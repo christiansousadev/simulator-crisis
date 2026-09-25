@@ -26,7 +26,7 @@ export default function TechDebtMeter({ techDebt }: TechDebtMeterProps) {
       </div>
       <div className="flex items-center gap-2">
         <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
-          <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
+          <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
         </div>
         <span className={`font-bold text-sm ${tone.text}`}>{techDebt}</span>
       </div>

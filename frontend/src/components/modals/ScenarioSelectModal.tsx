@@ -6,6 +6,7 @@ import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import { DifficultyId, ScenarioCatalogEntry } from "../../types/game";
 import { playCashSound, playClickSound } from "../../utils/sound";
+import Spinner from "../common/Spinner";
 
 const DIFFICULTY_IDS: DifficultyId[] = ["intern", "standard", "chaos"];
 
@@ -63,11 +64,11 @@ export default function ScenarioSelectModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in">
+      <div className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700 bg-slate-800/60 shrink-0">
           <div>
-            <h2 className="text-base font-extrabold text-white">{t.scenarios.selectModeTitle}</h2>
+            <h2 className="text-base font-extrabold font-heading text-white">{t.scenarios.selectModeTitle}</h2>
             <p className="text-xs text-slate-400 mt-0.5">{t.scenarios.selectModeSubtitle}</p>
           </div>
           <button onClick={closeScenarioSelect} className="text-slate-400 hover:text-slate-100 transition-colors" title={t.common.close}>
@@ -139,7 +140,9 @@ export default function ScenarioSelectModal() {
             })}
 
             {loading && catalog.length === 0 && (
-              <div className="col-span-full text-center text-xs text-slate-500 py-6">…</div>
+              <div className="col-span-full">
+                <Spinner />
+              </div>
             )}
           </div>
         </div>
@@ -175,7 +178,7 @@ function ScenarioCard({ name, description, victoryRequirement, durationLabel, ic
     <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex flex-col gap-3 hover:border-sky-500/50 transition-colors">
       <div className="flex items-center gap-2">
         {Icon && <Icon className="w-4 h-4 text-sky-400" />}
-        <h3 className="text-sm font-bold text-white">{name}</h3>
+        <h3 className="text-sm font-bold font-heading text-white">{name}</h3>
       </div>
       <p className="text-xs text-slate-300 leading-relaxed flex-1">{description}</p>
       <div className="text-[10px] text-slate-400 font-mono">{durationLabel}</div>

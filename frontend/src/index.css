@@ -9,6 +9,15 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* global press feedback: every button in the app gets a subtle tactile squash on press,
+     without needing every call site to opt in individually. deliberately not part of a
+     `transition` shorthand here -- utility classes like transition-colors already own that
+     property elsewhere, and :active only holds while the pointer is down, so an instant snap
+     in and out reads as a crisp click rather than needing an eased tween of its own. */
+  button:not(:disabled):active {
+    transform: scale(0.96);
+  }
 }
 
 /* thin, low-contrast scrollbar for the hud drawers */
@@ -66,8 +75,25 @@
   );
 }
 
-/* soft daylight gradient plus a hazy distant skyline, so the flanks never feel empty */
+/* soft daylight gradient plus a hazy distant skyline, so the flanks never feel empty.
+   the gradient itself lives on a ::before pseudo-element (not the container's own background)
+   specifically so a CSS `filter` can tint it per day/night phase without also re-processing the
+   office svg / skyline children painted on top of it -- filter applies to an element's whole
+   rendered subtree, and a ::before has none, so it only ever touches this one gradient layer.
+   previously this backdrop stayed a fixed daytime blue no matter the tick-driven time of day. */
 .office-sky {
+  position: relative;
+  /* small crosshair cursor over the office canvas, for a more "game world" feel than a plain arrow */
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="none" stroke="%230f172a" stroke-width="1.5" opacity="0.6"/><line x1="10" y1="0" x2="10" y2="5" stroke="%230f172a" stroke-width="1.5"/><line x1="10" y1="15" x2="10" y2="20" stroke="%230f172a" stroke-width="1.5"/><line x1="0" y1="10" x2="5" y2="10" stroke="%230f172a" stroke-width="1.5"/><line x1="15" y1="10" x2="20" y2="10" stroke="%230f172a" stroke-width="1.5"/></svg>')
+      10 10,
+    auto;
+}
+.office-sky::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background-color: #eff6ff;
   background-image: linear-gradient(to bottom, #dbeafe 0%, #eff6ff 45%, #f8fafc 100%),
     repeating-linear-gradient(
@@ -78,11 +104,20 @@
       transparent 46px
     );
   background-blend-mode: normal, multiply;
-  /* small crosshair cursor over the office canvas, for a more "game world" feel than a plain arrow */
-  cursor:
-    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="none" stroke="%230f172a" stroke-width="1.5" opacity="0.6"/><line x1="10" y1="0" x2="10" y2="5" stroke="%230f172a" stroke-width="1.5"/><line x1="10" y1="15" x2="10" y2="20" stroke="%230f172a" stroke-width="1.5"/><line x1="0" y1="10" x2="5" y2="10" stroke="%230f172a" stroke-width="1.5"/><line x1="15" y1="10" x2="20" y2="10" stroke="%230f172a" stroke-width="1.5"/></svg>')
-      10 10,
-    auto;
+  filter: brightness(1) saturate(1) hue-rotate(0deg);
+  transition: filter 4s ease-in-out;
+}
+.office-sky[data-day-phase="dawn"]::before {
+  filter: brightness(0.92) saturate(1.15) hue-rotate(-8deg);
+}
+.office-sky[data-day-phase="afternoon"]::before {
+  filter: brightness(0.97) saturate(1.05) hue-rotate(6deg);
+}
+.office-sky[data-day-phase="dusk"]::before {
+  filter: brightness(0.75) saturate(1.4) hue-rotate(28deg);
+}
+.office-sky[data-day-phase="night"]::before {
+  filter: brightness(0.3) saturate(0.75) hue-rotate(205deg);
 }
 
 /* screen shake and full-viewport flash, applied to the app root by imperative class toggles */

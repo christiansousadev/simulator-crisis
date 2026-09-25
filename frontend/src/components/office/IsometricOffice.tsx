@@ -168,6 +168,7 @@ export default function IsometricOffice() {
     <div
       ref={containerRef}
       data-tour="office-canvas"
+      data-day-phase={dayPhase}
       className="relative flex-1 office-sky overflow-hidden"
       onClick={handleCanvasClick}
     >

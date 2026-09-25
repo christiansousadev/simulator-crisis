@@ -30,9 +30,9 @@ export default function VictoryScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-backdrop-in">
       <ConfettiBurst />
-      <div className="w-full max-w-lg bg-white rounded-sm shadow-2xl border border-slate-300 relative">
+      <div className="w-full max-w-lg bg-white rounded-sm shadow-2xl border border-slate-300 relative animate-modal-in">
         <div
           className={`absolute top-6 right-8 rotate-[-8deg] border-4 rounded-full w-20 h-20 flex flex-col items-center justify-center opacity-90 ${gradeTone}`}
           style={{ borderColor: "currentColor" }}

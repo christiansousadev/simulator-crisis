@@ -68,9 +68,9 @@ export default function LogTriageTerminal() {
   const visibleLines = lines.filter((l) => activeFilters.has(l.level));
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" onClick={close}>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in" onClick={close}>
       <div
-        className="w-full max-w-2xl max-h-[75vh] rounded-lg border-2 border-emerald-500/40 bg-black shadow-2xl flex flex-col overflow-hidden font-mono"
+        className="w-full max-w-2xl max-h-[75vh] rounded-lg border-2 border-emerald-500/40 bg-black shadow-2xl flex flex-col overflow-hidden font-mono animate-modal-in"
         onClick={(e) => e.stopPropagation()}
         style={{
           backgroundImage: "repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(34,197,94,0.03) 3px)",

@@ -109,7 +109,7 @@ export default function OnboardingModal() {
       )}
 
       <div className={`fixed inset-0 z-[90] flex pointer-events-none p-4 ${STEP_CARD_POSITION[stepKey]}`}>
-        <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden pointer-events-auto">
+        <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden pointer-events-auto animate-modal-in">
           <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-800/60">
             <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
               {t.onboarding.stepLabel(step + 1, TOTAL_STEPS)}
@@ -123,7 +123,7 @@ export default function OnboardingModal() {
             <div className="p-3 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
               <StepIcon className="w-7 h-7" />
             </div>
-            <h2 className="text-lg font-extrabold text-white">{t.onboarding.steps[stepKey].title}</h2>
+            <h2 className="text-lg font-extrabold font-heading text-white">{t.onboarding.steps[stepKey].title}</h2>
             <p className="text-sm text-slate-300 leading-relaxed">{t.onboarding.steps[stepKey].body}</p>
           </div>
 

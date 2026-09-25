@@ -21,6 +21,16 @@ export default {
           "60%": { transform: "scale(1.1)", opacity: "1" },
           "100%": { transform: "scale(1)", opacity: "1" },
         },
+        // subdued dialog entrance -- pop-in's bounce reads great for a toast/badge but is too
+        // playful for a settings/dilemma dialog; this is a plain, professional fade+scale-up
+        "modal-in": {
+          "0%": { transform: "scale(0.96)", opacity: "0" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        "backdrop-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
         "bounce-panic": {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-6px)" },
@@ -154,6 +164,8 @@ export default {
       },
       animation: {
         "pop-in": "pop-in 0.25s ease-out",
+        "modal-in": "modal-in 0.18s ease-out",
+        "backdrop-in": "backdrop-in 0.15s ease-out",
         "bounce-panic": "bounce-panic 0.5s ease-in-out infinite",
         shake: "shake 0.22s linear infinite",
         "spin-slow": "spin-slow 2.4s linear infinite",

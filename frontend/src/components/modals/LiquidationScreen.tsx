@@ -25,8 +25,8 @@ export default function LiquidationScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg bg-white rounded-sm shadow-2xl border border-slate-300 relative">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-backdrop-in">
+      <div className="w-full max-w-lg bg-white rounded-sm shadow-2xl border border-slate-300 relative animate-modal-in">
         <div className="absolute top-6 right-8 rotate-[-8deg] border-4 border-rose-600 text-rose-600 rounded-md px-3 py-1 flex items-center gap-1.5 opacity-80">
           <Stamp className="w-4 h-4" />
           <span className="font-extrabold text-sm tracking-wider">{t.liquidation.stamp}</span>

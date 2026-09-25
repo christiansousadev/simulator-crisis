@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { useEffect, useMemo } from "react";
+import { Wrench } from "lucide-react";
 import { useGameStore } from "../../store/useGameStore";
 import { Service } from "../../types/game";
 import { GroundShadow } from "./OfficeProps";
@@ -196,7 +197,9 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
       {/* wrench repair overlay while a mitigation is being applied */}
       {repairAnim && (
         <foreignObject x={wrenchAnchor.x - 9} y={wrenchAnchor.y - 9} width={18} height={18} className="overflow-visible">
-          <div className="w-[18px] h-[18px] flex items-center justify-center text-xs animate-wrench-turn">🔧</div>
+          <div className="w-[18px] h-[18px] flex items-center justify-center text-amber-400 animate-wrench-turn">
+            <Wrench className="w-3.5 h-3.5" fill="currentColor" />
+          </div>
         </foreignObject>
       )}
     </g>

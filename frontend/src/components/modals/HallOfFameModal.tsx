@@ -1,10 +1,11 @@
-import { Award, Globe2, Skull, User, X } from "lucide-react";
+import { Award, Globe2, Skull, Trophy, User, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import { CareerRecord } from "../../types/game";
 import { playClickSound } from "../../utils/sound";
+import Spinner from "../common/Spinner";
 
 type LeaderboardScope = "mine" | "global";
 
@@ -31,13 +32,13 @@ export default function HallOfFameModal() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" onClick={close}>
+    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in" onClick={close}>
       <div
-        className="w-full max-w-lg max-h-[75vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-lg max-h-[75vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-modal-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-800/60 shrink-0">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+          <h2 className="text-sm font-bold font-heading text-white flex items-center gap-2">
             <Award className="w-4 h-4 text-amber-400" />
             {t.titleScreen.hallOfFame}
           </h2>
@@ -65,8 +66,12 @@ export default function HallOfFameModal() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
+          {loading && <Spinner />}
           {!loading && records.length === 0 && (
-            <p className="text-center text-xs text-slate-500 py-8">{t.hallOfFame.empty}</p>
+            <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
+              <Trophy className="w-7 h-7 text-slate-700" />
+              <p className="text-xs text-slate-500 max-w-[220px]">{t.hallOfFame.empty}</p>
+            </div>
           )}
           <div className="flex flex-col gap-1.5">
             {records.map((r, i) => (

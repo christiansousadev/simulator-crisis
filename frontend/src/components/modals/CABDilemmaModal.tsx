@@ -51,10 +51,10 @@ export default function CABDilemmaModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-xl rounded-xl border-2 border-rose-500/40 bg-slate-900 shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in">
+      <div className="w-full max-w-xl rounded-xl border-2 border-rose-500/40 bg-slate-900 shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden animate-modal-in">
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-800/60">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-100">
+          <div className="flex items-center gap-2 text-sm font-bold font-heading text-slate-100">
             <Gavel className="w-4 h-4 text-rose-400" />
             {t.cabDilemma.modalTitle}
           </div>

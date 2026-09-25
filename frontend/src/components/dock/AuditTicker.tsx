@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, ScrollText } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
@@ -41,7 +41,10 @@ export default function AuditTicker() {
       )}
       <div className="flex flex-col gap-1 font-mono text-[11px]">
         {audits.length === 0 ? (
-          <span className="text-slate-400">{t.ledger.noActivity}</span>
+          <div className="flex items-center gap-1.5 text-slate-400 py-1">
+            <ScrollText className="w-3.5 h-3.5" />
+            <span>{t.ledger.noActivity}</span>
+          </div>
         ) : (
           audits
             .slice()

@@ -1,6 +1,6 @@
 # Quality Gates and Installability — Implementation Specification
 
-**Document ID:** IZ-IMPL-07
+**Document ID:** IZ-IMPL-08
 **Classification:** Implementation Contract
 **Status:** Implemented, additive only, non-breaking
 **Integration baseline:** `frontend/vite.config.ts`, `frontend/src/test/setup.ts`, `.github/workflows/ci.yml`, `frontend/src/components/layout/Topbar.tsx`, `frontend/src/components/layout/BottomDock.tsx`
@@ -19,7 +19,7 @@ Three gaps unrelated to gameplay but load-bearing for the project's ability to k
 
 - `src/store/useGameStore.test.ts` — a direct regression guard for the exact "stale backend frame omits a newer field" crash class this project hit in production: asserts `setTelemetry` fills every field absent from a partial frame from `INITIAL_TELEMETRY` rather than leaving it `undefined`, plus the incident-spawn/incident-resolve floating-text and `resolvedHistory` bookkeeping.
 - `src/components/common/ObjectiveHint.test.tsx` — the `useNextObjectiveKey` priority hook (exported for testability) exercised via `@testing-library/react`'s `renderHook`, covering the full acknowledge → hire → upgrade → build-mode → achievement priority chain and the "nothing left to suggest" terminal case.
-- `src/components/common/ReputationMeter.test.tsx` — a render smoke test for the new meter (Document `06_DIFFICULTY_REPUTATION_AND_SESSION_RESILIENCE_SPEC.md` § 3), including its bar-width clamping at both ends of the 0–100 range.
+- `src/components/common/ReputationMeter.test.tsx` — a render smoke test for the new meter (Document `07_DIFFICULTY_REPUTATION_AND_SESSION_RESILIENCE_SPEC.md` § 3), including its bar-width clamping at both ends of the 0–100 range.
 
 `npm run build` (`tsc && vite build`) and `npx tsc --noEmit` were re-verified clean after every change in this batch; test files compile under the same project-wide `tsconfig` and are excluded from the production bundle automatically, since Vite only bundles from the app's real entry point graph.
 

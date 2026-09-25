@@ -50,13 +50,13 @@ export default function IncidentReplayModal() {
   const visibleEvents = events.slice(0, visibleCount);
 
   return (
-    <div className="fixed inset-0 z-[86] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" onClick={close}>
+    <div className="fixed inset-0 z-[86] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in" onClick={close}>
       <div
-        className="w-full max-w-lg max-h-[75vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-lg max-h-[75vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-modal-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-800/60 shrink-0">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+          <h2 className="text-sm font-bold font-heading text-white flex items-center gap-2">
             <Film className="w-4 h-4 text-sky-400" />
             {t.incidentReplay.title(incidentId)}
           </h2>

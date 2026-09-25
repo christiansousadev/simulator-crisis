@@ -21,6 +21,7 @@ IncidentZero is a real-time crisis and systems engineering simulation game. As H
 - **Scripted scenarios & custom scenario builder** — Black Friday Rush, Ransomware Infiltration, Chaos Engineering Drill, plus a sandbox config editor for hazard multipliers, budget floors, and scripted chaos injections.
 - **Achievements, cosmetics & career progression** — a 12-entry achievement catalog, prestige-point cosmetic unlocks, and a permanent Hall of Fame (per-player and global leaderboard) that survives every session reset.
 - **Guided onboarding** — a spotlight tutorial that highlights the real UI element being explained, plus a contextual "what to do next" hint system for new players.
+- **Polished HUD & office** — animated meters and a tweened budget counter, consistent dialog styling and entrance transitions across every modal, a day/night cycle that now tints the sky itself (not just the office interior), and global button press feedback.
 - **Settings & accessibility** — separate music/SFX volume, high-contrast mode, colorblind-safe palette, and full UI translation.
 - **Internationalization** — English (default), Português (Brasil), and Español, with full parity across every UI string.
 - **Installable PWA** — the app ships a web manifest and service worker; the app shell installs and loads offline, while every simulation call always hits the live backend (no stale cached game state).

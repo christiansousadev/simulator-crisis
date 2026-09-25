@@ -1,6 +1,6 @@
 # Difficulty, Governance Reputation, and Session Resilience — Implementation Specification
 
-**Document ID:** IZ-IMPL-06
+**Document ID:** IZ-IMPL-07
 **Classification:** Implementation Contract
 **Status:** Implemented, additive only, non-breaking
 **Integration baseline:** `backend/app/engine/simulator.py`, `backend/app/engine/dilemmas.py`, `backend/app/api/v1/sessions.py`, `backend/app/api/v1/career.py`, `frontend/src/components/modals/ScenarioSelectModal.tsx`, `frontend/src/components/modals/HallOfFameModal.tsx`, `frontend/src/components/modals/CABDilemmaModal.tsx`, `frontend/src/components/common/ReputationMeter.tsx`

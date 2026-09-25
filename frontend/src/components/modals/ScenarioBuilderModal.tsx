@@ -88,10 +88,10 @@ export default function ScenarioBuilderModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg max-h-[85vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in">
+      <div className="w-full max-w-lg max-h-[85vh] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-800/60 shrink-0">
-          <h2 className="text-sm font-bold text-white">{t.scenarioBuilder.title}</h2>
+          <h2 className="text-sm font-bold font-heading text-white">{t.scenarioBuilder.title}</h2>
           <button onClick={close} className="text-slate-400 hover:text-slate-100" title={t.common.close}>
             <X className="w-4 h-4" />
           </button>
