@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #e2e8f0;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* thin, low-contrast scrollbar for the hud drawers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+@layer utilities {
+  /* soft management-console card shadow, used across hud panels and modals */
+  .panel-shadow {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  /* hides the scrollbar on a horizontally-swipeable strip (topbar kpis, dock tabs on mobile)
+     while keeping it scrollable -- the content itself is the affordance, not a visible track */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* speech-bubble tail for the incident alert bubble above a server rack */
+  .alert-bubble::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    transform: translateX(-50%);
+    border-width: 6px 5px 0 5px;
+    border-style: solid;
+    border-color: inherit;
+    border-left-color: transparent;
+    border-right-color: transparent;
+  }
+}
+
+/* radial cooldown sweep, progress driven by the --progress css variable (0 to 1) */
+.cooldown-ring {
+  background: conic-gradient(
+    rgba(15, 23, 42, 0.7) calc(var(--progress, 0) * 360deg),
+    transparent calc(var(--progress, 0) * 360deg)
+  );
+}
+
+/* soft daylight gradient plus a hazy distant skyline, so the flanks never feel empty */
+.office-sky {
+  background-color: #eff6ff;
+  background-image: linear-gradient(to bottom, #dbeafe 0%, #eff6ff 45%, #f8fafc 100%),
+    repeating-linear-gradient(
+      to right,
+      rgba(30, 58, 95, 0.06) 0px,
+      rgba(30, 58, 95, 0.06) 18px,
+      transparent 18px,
+      transparent 46px
+    );
+  background-blend-mode: normal, multiply;
+  /* small crosshair cursor over the office canvas, for a more "game world" feel than a plain arrow */
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="none" stroke="%230f172a" stroke-width="1.5" opacity="0.6"/><line x1="10" y1="0" x2="10" y2="5" stroke="%230f172a" stroke-width="1.5"/><line x1="10" y1="15" x2="10" y2="20" stroke="%230f172a" stroke-width="1.5"/><line x1="0" y1="10" x2="5" y2="10" stroke="%230f172a" stroke-width="1.5"/><line x1="15" y1="10" x2="20" y2="10" stroke="%230f172a" stroke-width="1.5"/></svg>')
+      10 10,
+    auto;
+}
+
+/* screen shake and full-viewport flash, applied to the app root by imperative class toggles */
+.screen-shake-light {
+  animation: screen-shake-light 0.4s ease-in-out;
+}
+.screen-shake-heavy {
+  animation: screen-shake-heavy 0.6s ease-in-out;
+}
+
+/* accessibility: high-contrast pass over the most information-dense hud surfaces */
+[data-high-contrast="true"] {
+  --tw-border-opacity: 1 !important;
+}
+[data-high-contrast="true"] .panel-shadow {
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.4);
+}
+[data-high-contrast="true"] button,
+[data-high-contrast="true"] input,
+[data-high-contrast="true"] select {
+  outline-offset: 1px;
+}
+[data-high-contrast="true"] button:focus-visible,
+[data-high-contrast="true"] input:focus-visible,
+[data-high-contrast="true"] select:focus-visible {
+  outline: 2px solid #fbbf24;
+}
+
+/* accessibility: colorblind-safe remap of the semantic status palette (deuteranopia/protanopia safe) */
+[data-colorblind-safe="true"] .bg-emerald-500,
+[data-colorblind-safe="true"] .bg-emerald-400 {
+  background-color: #2563eb !important;
+}
+[data-colorblind-safe="true"] .text-emerald-600,
+[data-colorblind-safe="true"] .text-emerald-500,
+[data-colorblind-safe="true"] .text-emerald-400,
+[data-colorblind-safe="true"] .text-emerald-300 {
+  color: #3b82f6 !important;
+}
+[data-colorblind-safe="true"] .border-emerald-300,
+[data-colorblind-safe="true"] .border-emerald-400,
+[data-colorblind-safe="true"] .border-emerald-500 {
+  border-color: #3b82f6 !important;
+}
+[data-colorblind-safe="true"] .bg-rose-500,
+[data-colorblind-safe="true"] .bg-rose-400 {
+  background-color: #f97316 !important;
+}
+[data-colorblind-safe="true"] .text-rose-600,
+[data-colorblind-safe="true"] .text-rose-500,
+[data-colorblind-safe="true"] .text-rose-400,
+[data-colorblind-safe="true"] .text-rose-300 {
+  color: #fb923c !important;
+}
+[data-colorblind-safe="true"] .border-rose-300,
+[data-colorblind-safe="true"] .border-rose-400,
+[data-colorblind-safe="true"] .border-rose-500 {
+  border-color: #fb923c !important;
+}

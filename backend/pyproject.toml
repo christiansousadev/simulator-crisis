@@ -1,0 +1,11 @@
+[project]
+name = "incidentzero-backend"
+version = "1.0.0"
+description = "IncidentZero: SRE & IT Governance Crisis Simulator - FastAPI backend"
+requires-python = ">=3.11"
+
+[tool.black]
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

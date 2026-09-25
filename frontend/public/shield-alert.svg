@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="neonPulse" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#f43f5e" />
+    </linearGradient>
+  </defs>
+  <path d="M32 4L10 14V30C10 44 19 55 32 60C45 55 54 44 54 30V14L32 4Z" fill="url(#shieldGrad)" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round" />
+  <rect x="20" y="18" width="24" height="6" rx="2" fill="#1e293b" stroke="#64748b" stroke-width="1.5" />
+  <circle cx="25" cy="21" r="1.5" fill="#10b981" />
+  <circle cx="30" cy="21" r="1.5" fill="#38bdf8" />
+  <rect x="20" y="28" width="24" height="6" rx="2" fill="#1e293b" stroke="#f43f5e" stroke-width="1.5" />
+  <circle cx="25" cy="31" r="1.5" fill="#f43f5e" />
+  <circle cx="30" cy="31" r="1.5" fill="#f59e0b" />
+  <rect x="20" y="38" width="24" height="6" rx="2" fill="#1e293b" stroke="#64748b" stroke-width="1.5" />
+  <circle cx="25" cy="41" r="1.5" fill="#10b981" />
+  <circle cx="30" cy="41" r="1.5" fill="#10b981" />
+  <path d="M16 48L24 48L28 42L33 52L37 45L40 48L48 48" stroke="url(#neonPulse)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

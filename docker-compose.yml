@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - ENVIRONMENT=production
+      - DATABASE_URL=sqlite:///./incidentzero.db
+    volumes:
+      - ./audits:/app/audits
+      - backend-data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000/ws/telemetry}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
