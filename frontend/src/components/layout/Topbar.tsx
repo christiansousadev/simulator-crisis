@@ -3,6 +3,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import CreditCounter from "../common/CreditCounter";
+import DefconMeter from "../common/DefconMeter";
 import ErrorBudgetMeter from "../common/ErrorBudgetMeter";
 import MoraleMeter from "../common/MoraleMeter";
 import ReputationMeter from "../common/ReputationMeter";
@@ -69,6 +70,8 @@ export default function Topbar() {
         className="flex items-center gap-3 sm:gap-6 overflow-x-auto no-scrollbar min-w-0 [&>*]:shrink-0"
         data-tour="topbar-kpis"
       >
+        <DefconMeter telemetry={telemetry} />
+        <div className="h-9 w-px bg-slate-700" />
         <ShieldGauge slaPercentage={telemetry.sla_percentage} />
         <div className="h-9 w-px bg-slate-700" />
         <ErrorBudgetMeter remainingRatio={telemetry.error_budget_remaining_ratio} frozen={telemetry.feature_freeze_active} />

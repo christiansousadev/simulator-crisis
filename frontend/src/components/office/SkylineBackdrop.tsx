@@ -37,7 +37,10 @@ const BUILDINGS: Building[] = [
   { x: 300, width: 50, height: 116, setbackWidth: 28, setbackHeight: 26, windowRows: 7, windowCols: 4, depth: "mid" },
 ];
 
-// GENERATE THE LIT WINDOW GRID FOR ONE BUILDING SLAB, WITH A SOFT GLOW LAYER UNDER EACH PANE
+// GENERATE THE LIT WINDOW GRID FOR ONE BUILDING SLAB, WITH A SOFT GLOW LAYER UNDER EACH PANE.
+// tones are deliberately muted (warm white / soft cyan, never a flat saturated yellow) and each
+// pane's intensity is nudged by a per-cell pseudo-random factor so the grid doesn't read as a
+// wall of identical chapado squares.
 function BuildingWindows({
   x,
   top,
@@ -64,11 +67,12 @@ function BuildingWindows({
       if ((row * 7 + col * 13) % 5 === 0) continue;
       const wx = x + cellW * (col + 1);
       const wy = top + cellH * (row + 1);
-      const color = (row + col) % 3 === 0 ? "#93c5fd" : "#fbbf24";
+      const color = (row + col) % 3 === 0 ? "#7dd3fc" : "#fef08a";
+      const intensity = 0.55 + ((row * 3 + col * 5) % 4) * 0.12;
       windows.push(
         <g key={`${row}-${col}`} style={{ transition: "opacity 4s linear" }} opacity={lit ? 1 : 0}>
-          <circle cx={wx} cy={wy} r={3.2} fill={color} opacity={0.35} filter="url(#skylineWindowGlow)" />
-          <rect x={wx - 1.4} y={wy - 1.8} width={2.8} height={3.6} rx={0.4} fill={color} opacity={0.9} />
+          <circle cx={wx} cy={wy} r={3.2} fill={color} opacity={0.2 + intensity * 0.15} filter="url(#skylineWindowGlow)" />
+          <rect x={wx - 1.4} y={wy - 1.8} width={2.8} height={3.6} rx={0.4} fill={color} opacity={intensity} />
         </g>
       );
     }
@@ -100,6 +104,10 @@ function BuildingSilhouette({ building, lit }: { building: Building; lit: boolea
           strokeWidth={1.4}
         />
       )}
+      {/* aviation warning beacon atop the tallest towers, blinking red as a small skyline accent */}
+      {building.setbackWidth > 0 && building.depth === "near" && (
+        <circle cx={setbackX + building.setbackWidth / 2} cy={setbackTop - 10} r={1.2} fill="#f87171" className="animate-pulse" />
+      )}
       <BuildingWindows
         x={building.x}
         top={baseTop}
@@ -129,6 +137,9 @@ function BuildingSilhouette({ building, lit }: { building: Building; lit: boolea
 // atmospheric parallax skyline sitting behind the isometric svg canvas, seen through the office windows
 export default function SkylineBackdrop({ dayPhase }: SkylineBackdropProps) {
   const lit = dayPhase === "night" || dayPhase === "dusk";
+  // the deep navy/black backdrop reads fully at night and dusk; during the day it stays a faint
+  // vignette so the CSS daylight gradient behind this layer still shows through
+  const deepSkyOpacity = lit ? 1 : 0.22;
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
@@ -139,10 +150,32 @@ export default function SkylineBackdrop({ dayPhase }: SkylineBackdropProps) {
             <stop offset="65%" stopColor="#dbeafe" stopOpacity={0.15} />
             <stop offset="100%" stopColor="#f8fafc" stopOpacity={0} />
           </linearGradient>
+          {/* deep atmospheric backdrop behind every building silhouette, near-black at the top
+              fading to a lighter navy at the horizon -- gives the skyline real depth instead of
+              sitting on a flat, pale wash */}
+          <linearGradient id="skylineDeepGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#030712" />
+            <stop offset="100%" stopColor="#0f172a" />
+          </linearGradient>
+          {/* volumetric ground-hugging fog band where the skyline meets the office floor */}
+          <linearGradient id="skylineHorizonHaze" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="rgba(15,23,42,0.85)" />
+            <stop offset="100%" stopColor="rgba(15,23,42,0)" />
+          </linearGradient>
           <filter id="skylineWindowGlow" x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="1.6" />
           </filter>
         </defs>
+
+        <rect
+          x={0}
+          y={0}
+          width={340}
+          height={200}
+          fill="url(#skylineDeepGradient)"
+          opacity={deepSkyOpacity}
+          style={{ transition: "opacity 4s linear" }}
+        />
 
         {/* far-to-near paint order for correct overlap between depth bands */}
         {BUILDINGS.map((b, i) => (
@@ -151,6 +184,9 @@ export default function SkylineBackdrop({ dayPhase }: SkylineBackdropProps) {
 
         {/* soft aerial haze wash over the whole skyline, strongest near the rooftops fading to the horizon */}
         <rect x={0} y={0} width={340} height={200} fill="url(#skylineAirGradient)" />
+
+        {/* horizon fog band grounding the skyline into the scene instead of a hard silhouette cutoff */}
+        <rect x={0} y={140} width={340} height={60} fill="url(#skylineHorizonHaze)" />
       </svg>
     </div>
   );

@@ -4,7 +4,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { MitigationActionId, MitigationCategoryKey } from "../../i18n/translations";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
-import { playCashSound, playClickSound } from "../../utils/sound";
+import { playCashSound, playClickSound, playKeyboardClatter } from "../../utils/sound";
 import CooldownButton from "../common/CooldownButton";
 
 interface RunbookDef {
@@ -39,6 +39,7 @@ export default function MitigationsPanel() {
   const handleRunbook = async (rb: RunbookDef) => {
     if (!selectedServiceId) return;
     playClickSound();
+    playKeyboardClatter();
     const copy = t.mitigations.actions[rb.actionId];
     try {
       await api.executeMitigation(rb.actionId, selectedServiceId);
@@ -73,21 +74,23 @@ export default function MitigationsPanel() {
               progress={cooldownProgress}
               onClick={() => handleRunbook(rb)}
               disabled={disabled || onCooldown}
-              className={`rounded-lg border p-2 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                rb.danger ? "border-rose-200 bg-rose-50 hover:bg-rose-100" : "border-slate-200 bg-white hover:bg-slate-50"
+              className={`rounded-lg border p-2 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                rb.danger
+                  ? "border-rose-500/50 bg-rose-950/30 hover:bg-rose-950/50"
+                  : "border-slate-800 bg-slate-900/80 hover:bg-slate-800/80"
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
                   {t.mitigations.categories[rb.category]}
                 </span>
-                <Icon className={`w-3.5 h-3.5 ${rb.danger ? "text-rose-500" : "text-slate-400"}`} />
+                <Icon className={`w-3.5 h-3.5 ${rb.danger ? "text-rose-400" : "text-slate-400"}`} />
               </div>
-              <div className={`text-xs font-bold ${rb.danger ? "text-rose-700" : "text-slate-700"}`}>{copy.name}</div>
-              <p className="text-[10px] text-slate-500 leading-tight">{copy.description}</p>
+              <div className={`text-xs font-bold ${rb.danger ? "text-rose-300" : "text-slate-200"}`}>{copy.name}</div>
+              <p className="text-[10px] text-slate-400 leading-tight">{copy.description}</p>
               <div className="flex items-center justify-between mt-1 text-[10px] font-bold">
-                <span className="text-rose-500">-${rb.cost.toLocaleString()}</span>
-                <span className={rb.techDebtDelta < 0 ? "text-emerald-500" : "text-amber-500"}>
+                <span className="text-rose-400">-${rb.cost.toLocaleString()}</span>
+                <span className={rb.techDebtDelta < 0 ? "text-emerald-400" : "text-amber-400"}>
                   {rb.techDebtDelta > 0 ? "+" : ""}
                   {rb.techDebtDelta} {t.mitigations.tdiSuffix}
                 </span>

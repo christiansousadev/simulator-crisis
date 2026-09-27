@@ -293,3 +293,62 @@ export function playDefeatSting() {
     { freq: 130.81, type: "sawtooth", start: 0.36, duration: 0.5, gain: 0.11 },
   ]);
 }
+
+// RETRO ARCADE COIN/CASH-REGISTER JINGLE FOR A SURVIVED CYCLE OR A JUICY POSITIVE PAYOUT
+export function playChaChing() {
+  playToneSequence([
+    { freq: 988, type: "square", start: 0, duration: 0.06, gain: 0.07 },
+    { freq: 1319, type: "square", start: 0.055, duration: 0.09, gain: 0.08 },
+    { freq: 1568, type: "square", start: 0.13, duration: 0.16, gain: 0.09 },
+  ]);
+}
+
+// FRANTIC MECHANICAL-KEYBOARD CLATTER, PLAYED WHILE A RUNBOOK IS BEING APPLIED
+export function playKeyboardClatter() {
+  const steps: ToneStep[] = [];
+  const clacks = 8;
+  for (let i = 0; i < clacks; i++) {
+    steps.push({
+      freq: 1800 + Math.random() * 1400,
+      type: "square",
+      start: i * 0.055 + Math.random() * 0.02,
+      duration: 0.02,
+      gain: 0.025,
+    });
+  }
+  playToneSequence(steps);
+}
+
+// TWO-TONE ROTARY EMERGENCY SIREN, ONE SWEEP CYCLE -- CALL AGAIN ON A LOOP WHILE A P1 IS ACTIVE
+export function playRedAlertSiren() {
+  if (muted || masterVolume <= 0) return;
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(500, now);
+    oscillator.frequency.linearRampToValueAtTime(900, now + 0.5);
+    oscillator.frequency.linearRampToValueAtTime(500, now + 1.0);
+    const peak = 0.05 * masterVolume;
+    gainNode.gain.setValueAtTime(peak, now);
+    gainNode.gain.setValueAtTime(peak, now + 0.95);
+    gainNode.gain.linearRampToValueAtTime(0.0001, now + 1.0);
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 1.0);
+    setTimeout(() => ctx.close(), 1100);
+  } catch {
+    // audio unsupported or blocked; the alarm stays purely visual
+  }
+}
+
+// TENSE, SUBTLE CARDIAC-MONITOR BEEP FOR WHEN THE RUNWAY IS NEARLY EXHAUSTED
+export function playCriticalHeartbeat() {
+  playToneSequence([
+    { freq: 1000, type: "sine", start: 0, duration: 0.08, gain: 0.05 },
+    { freq: 1000, type: "sine", start: 0.16, duration: 0.08, gain: 0.05 },
+  ]);
+}

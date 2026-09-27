@@ -150,7 +150,25 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
         <circle cx={fanAnchor.x} cy={fanAnchor.y} r={4} fill="none" stroke="#94a3b8" strokeWidth={1.2} strokeDasharray="2.4 2.4" />
       </g>
 
-      {/* spark and smoke particles from a downed node */}
+      {/* thin dark smoke wisping from the vent grille: a mid-tier warning before the rack fully dies */}
+      {service.status === "degraded" && (
+        <g>
+          {[0, 0.5].map((delay, i) => (
+            <circle
+              key={`degraded-smoke-${i}`}
+              cx={wrenchAnchor.x + (i - 0.5) * 3}
+              cy={wrenchAnchor.y - 6}
+              r={2}
+              fill="#3f3f46"
+              opacity={0.45}
+              className="animate-smoke-rise"
+              style={{ animationDelay: `${delay}s` }}
+            />
+          ))}
+        </g>
+      )}
+
+      {/* flames, arcing sparks and a dense smoke column from a fully downed node */}
       {service.status === "down" && (
         <g>
           {[0, 0.2, 0.4].map((delay, i) => (
@@ -164,6 +182,28 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
               style={{ animationDelay: `${delay}s` }}
             />
           ))}
+          {/* electric arc jumping between two contact points, flickering on/off like a short circuit */}
+          <path
+            d={`M ${sparkAnchor.x - 2},${sparkAnchor.y + 1} L ${sparkAnchor.x + 1.5},${sparkAnchor.y - 2} L ${sparkAnchor.x},${sparkAnchor.y + 0.5} L ${sparkAnchor.x + 3},${sparkAnchor.y - 3}`}
+            stroke="#e0f2fe"
+            strokeWidth={0.8}
+            fill="none"
+            className="animate-spark-flicker"
+            style={{ animationDelay: "0.1s" }}
+          />
+          {/* small stylized flame licking up from the vent */}
+          <path
+            d={`M ${wrenchAnchor.x - 1},${wrenchAnchor.y - 2} q -2,-4 0,-7 q 2,3 0.5,4.5 q 2,-2 0.5,-5.5 q 2.5,3 1,7 q -0.5,2 -2,1`}
+            fill="#f97316"
+            className="animate-spark-flicker"
+            style={{ animationDelay: "0.25s" }}
+          />
+          <path
+            d={`M ${wrenchAnchor.x - 1},${wrenchAnchor.y - 2} q -1,-2.5 0,-4.5 q 1,2 0,3.5`}
+            fill="#fde047"
+            className="animate-spark-flicker"
+            style={{ animationDelay: "0.35s" }}
+          />
           {[0, 0.4, 0.8].map((delay, i) => (
             <circle
               key={`smoke-${i}`}

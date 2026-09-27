@@ -50,15 +50,15 @@ export default function EngineerRosterPanel() {
       <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
         {engineers.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 gap-1 py-6">
-            <Users className="w-6 h-6 text-slate-300" />
+            <Users className="w-6 h-6 text-slate-600" />
             <p className="text-[11px] font-medium">{t.common.none}</p>
           </div>
         )}
         {engineers.map((eng) => (
-          <div key={eng.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2">
+          <div key={eng.id} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 p-2">
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 truncate">{eng.name}</span>
+                <span className="text-xs font-bold text-slate-200 truncate">{eng.name}</span>
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
                   {t.staff.competencies[eng.core_competency]}
                 </span>
@@ -69,7 +69,7 @@ export default function EngineerRosterPanel() {
                     <span>{t.staff.stress}</span>
                     <span>{Math.round(eng.stress_index)}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
                     <div
                       className={`h-full rounded-full ${barTone(eng.stress_index, false)}`}
                       style={{ width: `${eng.stress_index}%` }}
@@ -81,7 +81,7 @@ export default function EngineerRosterPanel() {
                     <span>{t.staff.stamina}</span>
                     <span>{Math.round(eng.stamina)}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
                     <div
                       className={`h-full rounded-full ${barTone(eng.stamina, true)}`}
                       style={{ width: `${eng.stamina}%` }}
@@ -92,7 +92,7 @@ export default function EngineerRosterPanel() {
             </div>
             <button
               onClick={() => handleRotate(eng.id)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border border-slate-700 text-slate-300 hover:bg-slate-800"
               title={t.staff.rotateShift}
             >
               {eng.on_call_status === "on_duty" ? <Moon className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
@@ -102,12 +102,12 @@ export default function EngineerRosterPanel() {
         ))}
       </div>
 
-      <div className="border-t border-slate-200 p-2">
+      <div className="border-t border-slate-800 p-2">
         {!hiring ? (
           <button
             onClick={() => setHiring(true)}
             disabled={budget < HIRING_COST}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-700 py-1.5 text-xs font-bold text-slate-400 hover:bg-slate-900/60 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <UserPlus className="w-3.5 h-3.5" />
             {t.staff.hireEngineer} ({t.staff.hiringCost(`$${HIRING_COST.toLocaleString()}`)})
@@ -118,7 +118,7 @@ export default function EngineerRosterPanel() {
               <button
                 key={c}
                 onClick={() => handleHire(c)}
-                className="flex-1 rounded-md bg-slate-800 text-white text-[10px] font-bold py-1.5 hover:bg-slate-700"
+                className="flex-1 rounded-md bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-[10px] font-bold py-1.5 hover:bg-cyan-900/60"
               >
                 {t.staff.competencies[c]}
               </button>

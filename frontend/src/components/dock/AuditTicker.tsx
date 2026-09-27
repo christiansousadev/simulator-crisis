@@ -23,14 +23,14 @@ export default function AuditTicker() {
   return (
     <div className="h-full overflow-y-auto p-2 flex flex-col gap-2">
       {resolvedHistory.length > 0 && (
-        <div className="pb-2 border-b border-slate-200">
+        <div className="pb-2 border-b border-slate-800">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">{t.ledger.generatePostmortem}</p>
           <div className="flex flex-wrap gap-1.5">
             {resolvedHistory.map((inc) => (
               <button
                 key={inc.id}
                 onClick={() => handlePostMortem(inc.id)}
-                className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white hover:border-sky-300 text-[10px] font-medium text-slate-500 hover:text-sky-600 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-800 bg-slate-900/80 hover:border-sky-500/50 text-[10px] font-medium text-slate-400 hover:text-sky-400 transition-colors"
               >
                 <FileText className="w-3 h-3" />
                 {inc.id}
@@ -50,13 +50,16 @@ export default function AuditTicker() {
             .slice()
             .reverse()
             .map((audit) => (
-              <div key={audit.id} className="flex items-center gap-3 text-slate-500">
-                <span className="text-slate-400">{audit.timestamp.substring(11, 19)}</span>
-                <span className="text-sky-600 font-semibold">[{audit.actor}]</span>
-                <span className={audit.compliance_flag ? "text-emerald-600" : "text-rose-600 font-bold"}>
+              <div
+                key={audit.id}
+                className="flex items-center gap-3 text-slate-400 bg-slate-900/60 border border-slate-800/70 rounded px-2 py-1"
+              >
+                <span className="text-slate-500">{audit.timestamp.substring(11, 19)}</span>
+                <span className="text-sky-400 font-semibold">[{audit.actor}]</span>
+                <span className={audit.compliance_flag ? "text-emerald-400" : "text-rose-400 font-bold"}>
                   {audit.event_type}
                 </span>
-                <span className="text-slate-400 truncate">{JSON.stringify(audit.details)}</span>
+                <span className="text-slate-500 truncate">{JSON.stringify(audit.details)}</span>
               </div>
             ))
         )}

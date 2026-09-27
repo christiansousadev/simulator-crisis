@@ -86,7 +86,7 @@ function shouldShowOnboardingOnBoot(): boolean {
   }
 }
 
-export type FloatingTextTone = "danger" | "success" | "warning" | "info";
+export type FloatingTextTone = "danger" | "success" | "warning" | "info" | "gold";
 
 export interface FloatingText {
   id: string;
@@ -96,6 +96,10 @@ export interface FloatingText {
 
 let floatingTextSeq = 0;
 let runAnimationSeq = 0;
+
+// audit ledger ids already reflected as a floating callout; module-scoped so it survives
+// across store updates without becoming rendered/persisted state of its own
+let seenAuditIds: Set<string> | null = null;
 
 // office-scene ephemeral animation kinds, purely presentational and client-local
 export type RunAnimationKind = "acknowledge" | "mitigate";
@@ -238,8 +242,74 @@ export const useGameStore = create<GameStore>((set) => ({
           tone: "success",
         });
       }
-      if (state.telemetry.status !== "breached" && telemetry.status === "breached") {
+      const justBreached = state.telemetry.status !== "breached" && telemetry.status === "breached";
+      if (justBreached) {
         spawnedTexts.push({ id: `ft-${floatingTextSeq++}`, text: dict.floatingTexts.slaWarning, tone: "warning" });
+      }
+
+      // ledger diff: turn newly-appended audit entries into RPG-style impact callouts. the very
+      // first frame just seeds the seen-ids baseline so a resumed session doesn't replay its
+      // entire history as a burst of toasts.
+      if (seenAuditIds === null) {
+        seenAuditIds = new Set(telemetry.recent_audits.map((a) => a.id));
+      } else {
+        for (const audit of telemetry.recent_audits) {
+          if (seenAuditIds.has(audit.id)) continue;
+          seenAuditIds.add(audit.id);
+
+          if (audit.event_type === "UNATTENDED_ALERT_VIOLATION") {
+            const fine = Number(audit.details.fine_amount ?? 0);
+            spawnedTexts.push({
+              id: `ft-${floatingTextSeq++}`,
+              text: dict.floatingTexts.fineApplied(fine.toLocaleString()),
+              tone: "danger",
+            });
+          } else if (audit.event_type === "SLA_BREACH_EMERGENCY_SANCTION") {
+            spawnedTexts.push({ id: `ft-${floatingTextSeq++}`, text: dict.floatingTexts.slaSanction, tone: "danger" });
+          } else if (audit.event_type === "MONTHLY_AUDIT_CYCLE_SURVIVED") {
+            spawnedTexts.push({ id: `ft-${floatingTextSeq++}`, text: dict.floatingTexts.cycleSurvived, tone: "gold" });
+          } else if (audit.event_type === "RUNBOOK_EXECUTED") {
+            const tdiDelta = Number(audit.details.tech_debt_delta ?? 0);
+            if (tdiDelta < 0) {
+              spawnedTexts.push({
+                id: `ft-${floatingTextSeq++}`,
+                text: dict.floatingTexts.techDebtImproved(Math.abs(tdiDelta)),
+                tone: "success",
+              });
+            } else if (tdiDelta > 0) {
+              spawnedTexts.push({
+                id: `ft-${floatingTextSeq++}`,
+                text: dict.floatingTexts.techDebtWorsened(tdiDelta),
+                tone: "warning",
+              });
+            }
+          } else if (audit.event_type === "DILEMMA_RESOLVED") {
+            const budgetDelta = Number(audit.details.budget_delta ?? 0);
+            if (budgetDelta > 0) {
+              spawnedTexts.push({
+                id: `ft-${floatingTextSeq++}`,
+                text: dict.floatingTexts.budgetGain(budgetDelta.toLocaleString()),
+                tone: "gold",
+              });
+            } else if (budgetDelta < 0) {
+              spawnedTexts.push({
+                id: `ft-${floatingTextSeq++}`,
+                text: dict.floatingTexts.budgetLoss(Math.abs(budgetDelta).toLocaleString()),
+                tone: "danger",
+              });
+            }
+            const happinessDelta = Number(audit.details.happiness_delta ?? 0);
+            if (happinessDelta > 0) {
+              spawnedTexts.push({ id: `ft-${floatingTextSeq++}`, text: dict.floatingTexts.moraleGain, tone: "success" });
+            } else if (happinessDelta < 0) {
+              spawnedTexts.push({ id: `ft-${floatingTextSeq++}`, text: dict.floatingTexts.moraleLoss, tone: "warning" });
+            }
+          }
+        }
+        // keep the seen-set bounded instead of growing forever across a long session
+        if (seenAuditIds.size > 400) {
+          seenAuditIds = new Set(telemetry.recent_audits.map((a) => a.id));
+        }
       }
 
       const floatingTexts = spawnedTexts.length
@@ -275,7 +345,7 @@ export const useGameStore = create<GameStore>((set) => ({
         screenShakeSeq += 1;
         screenShakeMagnitude = "heavy";
         impactFlashSeq += 1;
-      } else if (newlyRaisedP1) {
+      } else if (newlyRaisedP1 || justBreached) {
         screenShakeSeq += 1;
         screenShakeMagnitude = "light";
         impactFlashSeq += 1;

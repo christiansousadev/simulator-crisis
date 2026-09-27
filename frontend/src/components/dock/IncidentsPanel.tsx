@@ -9,8 +9,21 @@ import { playClickSound } from "../../utils/sound";
 const REGULATORY_BREACH_TICK = 12;
 
 function severityTone(severity: Incident["severity"]) {
-  if (severity === "P1_CRITICAL") return { badge: "bg-rose-100 text-rose-700 border-rose-300", icon: "text-rose-500" };
-  return { badge: "bg-amber-100 text-amber-700 border-amber-300", icon: "text-amber-500" };
+  if (severity === "P1_CRITICAL") {
+    return {
+      badge: "bg-rose-500/15 text-rose-300 border-rose-500/40",
+      icon: "text-rose-400",
+      card: "border-rose-500/60 shadow-[0_0_15px_rgba(244,63,94,0.15)] bg-rose-950/20",
+    };
+  }
+  if (severity === "P2_HIGH") {
+    return {
+      badge: "bg-amber-500/15 text-amber-300 border-amber-500/40",
+      icon: "text-amber-400",
+      card: "border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.1)] bg-amber-950/20",
+    };
+  }
+  return { badge: "bg-slate-500/15 text-slate-300 border-slate-500/40", icon: "text-slate-400", card: "" };
 }
 
 // CLEAN PRIORITY NOTIFICATION LIST FOR ACTIVE INCIDENTS
@@ -51,7 +64,7 @@ export default function IncidentsPanel() {
             <div
               key={inc.id}
               onClick={() => openIncidentDetail(inc)}
-              className="flex flex-col gap-1.5 p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 cursor-pointer transition-colors"
+              className={`flex flex-col gap-1.5 p-3 rounded-lg border bg-slate-900/80 border-slate-800 hover:border-slate-700 cursor-pointer transition-all shadow-md ${tone.card}`}
             >
               <div className="flex items-start gap-2 min-w-0">
                 <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${tone.icon}`} />
@@ -60,18 +73,18 @@ export default function IncidentsPanel() {
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${tone.badge}`}>
                       {t.severities[inc.severity]}
                     </span>
-                    <span className="text-xs font-semibold text-slate-700 truncate">{inc.service_id}</span>
+                    <span className="text-xs font-semibold text-slate-200 truncate">{inc.service_id}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 truncate">{inc.title}</p>
+                  <p className="text-xs text-slate-400 truncate">{inc.title}</p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-slate-800/70">
                 <div className="flex items-center gap-2.5 text-[10px] text-slate-400 font-mono min-w-0">
                   <span>{t.incidents.mtta} {inc.mtta_seconds}t</span>
                   <span>{t.incidents.mttr} {inc.mttr_seconds}t</span>
                   {inc.status === "active" && (
-                    <span className={`flex items-center gap-0.5 shrink-0 ${breachSoon ? "text-rose-500 font-bold" : ""}`}>
+                    <span className={`flex items-center gap-0.5 shrink-0 ${breachSoon ? "text-rose-400 font-bold" : ""}`}>
                       <TimerReset className="w-2.5 h-2.5" />
                       {t.incidents.sanctionCountdown(ticksToBreach)}
                     </span>
@@ -83,7 +96,7 @@ export default function IncidentsPanel() {
                       e.stopPropagation();
                       handleAcknowledge(inc);
                     }}
-                    className="shrink-0 px-2 py-1 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold transition-colors"
+                    className="shrink-0 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold text-[10px] px-3 py-1.5 rounded shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95 transition-all"
                   >
                     {t.incidents.acknowledge}
                   </button>

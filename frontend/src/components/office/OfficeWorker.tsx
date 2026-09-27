@@ -1,6 +1,20 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "../../i18n/useTranslation";
 import { project } from "./isoMath";
 
 export type WorkerMood = "idle" | "panic" | "running" | "tired" | "happy" | "recovering";
+
+const QUIP_DISPLAY_MS = 3200;
+
+// maps every sprite mood onto one of the four flavored quip pools (running/recovering read
+// closest to a determined "idle" bark rather than getting their own dedicated lines)
+function quipPoolKey(mood: WorkerMood): "idle" | "panic" | "tired" | "happy" {
+  if (mood === "panic") return "panic";
+  if (mood === "tired") return "tired";
+  if (mood === "happy") return "happy";
+  return "idle";
+}
 export type WorkerRole = "engineer" | "executive" | "casual";
 
 interface OfficeWorkerProps {
@@ -87,9 +101,25 @@ export default function OfficeWorker({
   badge = false,
   glowColor,
 }: OfficeWorkerProps) {
+  const t = useTranslation();
   const anchor = project(x, y, z);
   const hands = HAND_POSE[mood];
   const slumped = mood === "tired";
+
+  // click-to-banter: a comic speech bubble with a mood-flavored one-liner, auto-dismissing
+  const [quip, setQuip] = useState<string | null>(null);
+  useEffect(() => {
+    if (!quip) return;
+    const timer = setTimeout(() => setQuip(null), QUIP_DISPLAY_MS);
+    return () => clearTimeout(timer);
+  }, [quip]);
+  const handleBanter = (evt: ReactMouseEvent<SVGGElement>) => {
+    // deliberately not stopping propagation: a click still selects the desk/rack this worker
+    // belongs to (that handler lives on an ancestor <g>) while also popping this quip bubble
+    void evt;
+    const pool = t.workerQuips[quipPoolKey(mood)];
+    setQuip(pool[Math.floor(Math.random() * pool.length)]);
+  };
 
   return (
     <g
@@ -97,6 +127,8 @@ export default function OfficeWorker({
         transform: `translate(${anchor.x}px, ${anchor.y}px)`,
         transition: transitionMs ? `transform ${transitionMs}ms ease-in-out` : undefined,
       }}
+      onClick={handleBanter}
+      className="cursor-pointer"
     >
       <g
         className={BODY_ANIMATION[mood]}
@@ -177,9 +209,20 @@ export default function OfficeWorker({
       )}
 
       {mood === "tired" && (
-        <text x={7} y={-40} style={{ fontSize: 7, fontWeight: 700 }} fill="#94a3b8">
-          z z z
-        </text>
+        <g>
+          {["z", "Z", "z"].map((glyph, i) => (
+            <text
+              key={i}
+              x={6 + i * 2.5}
+              y={-38 - i * 3}
+              style={{ fontSize: 6 + i, fontWeight: 700, animationDelay: `${i * 0.5}s` }}
+              fill="#94a3b8"
+              className="animate-steam-rise"
+            >
+              {glyph}
+            </text>
+          ))}
+        </g>
       )}
 
       {mood === "recovering" && (
@@ -201,6 +244,17 @@ export default function OfficeWorker({
             />
           ))}
         </g>
+      )}
+
+      {/* comic banter bubble, popped by clicking this worker; auto-dismisses on its own timer */}
+      {quip && (
+        <foreignObject x={-72} y={-96} width={144} height={54} className="overflow-visible pointer-events-none">
+          <div className="flex justify-center">
+            <div className="speech-bubble relative px-2 py-1.5 rounded-lg border-2 border-slate-800 bg-white text-slate-900 text-[9px] font-bold leading-tight text-center shadow-lg animate-pop-in max-w-[132px]">
+              {quip}
+            </div>
+          </div>
+        </foreignObject>
       )}
     </g>
   );

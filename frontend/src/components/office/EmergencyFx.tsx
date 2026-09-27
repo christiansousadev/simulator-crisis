@@ -1,5 +1,31 @@
 import { project } from "./isoMath";
 
+interface RedAlertOverlayProps {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+// DEFCON RED-ALERT AMBIENT: A DARKENING VIGNETTE OVER THE WHOLE FLOOR PLAN, DROPPED IN BEHIND
+// EVERY PROP SO NORMAL LIGHTING READS AS "EMERGENCY POWER ONLY". THIS IS DELIBERATELY A NEAR-BLACK
+// WASH RATHER THAN A TINTED RED ONE -- THE COLOR MATRIX GRADE ALREADY DESATURATES/COOLS THE SCENE,
+// AND ONLY THE BEACONS THEMSELVES SHOULD READ AS RED, LIKE SPOTLIGHTS CUTTING THROUGH DARKNESS.
+export function RedAlertOverlay({ minX, minY, maxX, maxY }: RedAlertOverlayProps) {
+  const corners = [
+    project(minX, minY, 0),
+    project(maxX, minY, 0),
+    project(maxX, maxY, 0),
+    project(minX, maxY, 0),
+  ];
+  const floorPath = `M ${corners.map((p) => `${p.x},${p.y}`).join(" L ")} Z`;
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      <path d={floorPath} fill="#020617" opacity={0.4} className="animate-glow-pulse" />
+    </g>
+  );
+}
+
 interface BeaconProps {
   x: number;
   y: number;

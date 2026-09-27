@@ -1,12 +1,22 @@
+import { Service } from "../../types/game";
 import { project } from "./isoMath";
 
+export type NetworkHealth = "healthy" | "degraded" | "down";
+
 interface CableTrayProps {
-  alert: boolean;
+  networkHealth: NetworkHealth;
 }
 
 interface CablePoint {
   x: number;
   y: number;
+}
+
+// DERIVE THE OVERALL DATA-PATH HEALTH TIER FROM THE CURRENT SERVICE FLEET
+export function computeNetworkHealth(services: Service[]): NetworkHealth {
+  if (services.some((s) => s.status === "down")) return "down";
+  if (services.some((s) => s.status === "degraded")) return "degraded";
+  return "healthy";
 }
 
 // floor conduit runs linking the server vault doorway to the engineering bay across the hallway
@@ -23,33 +33,59 @@ const CABLE_PATHS: CablePoint[][] = [
   ],
 ];
 
+// per-health tier visual tuning: pulse color, dash speed, and whether the line stutters/sparks
+const HEALTH_STYLE: Record<NetworkHealth, { color: string; durationS: number; className: string; sparking: boolean }> = {
+  healthy: { color: "#22c55e", durationS: 0.7, className: "animate-dash-flow", sparking: false },
+  degraded: { color: "#f59e0b", durationS: 1.9, className: "animate-dash-flow", sparking: false },
+  down: { color: "#ef4444", durationS: 0.5, className: "animate-dash-flow-stutter", sparking: true },
+};
+
 function toPath(points: CablePoint[]): string {
   const projected = points.map((p) => project(p.x, p.y, 0.026));
   return `M ${projected.map((p) => `${p.x},${p.y}`).join(" L ")}`;
 }
 
-// FLOOR CABLE CONDUITS CARRYING ANIMATED DATA PULSES; TURN RED AND STUTTER DURING A P1 INCIDENT
-export default function CableTray({ alert }: CableTrayProps) {
-  const pulseColor = alert ? "#ef4444" : "#22d3ee";
-  const pulseAnimation = alert ? "animate-dash-flow-stutter" : "animate-dash-flow";
+// midpoint of a multi-segment path, used to anchor the "connection severed" spark burst
+function midpoint(points: CablePoint[]): CablePoint {
+  const mid = points[Math.floor(points.length / 2)];
+  return mid;
+}
+
+// FLOOR CABLE CONDUITS CARRYING ANIMATED DATA PULSES; COLOR, SPEED AND STUTTER TRACK FLEET-WIDE HEALTH:
+// green/fast when every service is healthy, amber/slow when one is degraded, red/stuttering with
+// spark bursts when a service is fully down -- a data-flow readout, not just a single alert flag.
+export default function CableTray({ networkHealth }: CableTrayProps) {
+  const style = HEALTH_STYLE[networkHealth];
 
   return (
     <g>
       {CABLE_PATHS.map((points, i) => {
         const d = toPath(points);
+        const spark = project(midpoint(points).x, midpoint(points).y, 0.04);
         return (
           <g key={i}>
             <path d={d} stroke="#475569" strokeWidth={2.6} fill="none" opacity={0.45} strokeLinecap="round" />
             <path
               d={d}
-              stroke={pulseColor}
+              stroke={style.color}
               strokeWidth={1.3}
               strokeDasharray="6 6"
               fill="none"
               strokeLinecap="round"
-              className={pulseAnimation}
+              className={style.className}
+              style={{ animationDuration: `${style.durationS}s` }}
               opacity={0.9}
             />
+            {style.sparking && (
+              <circle
+                cx={spark.x}
+                cy={spark.y}
+                r={1.6}
+                fill="#fef08a"
+                className="animate-spark-flicker"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            )}
           </g>
         );
       })}

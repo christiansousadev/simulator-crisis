@@ -158,8 +158,18 @@ export default {
           "0%": { transform: "translateY(0) scale(0.6)", opacity: "0" },
           "15%": { transform: "translateY(0) scale(1.15)", opacity: "1" },
           "30%": { transform: "translateY(0) scale(1)", opacity: "1" },
-          "80%": { opacity: "1" },
+          // slight elastic overshoot mid-flight, arcade-style, before settling into the rise
+          "55%": { transform: "translateY(-8px) scale(1.05)", opacity: "1" },
+          "85%": { transform: "translateY(-20px) scale(1)", opacity: "1" },
           "100%": { transform: "translateY(-28px) scale(1)", opacity: "0" },
+        },
+        // subtle jittery displacement for the defcon-1 hud badge, reading as a stressed video feed
+        "defcon-critical-glitch": {
+          "0%, 100%": { transform: "translate(0, 0)" },
+          "20%": { transform: "translate(-1px, 0.5px)" },
+          "40%": { transform: "translate(1px, -0.5px)" },
+          "60%": { transform: "translate(-0.5px, -1px)" },
+          "80%": { transform: "translate(0.5px, 1px)" },
         },
       },
       animation: {
@@ -194,6 +204,7 @@ export default {
         "confetti-fall": "confetti-fall 3.2s linear forwards",
         "ticker-scroll": "ticker-scroll 32s linear infinite",
         "combat-text-pop": "combat-text-pop 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "defcon-glitch": "defcon-critical-glitch 0.3s steps(2, end) infinite",
       },
     },
   },

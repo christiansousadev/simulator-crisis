@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { FloatingTextTone, useGameStore } from "../../store/useGameStore";
 
+// arcade combat-text look: dark glass chip per tone, colored glow standing in for a crt bloom
 const TONE_STYLES: Record<FloatingTextTone, string> = {
-  danger: "text-rose-600 border-rose-200 bg-rose-50",
-  success: "text-emerald-600 border-emerald-200 bg-emerald-50",
-  warning: "text-amber-600 border-amber-200 bg-amber-50",
-  info: "text-sky-600 border-sky-200 bg-sky-50",
+  danger: "bg-slate-950/85 border-rose-500/60 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.4)]",
+  warning: "bg-slate-950/85 border-amber-500/60 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.4)]",
+  success: "bg-slate-950/85 border-emerald-500/60 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)]",
+  info: "bg-slate-950/85 border-sky-500/60 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.4)]",
+  gold: "bg-slate-950/85 border-yellow-400/70 text-yellow-300 shadow-[0_0_20px_rgba(234,179,8,0.5)]",
 };
 
 const AUTO_DISMISS_MS = 1600;
@@ -27,7 +29,7 @@ export default function FloatingCombatText() {
       {texts.map((t) => (
         <span
           key={t.id}
-          className={`font-bold text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-md border shadow-sm animate-combat-text-pop ${TONE_STYLES[t.tone]}`}
+          className={`font-mono font-black text-xs uppercase tracking-wider px-3 py-1.5 rounded border animate-combat-text-pop ${TONE_STYLES[t.tone]}`}
         >
           {t.text}
         </span>

@@ -65,12 +65,31 @@
     border-left-color: transparent;
     border-right-color: transparent;
   }
+
+  /* comic speech-bubble tail for a clicked worker's mood-based quip, same trick as .alert-bubble
+     but sized for a wider text balloon rather than a one-glyph alert badge */
+  .speech-bubble {
+    display: inline-block;
+  }
+  .speech-bubble::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    transform: translateX(-50%);
+    border-width: 8px 6px 0 6px;
+    border-style: solid;
+    border-color: inherit;
+    border-left-color: transparent;
+    border-right-color: transparent;
+  }
 }
 
-/* radial cooldown sweep, progress driven by the --progress css variable (0 to 1) */
+/* radial cooldown sweep, progress driven by the --progress css variable (0 to 1). near-black so
+   the "still on cooldown" wedge stays visible as it recedes even over the dark war-room cards. */
 .cooldown-ring {
   background: conic-gradient(
-    rgba(15, 23, 42, 0.7) calc(var(--progress, 0) * 360deg),
+    rgba(2, 6, 23, 0.78) calc(var(--progress, 0) * 360deg),
     transparent calc(var(--progress, 0) * 360deg)
   );
 }

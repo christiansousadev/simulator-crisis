@@ -52,6 +52,7 @@ export interface Translations {
     breakroom: string;
     auditSummary: (clean: number, flagged: number) => string;
     moraleSummary: (pct: number) => string;
+    centerOnCrisis: string;
   };
   nodeInspector: {
     status: string;
@@ -132,6 +133,29 @@ export interface Translations {
     nodeRestored: (serviceId: string) => string;
     slaWarning: string;
     preAlertWarning: (serviceId: string, ticksRemaining: number) => string;
+    fineApplied: (amount: string) => string;
+    slaSanction: string;
+    cycleSurvived: string;
+    techDebtImproved: (amount: number) => string;
+    techDebtWorsened: (amount: number) => string;
+    budgetGain: (amount: string) => string;
+    budgetLoss: (amount: string) => string;
+    moraleGain: string;
+    moraleLoss: string;
+  };
+  workerQuips: {
+    idle: string[];
+    panic: string[];
+    tired: string[];
+    happy: string[];
+  };
+  defcon: {
+    label: string;
+    level5: string;
+    level4: string;
+    level3: string;
+    level2: string;
+    level1: string;
   };
   upgrades: {
     header: string;
@@ -336,6 +360,7 @@ const en: Translations = {
     breakroom: "BREAKROOM",
     auditSummary: (clean, flagged) => `${clean} clean / ${flagged} flagged`,
     moraleSummary: (pct) => `morale ${pct.toFixed(0)}%`,
+    centerOnCrisis: "Center on Crisis",
   },
   nodeInspector: {
     status: "Status",
@@ -422,6 +447,15 @@ const en: Translations = {
     nodeRestored: (serviceId) => `NODE RESTORED: ${serviceId}`,
     slaWarning: "SLA WARNING: AUDIT SANCTIONS ACTIVE",
     preAlertWarning: (serviceId, ticksRemaining) => `INCOMING FAILURE: ${serviceId} (T-${ticksRemaining})`,
+    fineApplied: (amount) => `-$${amount} :: REGULATORY FINE`,
+    slaSanction: "SLA SANCTION APPLIED",
+    cycleSurvived: "AUDIT CYCLE SURVIVED",
+    techDebtImproved: (amount) => `-${amount} TDI`,
+    techDebtWorsened: (amount) => `+${amount} TDI`,
+    budgetGain: (amount) => `+$${amount}`,
+    budgetLoss: (amount) => `-$${amount}`,
+    moraleGain: "+MORALE",
+    moraleLoss: "-MORALE",
   },
   upgrades: {
     header: "Upgrades",
@@ -673,6 +707,20 @@ const en: Translations = {
     testScenario: "Test Scenario",
     testFailed: "Failed to load custom scenario",
   },
+  workerQuips: {
+    idle: ["Monitoring logs... nothing exploding for now.", "Just refilled my coffee. Send incidents responsibly."],
+    panic: ["WHO DEPLOYED ON A FRIDAY?!", "HELP, THE DATABASE IS ON FIRE!", "I TOLD THEM TO ADD MORE REPLICAS!"],
+    tired: ["One more hour on-call and I turn into a houseplant...", "Where's the coffee...? Zzz"],
+    happy: ["Zero-bug deploy! Pinch me!", "SLA back to 99.9%, buying the team donuts."],
+  },
+  defcon: {
+    label: "DEFCON",
+    level5: "NOMINAL",
+    level4: "ELEVATED",
+    level3: "P1 ACTIVE",
+    level2: "MULTIPLE P1s",
+    level1: "IMMINENT COLLAPSE",
+  },
 };
 
 const ptBR: Translations = {
@@ -704,6 +752,7 @@ const ptBR: Translations = {
     breakroom: "COPA",
     auditSummary: (clean, flagged) => `${clean} sem ressalvas / ${flagged} sinalizados`,
     moraleSummary: (pct) => `moral ${pct.toFixed(0)}%`,
+    centerOnCrisis: "Centralizar na Crise",
   },
   nodeInspector: {
     status: "Status",
@@ -790,6 +839,15 @@ const ptBR: Translations = {
     nodeRestored: (serviceId) => `NÓ RESTAURADO: ${serviceId}`,
     slaWarning: "ALERTA DE SLA: SANÇÕES DE AUDITORIA ATIVAS",
     preAlertWarning: (serviceId, ticksRemaining) => `FALHA IMINENTE: ${serviceId} (T-${ticksRemaining})`,
+    fineApplied: (amount) => `-$${amount} :: MULTA REGULATÓRIA`,
+    slaSanction: "SANÇÃO DE SLA APLICADA",
+    cycleSurvived: "CICLO DE AUDITORIA CONCLUÍDO",
+    techDebtImproved: (amount) => `-${amount} TDI`,
+    techDebtWorsened: (amount) => `+${amount} TDI`,
+    budgetGain: (amount) => `+$${amount}`,
+    budgetLoss: (amount) => `-$${amount}`,
+    moraleGain: "+MORAL",
+    moraleLoss: "-MORAL",
   },
   upgrades: {
     header: "Melhorias",
@@ -1041,6 +1099,20 @@ const ptBR: Translations = {
     testScenario: "Testar Cenário",
     testFailed: "Falha ao carregar cenário personalizado",
   },
+  workerQuips: {
+    idle: ["Monitorando logs... nada explodindo por enquanto.", "Acabei de encher a caneca. Mandem incidentes com moderação."],
+    panic: ["QUEM FEZ DEPLOY NA SEXTA-FEIRA?!?!", "SOCORRO, O BANCO PEGOU FOGO!", "EU AVISEI PRA ESCALAR MAIS RÉPLICAS!"],
+    tired: ["Mais uma hora de plantão e eu viro vegetal...", "Cadê o café...? Zzz"],
+    happy: ["Deploy com zero bugs! Alguém me belisca!", "SLA de volta a 99,9%, rodada de donuts pro time."],
+  },
+  defcon: {
+    label: "DEFCON",
+    level5: "NOMINAL",
+    level4: "ELEVADO",
+    level3: "P1 ATIVO",
+    level2: "MÚLTIPLOS P1s",
+    level1: "COLAPSO IMINENTE",
+  },
 };
 
 const es: Translations = {
@@ -1072,6 +1144,7 @@ const es: Translations = {
     breakroom: "SALA DE DESCANSO",
     auditSummary: (clean, flagged) => `${clean} limpios / ${flagged} marcados`,
     moraleSummary: (pct) => `moral ${pct.toFixed(0)}%`,
+    centerOnCrisis: "Centrar en la Crisis",
   },
   nodeInspector: {
     status: "Estado",
@@ -1158,6 +1231,15 @@ const es: Translations = {
     nodeRestored: (serviceId) => `NODO RESTAURADO: ${serviceId}`,
     slaWarning: "ALERTA DE SLA: SANCIONES DE AUDITORÍA ACTIVAS",
     preAlertWarning: (serviceId, ticksRemaining) => `FALLA INMINENTE: ${serviceId} (T-${ticksRemaining})`,
+    fineApplied: (amount) => `-$${amount} :: MULTA REGULATORIA`,
+    slaSanction: "SANCIÓN DE SLA APLICADA",
+    cycleSurvived: "CICLO DE AUDITORÍA SUPERADO",
+    techDebtImproved: (amount) => `-${amount} TDI`,
+    techDebtWorsened: (amount) => `+${amount} TDI`,
+    budgetGain: (amount) => `+$${amount}`,
+    budgetLoss: (amount) => `-$${amount}`,
+    moraleGain: "+MORAL",
+    moraleLoss: "-MORAL",
   },
   upgrades: {
     header: "Mejoras",
@@ -1408,6 +1490,20 @@ const es: Translations = {
     importFailed: "Código de desafío inválido",
     testScenario: "Probar Escenario",
     testFailed: "Error al cargar el escenario personalizado",
+  },
+  workerQuips: {
+    idle: ["Monitoreando logs... nada explota por ahora.", "Acabo de rellenar el café. Envíen incidentes con moderación."],
+    panic: ["¿¿QUIÉN HIZO DEPLOY UN VIERNES?!", "¡SOCORRO, LA BASE DE DATOS SE INCENDIÓ!", "¡LES DIJE QUE ESCALARAN MÁS RÉPLICAS!"],
+    tired: ["Una hora más de guardia y me convierto en planta...", "¿Dónde está el café...? Zzz"],
+    happy: ["¡Deploy sin bugs! ¡Pellízquenme!", "SLA de vuelta al 99.9%, ronda de donas para el equipo."],
+  },
+  defcon: {
+    label: "DEFCON",
+    level5: "NOMINAL",
+    level4: "ELEVADO",
+    level3: "P1 ACTIVO",
+    level2: "MÚLTIPLES P1s",
+    level1: "COLAPSO INMINENTE",
   },
 };
 

@@ -59,24 +59,24 @@ export default function UpgradesPanel() {
               onClick={() => handlePurchase(upg)}
               disabled={disabled}
               className={`rounded-lg border p-2 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                owned ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                owned ? "border-emerald-500/40 bg-emerald-950/20" : "border-slate-800 bg-slate-900/80 hover:bg-slate-800/80"
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
                   {t.upgrades.categories[upg.category]}
                 </span>
-                <Icon className={`w-3.5 h-3.5 ${owned ? "text-emerald-500" : "text-slate-400"}`} />
+                <Icon className={`w-3.5 h-3.5 ${owned ? "text-emerald-400" : "text-slate-400"}`} />
               </div>
-              <div className="text-xs font-bold text-slate-700">{copy.name}</div>
-              <p className="text-[10px] text-slate-500 leading-tight">{copy.description}</p>
+              <div className="text-xs font-bold text-slate-200">{copy.name}</div>
+              <p className="text-[10px] text-slate-400 leading-tight">{copy.description}</p>
               <div className="flex items-center justify-between mt-1 text-[10px] font-bold">
                 {owned ? (
-                  <span className="text-emerald-600">{t.upgrades.owned}</span>
+                  <span className="text-emerald-400">{t.upgrades.owned}</span>
                 ) : !prereqMet ? (
-                  <span className="text-amber-500">{t.upgrades.prerequisiteLocked(prereqName ?? "")}</span>
+                  <span className="text-amber-400">{t.upgrades.prerequisiteLocked(prereqName ?? "")}</span>
                 ) : (
-                  <span className="text-rose-500">-${upg.cost.toLocaleString()}</span>
+                  <span className="text-rose-400">-${upg.cost.toLocaleString()}</span>
                 )}
               </div>
             </button>
