@@ -13,13 +13,13 @@ from app.engine.scenarios import SCENARIO_REGISTRY
 from app.engine.scenarios.custom_scenario import CustomScenario
 from app.models.achievement import Achievement
 from app.models.audit import AuditLog
+from app.models.career import CareerRecord
 from app.models.cosmetic import UnlockedCosmetic
 from app.models.dilemma import DilemmaEvent
 from app.models.engineer import Engineer
 from app.models.incident import Incident
 from app.models.infrastructure import InfrastructureNode
 from app.models.service import Service
-from app.models.career import CareerRecord
 from app.models.session import GameSession
 from app.models.upgrade import PurchasedUpgrade
 
@@ -639,6 +639,7 @@ class SimulationEngine:
             "active_incidents": self.public_incidents(),
             "recent_audits": self.audit_logs[-15:],
             "purchased_upgrades": sorted(self.purchased_upgrade_ids),
+            "mitigation_cooldowns": dict(self.mitigation_last_fired_tick),
             "error_budget_remaining_ratio": round(self.error_budget_remaining_ratio, 4),
             "feature_freeze_active": self.feature_freeze_active,
             "engineers": self.engineers,

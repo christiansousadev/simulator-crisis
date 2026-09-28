@@ -30,8 +30,9 @@ if "DATABASE_URL" not in os.environ and os.path.exists(_TEST_DB):
     os.remove(_TEST_DB)
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TEST_DB}")
 
-from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
+
+from alembic import command  # noqa: E402
 
 _backend_root = Path(__file__).resolve().parents[1]
 command.upgrade(Config(str(_backend_root / "alembic.ini")), "head")

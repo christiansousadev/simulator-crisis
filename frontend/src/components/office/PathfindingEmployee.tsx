@@ -26,7 +26,6 @@ export default function PathfindingEmployee({
   useEffect(() => {
     setPath(findPath(OFFICE_GRAPH, currentNodeId, targetNodeId));
     setHopIndex(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentNodeId, targetNodeId]);
 
   useEffect(() => {

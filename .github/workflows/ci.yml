@@ -3,7 +3,9 @@ name: CI
 # runs the backend pytest suite and the frontend typecheck/test/build pipeline on every push
 # and pull request, so a schema-drift or type regression is caught before it reaches a running
 # instance -- exactly the class of bug ("no such column", a stale WS payload shape) that has
-# previously only surfaced by hand, after the fact, against a real running server.
+# previously only surfaced by hand, after the fact, against a real running server. Lint (ruff /
+# eslint) and coverage run alongside the tests they annotate rather than as separate jobs, so a
+# lint or coverage regression fails the same check a reviewer is already looking at.
 
 on:
   push:
@@ -12,7 +14,7 @@ on:
 
 jobs:
   backend:
-    name: Backend (pytest)
+    name: Backend (ruff, pytest + coverage)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,11 +32,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run test suite
-        run: python -m pytest tests/ -v
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Run test suite (with coverage)
+        run: python -m pytest tests/ -v --cov=app --cov-report=term-missing
 
   frontend:
-    name: Frontend (typecheck, unit tests, build)
+    name: Frontend (eslint, typecheck, unit tests + coverage, build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -52,11 +57,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Run unit tests
-        run: npm test
+      - name: Run unit tests (with coverage)
+        run: npm run test:coverage
 
       - name: Production build
         run: npm run build

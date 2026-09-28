@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
 
+from alembic import command
 from app.api.router import api_router
 from app.engine.simulator import SimulationEngine
 

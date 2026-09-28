@@ -1,6 +1,6 @@
 """data-driven custom scenario, configured entirely by player-supplied json"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from app.engine.scenarios.base import ScenarioEngine
 

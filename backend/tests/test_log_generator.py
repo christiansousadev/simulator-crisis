@@ -23,9 +23,11 @@ def test_root_cause_line_is_never_duplicated_by_a_decoy_line():
         for _ in range(50):
             stream = generate_incident_log_stream(incident)
             lines = stream["lines"]
-            root_line = next(l for l in lines if l["id"] == stream["root_cause_line_id"])
+            root_line = next(line for line in lines if line["id"] == stream["root_cause_line_id"])
             duplicates = [
-                l for l in lines if l["id"] != root_line["id"] and l["message"] == root_line["message"]
+                line
+                for line in lines
+                if line["id"] != root_line["id"] and line["message"] == root_line["message"]
             ]
             assert not duplicates, (
                 f"decoy line duplicates the root-cause message {root_line['message']!r} "
@@ -37,6 +39,6 @@ def test_log_stream_has_exactly_one_root_cause_line_and_correct_length():
     incident = {"root_cause": "deadlock detected under load"}
     stream = generate_incident_log_stream(incident)
     assert len(stream["lines"]) == 22
-    matches = [l for l in stream["lines"] if l["id"] == stream["root_cause_line_id"]]
+    matches = [line for line in stream["lines"] if line["id"] == stream["root_cause_line_id"]]
     assert len(matches) == 1
     assert matches[0]["level"] in ("ERROR", "FATAL")

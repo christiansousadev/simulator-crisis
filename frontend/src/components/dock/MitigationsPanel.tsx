@@ -1,5 +1,4 @@
 import { AlertTriangle, LucideIcon, RotateCcw, ShieldHalf, Zap } from "lucide-react";
-import { useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { MitigationActionId, MitigationCategoryKey } from "../../i18n/translations";
 import { api } from "../../services/api";
@@ -31,10 +30,9 @@ export default function MitigationsPanel() {
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
   const budget = useGameStore((s) => s.telemetry.budget);
   const currentTick = useGameStore((s) => s.telemetry.tick);
+  const mitigationCooldowns = useGameStore((s) => s.telemetry.mitigation_cooldowns);
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const triggerRunAnimation = useGameStore((s) => s.triggerRunAnimation);
-
-  const [firedAtTick, setFiredAtTick] = useState<Record<string, number>>({});
 
   const handleRunbook = async (rb: RunbookDef) => {
     if (!selectedServiceId) return;
@@ -43,12 +41,14 @@ export default function MitigationsPanel() {
     const copy = t.mitigations.actions[rb.actionId];
     try {
       await api.executeMitigation(rb.actionId, selectedServiceId);
-      setFiredAtTick((prev) => ({ ...prev, [rb.actionId]: currentTick }));
       triggerRunAnimation(selectedServiceId, "mitigate");
       pushFloatingText(`-$${rb.cost.toLocaleString()} :: ${copy.name}`, "info");
       playCashSound();
-    } catch {
-      pushFloatingText(t.mitigations.rejected, "danger");
+    } catch (err) {
+      // surface the backend's actual reason (e.g. a cooldown-remaining message, a feature-freeze
+      // or scenario restriction) instead of always claiming insufficient budget -- see api.ts's
+      // request(), which already throws Error(body.detail) for exactly this purpose
+      pushFloatingText(err instanceof Error && err.message ? err.message : t.mitigations.rejected, "danger");
     }
   };
 
@@ -63,7 +63,11 @@ export default function MitigationsPanel() {
           const Icon = rb.icon;
           const copy = t.mitigations.actions[rb.actionId];
           const disabled = !selectedServiceId || budget < rb.cost;
-          const lastFired = firedAtTick[rb.actionId];
+          // sourced from the server's own cooldown state (telemetry.mitigation_cooldowns) rather
+          // than component-local state, so it can never desync from what apply_mitigation
+          // actually enforces -- e.g. across a session reset, which zeroes both `tick` and the
+          // server's cooldown map together, or a page reload, which has no local state to lose
+          const lastFired = mitigationCooldowns[rb.actionId];
           const elapsed = lastFired !== undefined ? currentTick - lastFired : rb.cooldownTicks;
           const cooldownProgress = Math.max(0, Math.min(1, 1 - elapsed / rb.cooldownTicks));
           const onCooldown = cooldownProgress > 0;

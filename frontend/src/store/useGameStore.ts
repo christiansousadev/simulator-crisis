@@ -19,6 +19,7 @@ const INITIAL_TELEMETRY: TelemetryState = {
   active_incidents: [],
   recent_audits: [],
   purchased_upgrades: [],
+  mitigation_cooldowns: {},
   error_budget_remaining_ratio: 1,
   feature_freeze_active: false,
   engineers: [],

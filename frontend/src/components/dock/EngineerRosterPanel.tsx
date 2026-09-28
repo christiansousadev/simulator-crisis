@@ -31,8 +31,8 @@ export default function EngineerRosterPanel() {
       await api.hireEngineer(competency);
       pushFloatingText(`-$${HIRING_COST.toLocaleString()} :: ${t.staff.hireEngineer}`, "info");
       setHiring(false);
-    } catch {
-      pushFloatingText(t.upgrades.insufficientBudget, "danger");
+    } catch (err) {
+      pushFloatingText(err instanceof Error && err.message ? err.message : t.upgrades.insufficientBudget, "danger");
     }
   };
 
@@ -40,8 +40,8 @@ export default function EngineerRosterPanel() {
     playClickSound();
     try {
       await api.rotateShift(engineerId);
-    } catch {
-      pushFloatingText(t.staff.insufficientStamina, "danger");
+    } catch (err) {
+      pushFloatingText(err instanceof Error && err.message ? err.message : t.staff.insufficientStamina, "danger");
     }
   };
 

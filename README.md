@@ -2,11 +2,35 @@
 
 ![IncidentZero Logo](./frontend/public/shield-alert.svg)
 
+[![CI](https://github.com/christiansousadev/simulator-crisis/actions/workflows/ci.yml/badge.svg)](https://github.com/christiansousadev/simulator-crisis/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Frontend](https://img.shields.io/badge/frontend-React%2018%20%7C%20TypeScript%20%7C%20Vite-3178c6.svg)](./frontend)
+[![Backend](https://img.shields.io/badge/backend-FastAPI%20%7C%20Python%203.12-009688.svg)](./backend)
+
 **Language:** 🇺🇸 **English** (default) · [🇧🇷 Português](./README.pt-BR.md)
 
 > **"Silence the alarms. Defend the SLA. Survive the audit."**
 
 IncidentZero is a real-time crisis and systems engineering simulation game. As Head of Infrastructure / VP of Engineering, balance high availability, latency, cascade failures, runbook mitigations, technical debt accumulation, staffing, and compliance audits under live on-call fire — all rendered as a living isometric office.
+
+---
+
+## Screenshots
+
+![The war room: isometric office, live HUD, and an active incident on the floor](./docs/screenshots/office-hud.png)
+
+<table>
+<tr>
+<td width="33%"><img src="./docs/screenshots/incident-detail.png" alt="Incident detail — severity, root cause, MTTA/MTTR, and a log-triage entry point"></td>
+<td width="33%"><img src="./docs/screenshots/mitigations-panel.png" alt="Operational Directives: the runbook mitigation catalog"></td>
+<td width="33%"><img src="./docs/screenshots/onboarding.png" alt="The guided onboarding tutorial's first step"></td>
+</tr>
+<tr>
+<td align="center"><sub>Incident detail</sub></td>
+<td align="center"><sub>Runbook mitigations</sub></td>
+<td align="center"><sub>Guided onboarding</sub></td>
+</tr>
+</table>
 
 ---
 
@@ -37,7 +61,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical blueprint, mathe
 - **Database migrations:** Alembic — the schema is version-controlled and upgraded automatically on every backend startup (`alembic upgrade head` runs inside the FastAPI lifespan). See [Database Migrations](#database-migrations) below.
 - **Simulation Engine:** Deterministic tick loop, cascade failure probability, MTTA/MTTR penalty mechanics, SLA/budget/tech-debt formulas in `backend/app/engine/formulas.py`.
 - **Governance & Compliance:** Real-time audit log streaming persisted to SQLite, with SOX-404 / SOC2 post-mortem generation (Markdown and PDF) into `audits/reports/`.
-- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the full backend and frontend test suites, a TypeScript type-check, and a production build on every push and pull request.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs linting (Ruff / ESLint), the full backend and frontend test suites with coverage, a TypeScript type-check, and a production build on every push and pull request.
 
 ---
 
@@ -104,15 +128,19 @@ Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/), not 
 
 ```bash
 # backend — from backend/, with the virtualenv active
-pytest tests/ -v
+ruff check .                                   # lint
+pytest tests/ -v                                # test suite
+pytest tests/ --cov=app --cov-report=term-missing  # test suite + coverage
 
 # frontend — from frontend/
-npx tsc --noEmit     # type-check
-npm test             # vitest unit suite
-npm run build        # production build
+npm run lint          # eslint
+npx tsc --noEmit      # type-check
+npm test              # vitest unit suite
+npm run test:coverage  # vitest unit suite + coverage
+npm run build           # production build
 ```
 
-All four checks run automatically in CI on every push and pull request (`.github/workflows/ci.yml`).
+All of the above run automatically in CI on every push and pull request (`.github/workflows/ci.yml`).
 
 ---
 
@@ -146,5 +174,22 @@ simulator-crisis/
 ├── backend/    FastAPI app: engine, models, schemas, api/v1 routers, alembic migrations, pytest suite
 ├── frontend/   React + Vite + TS war-room dashboard, i18n (en/pt-BR/es), vitest suite
 ├── audits/     Post-mortem template, generated reports, and per-feature implementation specs (audits/docs/)
-└── .github/    CI workflow
+├── docs/       README screenshots
+├── .github/    CI workflow, Dependabot config, issue/PR templates
+├── LICENSE, SECURITY.md, CHANGELOG.md
+└── ARCHITECTURE.md, README.md / README.pt-BR.md
 ```
+
+---
+
+## Contributing
+
+Bug reports and feature ideas are welcome via [GitHub Issues](https://github.com/christiansousadev/simulator-crisis/issues) (templates provided). Before opening a PR, run the full local check suite from [Testing & CI](#testing--ci) above — the same checks run in CI. See [CHANGELOG.md](./CHANGELOG.md) for what's already landed.
+
+## Security
+
+This is a single-operator demo project, not a production deployment — see [SECURITY.md](./SECURITY.md) for the documented, accepted security boundaries (no auth layer, permissive CORS) and how to report anything beyond those.
+
+## License
+
+[MIT](./LICENSE) © Christian Sousa

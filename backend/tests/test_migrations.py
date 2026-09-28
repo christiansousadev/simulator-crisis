@@ -26,8 +26,9 @@ EXPECTED_TABLES = {
 
 
 def _run_upgrade_head():
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     backend_root = Path(__file__).resolve().parents[1]
     alembic_cfg = Config(str(backend_root / "alembic.ini"))

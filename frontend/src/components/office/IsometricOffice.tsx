@@ -278,8 +278,8 @@ export default function IsometricOffice() {
     try {
       await api.placeInfrastructureNode(armedNodeType, gridX, gridY, targetId, producerId);
       pushFloatingText(t.buildMode.placed, "success");
-    } catch {
-      pushFloatingText(t.buildMode.placementFailed, "danger");
+    } catch (err) {
+      pushFloatingText(err instanceof Error && err.message ? err.message : t.buildMode.placementFailed, "danger");
     }
     setArmedNodeType(null);
     setPendingTargetId(null);

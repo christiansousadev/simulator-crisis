@@ -64,7 +64,13 @@ async def set_speed(payload: SpeedRequest, request: Request) -> Dict[str, Any]:
 
 
 @router.post("/api/session/reset")
-async def reset_simulation(request: Request, payload: SessionResetRequest = SessionResetRequest()) -> Dict[str, Any]:
+async def reset_simulation(
+    request: Request,
+    # a shared default instance is safe here (unlike ruff's B008 concern about mutable-default
+    # traps): every field is Optional[...]=None, nothing in this handler mutates `payload`, and
+    # this lets a bare `POST /api/session/reset` with no body reset to the same defaults
+    payload: SessionResetRequest = SessionResetRequest(),  # noqa: B008
+) -> Dict[str, Any]:
     """RESTART THE SIMULATION FROM A CLEAN STATE, OPTIONALLY INTO A SCRIPTED SCENARIO"""
     engine = request.app.state.engine
     engine.reset(scenario_id=payload.scenario_id, player_id=payload.player_id, difficulty=payload.difficulty)

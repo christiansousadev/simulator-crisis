@@ -119,7 +119,17 @@ This directly supersedes an earlier implementation that instead layered a flat, 
 
 ### 3.1 Why This Builds on, Rather Than Replaces, `WanderingEmployee`
 
-`WanderingEmployee.tsx` already implements the foundational primitive this specification needs: a component holding a `waypoints: Waypoint[]` array, an `index` state cycling through it on an interval, and rendering `OfficeWorker` at `current.x`/`current.y` with a CSS `transitionMs`-eased move (`WanderingEmployee.tsx:1-59`). The gap this specification closes is that `WanderingEmployee`'s transition is a **direct straight-line CSS interpolation between two arbitrary points** — it does not check whether that straight line passes through a desk, a wall, or a server rack, because its existing waypoint pools (coffee machine, sofa, ping-pong table, per its docstring) were hand-authored to already avoid collisions. This specification generalizes that pattern into a real graph so that **new** waypoint pools (e.g., "any desk to the server room door") can be authored declaratively without a human manually verifying every pairwise straight line is collision-free.
+`WanderingEmployee.tsx` already implements the foundational primitive this specification needs: a component holding a `waypoints: Waypoint[]` array, an `index` state cycling through it on an interval, and rendering `OfficeWorker` at `current.x`/`current.y` with a CSS `transitionMs`-eased move (line count has since shifted with a bugfix, see note below — do not cite a specific line range without rereading the file). The gap this specification closes is that `WanderingEmployee`'s transition is a **direct straight-line CSS interpolation between two arbitrary points** — it does not check whether that straight line passes through a desk, a wall, or a server rack, because its existing waypoint pools (coffee machine, sofa, ping-pong table, per its docstring) were hand-authored to already avoid collisions. This specification generalizes that pattern into a real graph so that **new** waypoint pools (e.g., "any desk to the server room door") can be authored declaratively without a human manually verifying every pairwise straight line is collision-free.
+
+> **Fixed (frontend hardening pass):** the interval effect described above originally listed the
+> reactive `happiness` value in its dependency array. Because `user_happiness` drifts on almost
+> every tick broadcast, the interval was torn down and recreated before `dwellMs` could ever
+> elapse, so `index` effectively never advanced — every `WanderingEmployee` instance (both NPCs
+> in `BreakRoom.tsx` and the corridor patroller in `IsometricOffice.tsx`) stood frozen at its
+> first waypoint for the entire session, despite rendering a "patrolling" component. It now reads
+> `happiness` via a ref inside the interval callback instead. This does not change anything this
+> specification builds on top of (the waypoint-cycling shape, the CSS-eased move, the morale-gate
+> skip logic) — only that the cycling itself now actually runs at the intended cadence.
 
 ### 3.2 Waypoint Graph Data Structure
 

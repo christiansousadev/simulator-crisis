@@ -54,7 +54,6 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
       Array.from({ length: ledSlots }).map((_, i) =>
         project(x + RACK_WIDTH * 0.72, y + RACK_DEPTH, height * 0.3 + i * 0.2 + 0.1)
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [x, y, height]
   );
 

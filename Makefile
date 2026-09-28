@@ -1,4 +1,4 @@
-.PHONY: backend frontend dev docker-up docker-down
+.PHONY: backend frontend dev docker-up docker-down lint test
 
 # install backend deps into a local venv
 backend-install:
@@ -26,3 +26,13 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+# lint both apps (ruff + eslint) -- the same checks CI runs
+lint:
+	cd backend && .venv/Scripts/python -m ruff check .
+	cd frontend && npm run lint
+
+# run both test suites with coverage -- the same checks CI runs
+test:
+	cd backend && .venv/Scripts/python -m pytest tests/ -v --cov=app --cov-report=term-missing
+	cd frontend && npm run test:coverage

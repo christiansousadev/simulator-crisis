@@ -10,6 +10,14 @@ interface ToneStep {
   gain?: number;
 }
 
+// Safari (desktop and iOS) still only exposes the constructor under its vendor-prefixed name;
+// this is the standard cross-browser fallback, typed instead of an inline `as any` cast
+function createAudioContext(): AudioContext {
+  const w = window as typeof window & { webkitAudioContext?: typeof AudioContext };
+  const Ctor = w.AudioContext || w.webkitAudioContext;
+  return new Ctor!();
+}
+
 const VOLUME_STORAGE_KEY = "incidentzero.audio_volume";
 const MUTED_STORAGE_KEY = "incidentzero.audio_muted";
 const MUSIC_VOLUME_STORAGE_KEY = "incidentzero.music_volume";
@@ -140,7 +148,7 @@ function applyMusicGain() {
 export function startAmbientMusic() {
   if (musicEngine.ctx) return;
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = createAudioContext();
     const masterGain = ctx.createGain();
     masterGain.gain.value = 0;
     masterGain.connect(ctx.destination);
@@ -206,7 +214,7 @@ export function isMusicPlaying(): boolean {
 function playToneSequence(steps: ToneStep[]) {
   if (muted || masterVolume <= 0) return;
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = createAudioContext();
     const now = ctx.currentTime;
     let latestEnd = now;
 
@@ -323,7 +331,7 @@ export function playKeyboardClatter() {
 export function playRedAlertSiren() {
   if (muted || masterVolume <= 0) return;
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = createAudioContext();
     const now = ctx.currentTime;
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();

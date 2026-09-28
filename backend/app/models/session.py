@@ -1,7 +1,10 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Numeric, Integer, DateTime
+
+from sqlalchemy import Column, DateTime, Integer, Numeric, String
 from sqlalchemy.orm import relationship
+
 from app.models.base import Base
+
 
 class GameSession(Base):
     """REPRESENTS AN ACTIVE OR CONCLUDED CRISIS MANAGEMENT SIMULATION RUN"""

@@ -199,6 +199,11 @@ export interface TelemetryState {
   active_incidents: Incident[];
   recent_audits: AuditLogEntry[];
   purchased_upgrades: string[];
+  // action_id -> tick it was last fired, the server's own MITIGATION_CATALOG cooldown state
+  // (SimulationEngine.mitigation_last_fired_tick) -- the authoritative source for cooldown
+  // countdowns, since it is what apply_mitigation actually enforces and it is naturally
+  // consistent across a session reset (the engine clears it in reset() same as `tick`)
+  mitigation_cooldowns: Record<string, number>;
   error_budget_remaining_ratio: number;
   feature_freeze_active: boolean;
   engineers: Engineer[];

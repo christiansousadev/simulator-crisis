@@ -1,6 +1,15 @@
 // corridor waypoint graph and a* pathfinding for sprites moving across the isometric office
 // nodes are authored along the office's existing walkway guides and doorway gaps so every
 // edge follows a path the architecture already declares as walkable
+//
+// NOTE: as of the frontend hardening pass that added this note, this module (and its consumer,
+// PathfindingEmployee.tsx) is not imported anywhere else in frontend/src -- hired engineers
+// (EngineerRosterPanel.tsx / telemetry.engineers) have no visible representation in the office
+// scene; EngineeringFloor.tsx renders a fixed desk per service_id plus decorative filler sprites
+// regardless of roster state. This is a deliberately unwired, complete building block, not
+// abandoned/forgotten code -- wiring a hired engineer's walk-to-desk animation, or removing this
+// module if the feature is intentionally descoped, is a scoped product decision left open on
+// purpose (see audits/docs/implementations/09_VISUAL_POLISH_AND_HUD_CONSISTENCY_SPEC.md).
 
 export interface GraphNode {
   id: string;

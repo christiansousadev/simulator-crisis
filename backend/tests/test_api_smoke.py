@@ -31,13 +31,34 @@ def test_health_check_reports_online(client):
 def test_session_state_has_every_commercial_pillar_key(client):
     resp = client.get("/api/session/state")
     body = resp.json()
-    for key in ("infrastructure_nodes", "achievements_unlocked", "prestige_points", "unlocked_cosmetics", "active_scenario"):
+    for key in (
+        "infrastructure_nodes",
+        "achievements_unlocked",
+        "prestige_points",
+        "unlocked_cosmetics",
+        "active_scenario",
+        "mitigation_cooldowns",
+    ):
         assert key in body
 
 
 def test_mitigation_rejects_unknown_service(client):
     resp = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "does-not-exist"})
     assert resp.status_code == 400
+
+
+def test_mitigation_cooldown_is_enforced_and_reflected_in_state(client):
+    first = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "srv-auth"})
+    assert first.status_code == 200
+
+    # the frontend reads this map directly (telemetry.mitigation_cooldowns) rather than guessing
+    # cooldown state client-side -- confirm the wire payload actually carries it
+    state = client.get("/api/session/state").json()
+    assert "rollback" in state["mitigation_cooldowns"]
+
+    second = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "srv-auth"})
+    assert second.status_code == 400
+    assert "cooldown" in second.json()["detail"].lower()
 
 
 def test_upgrade_purchase_rejects_missing_prerequisite(client):

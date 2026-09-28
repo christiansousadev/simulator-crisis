@@ -37,8 +37,8 @@ export default function UpgradesPanel() {
       await api.purchaseUpgrade(upg.upgradeId);
       pushFloatingText(`-$${upg.cost.toLocaleString()} :: ${copy.name}`, "info");
       playCashSound();
-    } catch {
-      pushFloatingText(t.upgrades.insufficientBudget, "danger");
+    } catch (err) {
+      pushFloatingText(err instanceof Error && err.message ? err.message : t.upgrades.insufficientBudget, "danger");
     }
   };
 

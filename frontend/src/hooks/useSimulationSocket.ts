@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { TRANSLATIONS } from "../i18n/translations";
 import { WS_URL } from "../services/api";
 import { useGameStore } from "../store/useGameStore";
@@ -38,6 +38,12 @@ export function useSimulationSocket() {
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const setAchievementToast = useGameStore((s) => s.setAchievementToast);
   const language = useGameStore((s) => s.language);
+  // read inside the socket handler via a ref, not as an effect dependency below -- language is
+  // only used to localize one floating-text string, but including it in the effect's deps tore
+  // the whole websocket connection down and reconnected it (with RECONNECT_DELAY_MS's 2s gap,
+  // and a flip to "RECONNECTING" in the topbar) on every language change, just to pick a string
+  const languageRef = useRef(language);
+  languageRef.current = language;
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -66,7 +72,7 @@ export function useSimulationSocket() {
               expires_at_tick: data.expires_at_tick,
             });
           } else if (data.type === "PRE_ALERT_WARNING") {
-            const text = TRANSLATIONS[language].floatingTexts.preAlertWarning(data.service_id, data.ticks_remaining);
+            const text = TRANSLATIONS[languageRef.current].floatingTexts.preAlertWarning(data.service_id, data.ticks_remaining);
             pushFloatingText(text, "warning");
           } else if (data.type === "ACHIEVEMENT_UNLOCKED") {
             setAchievementToast({ achievementId: data.achievement_id, name: data.name, prestigePoints: data.prestige_points });
@@ -97,5 +103,5 @@ export function useSimulationSocket() {
       clearTimeout(reconnectTimer);
       socket?.close();
     };
-  }, [setTelemetry, setConnected, setActiveDilemma, pushFloatingText, setAchievementToast, language]);
+  }, [setTelemetry, setConnected, setActiveDilemma, pushFloatingText, setAchievementToast]);
 }
