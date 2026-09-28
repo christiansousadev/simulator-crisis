@@ -5,6 +5,14 @@
 **Status:** Approved for implementation — additive only, non-breaking
 **Integration baseline:** `backend/app/engine/simulator.py`, `backend/app/models/`, `frontend/src/components/office/OfficeWorker.tsx`, `frontend/src/components/office/WanderingEmployee.tsx`, `frontend/src/components/office/EngineerDesk.tsx`
 
+> **Staleness notice:** § 4.1's `OfficeWorker.tsx:NN` line citations predate a visual-refactor pass
+> that added real walk-cycle legs (a `StandingLegs`/`WalkingLegs` split, swapped in based on a new
+> `isWalking` state derived from actual x/y movement), blinking eyes, and a slightly rounder torso
+> — re-read the file rather than trusting any specific line number here. The substantive claims
+> this section makes remain true as of that pass: `WorkerMood`, `HAND_POSE`, and `BODY_ANIMATION`
+> are byte-for-byte unchanged (the new leg/eye logic is additive and orthogonal to mood), so
+> nothing below needs re-deriving — only the line numbers are stale.
+
 ---
 
 ## 1. System Objective

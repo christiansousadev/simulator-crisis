@@ -130,6 +130,47 @@ This directly supersedes an earlier implementation that instead layered a flat, 
 > `happiness` via a ref inside the interval callback instead. This does not change anything this
 > specification builds on top of (the waypoint-cycling shape, the CSS-eased move, the morale-gate
 > skip logic) — only that the cycling itself now actually runs at the intended cadence.
+>
+> **Fixed (follow-up):** that same cycling fix exposed a second, previously-latent bug: `BreakRoom.tsx`'s
+> ping-pong ball (`OfficeProps.tsx::PingPongBall`) rendered on an infinite CSS loop gated only by
+> `user_happiness > 70`, not by whether `employeeB` (the `WanderingEmployee` instance whose
+> waypoints include the table) had actually arrived there — so once the cycling bug above was
+> fixed and the employee started really patrolling, the ball volleyed by itself for the two-thirds
+> of the loop spent at the coffee/sofa waypoints instead. `WanderingEmployee` now accepts an
+> `onActionChange` callback, fired `WALK_TRANSITION_MS` (1800ms, matching `transitionMs`) after the
+> sprite's target waypoint changes, so a parent scene can key a prop's own animation to actual
+> arrival rather than a proxy condition. `BreakRoom` uses this to gate `PingPongBall` on
+> `employeeBAction === "pingpong"` directly.
+>
+> **Fixed (follow-up 2):** separately, the table itself didn't read as a ping-pong table — it was
+> a single solid `IsoBox` sitting flush on the floor (no legs) with a thin, easy-to-miss net box
+> on top, so once the ball stopped volleying by itself (previous fix) the whole prop looked like
+> an arbitrary green block, not furniture. Replaced the two inline `IsoBox` calls with a new
+> `PingPongTable` component (`OfficeProps.tsx`) built from two dark end supports raising a thin
+> tabletop off the ground plus a taller, more legible net across the midline — the same
+> stacked-box vocabulary every other prop in this file already uses (c.f. `Sofa`, `Fridge`), not a
+> new rendering primitive.
+>
+> **Changed (visual refactor pass):** three further changes, requested directly ("bonecos muito
+> quadradão e sem movimentação... refatorar essas animações, personagens e ambientes"), touch
+> every scene this specification builds on:
+> 1. `isoMath.ts::boxFaces` now chamfers each face's corners (a small proportional inset, capped
+>    and clamped so it degrades gracefully on both tiny and sliver-thin boxes) instead of emitting
+>    a plain 4-point rectangle. This is the single shared primitive behind every `IsoBox`-based
+>    prop in the game (server racks, desks, the new `PingPongTable`, etc.) — the change is
+>    entirely inside `boxFaces()`, so `IsoBox.tsx` and every prop component are unmodified and
+>    automatically inherit the softer silhouette. `project()` itself is still untouched, so this
+>    document's existing "isoMath.ts's project() is a read-only input" claims still hold.
+> 2. `OfficeWorker.tsx` gained blinking eyes (a per-instance randomized `animationDelay` so a room
+>    of sprites doesn't blink in lockstep) and a real walk-cycle: legs now swap between a static
+>    `StandingLegs` pose and a `WalkingLegs` pose (each leg a separately-pivoted `<g>` swinging in
+>    opposite phase) based on a new `isWalking` state, itself derived from comparing the sprite's
+>    current `(x, y)` against its previous render — true only for the `transitionMs` window after
+>    a position actually changes. Previously the legs were one fixed mid-stride pose regardless of
+>    whether the sprite was moving or standing still.
+> 3. `BreakRoom.tsx`'s ping-pong table redesign (previous note) is the concrete example of the
+>    "less blocky prop" ask; the same stacked-box-plus-chamfer treatment now applies uniformly via
+>    point 1 above rather than needing a bespoke redesign per prop.
 
 ### 3.2 Waypoint Graph Data Structure
 

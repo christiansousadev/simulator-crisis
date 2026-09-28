@@ -1,6 +1,15 @@
+import { useState } from "react";
 import IsoBox from "./IsoBox";
-import { EspressoMachine, Fridge, GroundShadow, OfficePlant, PingPongBall, Sofa, WaterCooler } from "./OfficeProps";
-import { useGameStore } from "../../store/useGameStore";
+import {
+  EspressoMachine,
+  Fridge,
+  GroundShadow,
+  OfficePlant,
+  PingPongBall,
+  PingPongTable,
+  Sofa,
+  WaterCooler,
+} from "./OfficeProps";
 import WanderingEmployee from "./WanderingEmployee";
 
 interface BreakRoomProps {
@@ -10,8 +19,12 @@ interface BreakRoomProps {
 
 // LOUNGE: PING PONG TABLE, KITCHENETTE, SECTIONAL SOFA AND TWO WANDERING STAFF
 export default function BreakRoom({ originX, originY }: BreakRoomProps) {
-  const happiness = useGameStore((s) => s.telemetry.user_happiness);
-  const gameInPlay = happiness > 70;
+  // the ball animates only while employeeB has actually arrived at the pingpong waypoint --
+  // previously it played on an infinite CSS loop keyed to a bare happiness threshold, so it kept
+  // volleying by itself across the empty table for the two-thirds of the patrol loop employeeB
+  // spent walking or on the sofa instead
+  const [employeeBAction, setEmployeeBAction] = useState<string>("walk");
+  const gameInPlay = employeeBAction === "pingpong";
 
   const employeeA = [
     { x: originX + 0.55, y: originY + 1.35, action: "walk" as const },
@@ -29,9 +42,8 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
       <GroundShadow x={originX + 0.85} y={originY + 0.6} rx={24} ry={12} />
 
       {/* ping pong table with net */}
-      <IsoBox x={originX + 0.3} y={originY + 0.3} z={0.02} w={1.1} d={0.6} h={0.2} color="#15803d" />
-      <IsoBox x={originX + 0.83} y={originY + 0.3} z={0.22} w={0.04} d={0.6} h={0.08} color="#f8fafc" />
-      {gameInPlay && <PingPongBall x={originX + 0.83} y={originY + 0.55} z={0.3} />}
+      <PingPongTable x={originX + 0.3} y={originY + 0.3} z={0.02} />
+      {gameInPlay && <PingPongBall x={originX + 0.83} y={originY + 0.55} z={0.43} />}
 
       {/* kitchenette counter with water cooler, espresso machine and fridge */}
       <WaterCooler x={originX + 1.7} y={originY + 0.25} />
@@ -45,7 +57,13 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
       <OfficePlant x={originX + 2.9} y={originY + 1.7} />
 
       <WanderingEmployee waypoints={employeeA} shirtColor="#ea580c" hairColor="#1c1917" />
-      <WanderingEmployee waypoints={employeeB} shirtColor="#0d9488" hairColor="#3f2e25" dwellMs={5200} />
+      <WanderingEmployee
+        waypoints={employeeB}
+        shirtColor="#0d9488"
+        hairColor="#3f2e25"
+        dwellMs={5200}
+        onActionChange={setEmployeeBAction}
+      />
     </g>
   );
 }

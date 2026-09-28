@@ -121,6 +121,23 @@ export default {
           "0%, 100%": { transform: "translateX(-11px)" },
           "50%": { transform: "translateX(11px)" },
         },
+        // scissor walk-cycle: each leg's own <g> is pivoted at its hip via transformOrigin, so
+        // this only ever rotates that one leg -- paired with "walk-cycle-right" (opposite phase)
+        // to alternate, and applied only while OfficeWorker detects it's actually mid-transition
+        "walk-cycle-left": {
+          "0%, 100%": { transform: "rotate(16deg)" },
+          "50%": { transform: "rotate(-16deg)" },
+        },
+        "walk-cycle-right": {
+          "0%, 100%": { transform: "rotate(-16deg)" },
+          "50%": { transform: "rotate(16deg)" },
+        },
+        // natural, infrequent eye blink (mostly open, briefly shut) rather than a continuous
+        // flutter -- each eye's own transformOrigin keeps the squash centered on itself
+        "eye-blink": {
+          "0%, 90%, 100%": { transform: "scaleY(1)" },
+          "95%": { transform: "scaleY(0.12)" },
+        },
         "drawer-slide-in": {
           "0%": { transform: "translateX(-16px)", opacity: "0" },
           "100%": { transform: "translateX(0)", opacity: "1" },
@@ -197,6 +214,9 @@ export default {
         "sweat-drop": "sweat-drop 0.9s ease-in infinite",
         "screen-glow-pulse": "screen-glow-pulse 2.4s ease-in-out infinite",
         "ball-volley": "ball-volley 1.1s ease-in-out infinite",
+        "walk-cycle-left": "walk-cycle-left 0.45s ease-in-out infinite",
+        "walk-cycle-right": "walk-cycle-right 0.45s ease-in-out infinite",
+        "eye-blink": "eye-blink 4s ease-in-out infinite",
         "drawer-slide-in": "drawer-slide-in 0.22s ease-out",
         "screen-shake-light": "screen-shake-light 0.4s ease-in-out",
         "screen-shake-heavy": "screen-shake-heavy 0.6s ease-in-out",

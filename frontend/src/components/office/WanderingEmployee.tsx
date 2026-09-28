@@ -16,10 +16,23 @@ interface WanderingEmployeeProps {
   shirtColor: string;
   hairColor: string;
   dwellMs?: number;
+  // reports the waypoint action this employee has actually arrived at (fired WALK_TRANSITION_MS
+  // after the target changes, matching OfficeWorker's own walk-eased transition below) -- lets a
+  // parent scene sync a prop's own animation (e.g. BreakRoom's ping-pong ball) to whether anyone
+  // is actually standing there, instead of guessing from an unrelated global condition
+  onActionChange?: (action: WaypointAction) => void;
 }
 
+const WALK_TRANSITION_MS = 1800;
+
 // AMBIENT NPC PATROLLING A LOOP OF WAYPOINTS: COFFEE MACHINE, SOFA, PING-PONG TABLE
-export default function WanderingEmployee({ waypoints, shirtColor, hairColor, dwellMs = 4500 }: WanderingEmployeeProps) {
+export default function WanderingEmployee({
+  waypoints,
+  shirtColor,
+  hairColor,
+  dwellMs = 4500,
+  onActionChange,
+}: WanderingEmployeeProps) {
   const happiness = useGameStore((s) => s.telemetry.user_happiness);
   const [index, setIndex] = useState(0);
 
@@ -53,6 +66,19 @@ export default function WanderingEmployee({ waypoints, shirtColor, hairColor, dw
 
   const current = waypoints[index];
 
+  // notify the parent once the walk to this waypoint has actually finished, not the instant the
+  // target changes -- otherwise a prop keyed off this (e.g. the ping-pong ball) starts animating
+  // while the sprite is still visibly mid-stride toward it
+  const onActionChangeRef = useRef(onActionChange);
+  onActionChangeRef.current = onActionChange;
+  useEffect(() => {
+    const timer = setTimeout(() => onActionChangeRef.current?.(current.action), WALK_TRANSITION_MS);
+    return () => clearTimeout(timer);
+    // keyed on `index`, not `current.action`: two consecutive waypoints could in principle share
+    // an action label, and each arrival should still fire its own notification
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
   let mood: WorkerMood = "idle";
   if (happiness < 40) mood = "tired";
   else if (current.action === "coffee" || current.action === "pingpong") mood = "happy";
@@ -65,7 +91,7 @@ export default function WanderingEmployee({ waypoints, shirtColor, hairColor, dw
       hairColor={hairColor}
       mood={mood}
       holdsMug={current.action === "coffee"}
-      transitionMs={1800}
+      transitionMs={WALK_TRANSITION_MS}
     />
   );
 }

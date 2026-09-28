@@ -142,6 +142,34 @@ export function SlidingGlassDoor({ x, y, z = 0, height = 0.95 }: PropPosition & 
   );
 }
 
+// PING-PONG TABLE: DARK END SUPPORTS HOLDING UP A THIN RAISED TABLETOP, WITH A NET ACROSS THE MIDDLE
+export function PingPongTable({ x, y, z = 0 }: PropPosition) {
+  const width = 1.1;
+  const depth = 0.6;
+  const legHeight = 0.28;
+  const topThickness = 0.05;
+  const supportWidth = 0.16;
+  return (
+    <g>
+      {/* end supports, raising the tabletop clear of the floor so it reads as furniture, not a slab */}
+      <IsoBox x={x} y={y} z={z} w={supportWidth} d={depth} h={legHeight} color="#334155" topFactor={1.1} />
+      <IsoBox x={x + width - supportWidth} y={y} z={z} w={supportWidth} d={depth} h={legHeight} color="#334155" topFactor={1.1} />
+      {/* thin tabletop resting on the supports */}
+      <IsoBox x={x} y={y} z={z + legHeight} w={width} d={depth} h={topThickness} color="#15803d" />
+      {/* net, standing upright across the midline */}
+      <IsoBox
+        x={x + width / 2 - 0.02}
+        y={y}
+        z={z + legHeight + topThickness}
+        w={0.04}
+        d={depth}
+        h={0.16}
+        color="#f8fafc"
+      />
+    </g>
+  );
+}
+
 // SMALL ANIMATED BALL VOLLEYING ACROSS THE PING-PONG TABLE
 export function PingPongBall({ x, y, z = 0 }: PropPosition) {
   const p = project(x, y, z);

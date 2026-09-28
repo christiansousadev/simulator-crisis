@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { project } from "./isoMath";
 
@@ -62,11 +62,12 @@ const BODY_ANIMATION: Record<WorkerMood, string> = {
 };
 
 // RENDER THE ROLE-SPECIFIC TORSO GARMENT: HOODIE, SUIT JACKET OR CASUAL TEE
+// (rx bumped from the original 3-4 to 5 -- softer, less "cardboard box" silhouette at a glance)
 function Torso({ role, shirtColor }: { role: WorkerRole; shirtColor: string }) {
   if (role === "executive") {
     return (
       <>
-        <rect x={-6} y={-24} width={12} height={14} rx={3} fill="#1f2937" />
+        <rect x={-6} y={-24} width={12} height={14} rx={5} fill="#1f2937" />
         <rect x={-2.4} y={-24} width={4.8} height={14} fill="#f8fafc" />
         <line x1={0} y1={-24} x2={0} y2={-15} stroke={shirtColor} strokeWidth={2} />
       </>
@@ -75,13 +76,42 @@ function Torso({ role, shirtColor }: { role: WorkerRole; shirtColor: string }) {
   if (role === "engineer") {
     return (
       <>
-        <rect x={-6} y={-24} width={12} height={14} rx={4} fill={shirtColor} />
+        <rect x={-6} y={-24} width={12} height={14} rx={5} fill={shirtColor} />
         {/* hoodie collar */}
         <path d="M -3.5,-24 Q 0,-20 3.5,-24 Z" fill="rgba(0,0,0,0.18)" />
       </>
     );
   }
-  return <rect x={-6} y={-24} width={12} height={14} rx={4} fill={shirtColor} />;
+  return <rect x={-6} y={-24} width={12} height={14} rx={5} fill={shirtColor} />;
+}
+
+// STANDING LEGS: A STILL, STRAIGHT STANCE -- USED WHENEVER THE SPRITE ISN'T ACTUALLY TRANSLATING
+function StandingLegs() {
+  return (
+    <>
+      <line x1={-3} y1={0} x2={-3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
+      <line x1={3} y1={0} x2={3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
+      <rect x={-6} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
+      <rect x={2} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
+    </>
+  );
+}
+
+// WALKING LEGS: EACH LEG IS ITS OWN <g>, PIVOTED AT ITS OWN HIP, SWINGING IN OPPOSITE PHASE --
+// A REAL SCISSOR STRIDE RATHER THAN THE SPRITE JUST SLIDING ACROSS THE FLOOR ON FIXED LEGS
+function WalkingLegs() {
+  return (
+    <>
+      <g className="animate-walk-cycle-left" style={{ transformOrigin: "-3px 0px" }}>
+        <line x1={-3} y1={0} x2={-3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
+        <rect x={-6} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
+      </g>
+      <g className="animate-walk-cycle-right" style={{ transformOrigin: "3px 0px" }}>
+        <line x1={3} y1={0} x2={3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
+        <rect x={2} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
+      </g>
+    </>
+  );
 }
 
 // STYLIZED 2.5D ISOMETRIC HUMANOID SPRITE, SCREEN-SPACE DRAWN AT A PROJECTED WORLD ANCHOR
@@ -105,6 +135,23 @@ export default function OfficeWorker({
   const anchor = project(x, y, z);
   const hands = HAND_POSE[mood];
   const slumped = mood === "tired";
+
+  // real walk-cycle legs only while the sprite is actually mid-translation between two world
+  // positions -- previously the legs were a single fixed mid-stride pose regardless of whether
+  // the sprite was moving or standing still, so nothing ever visibly "walked"
+  const [isWalking, setIsWalking] = useState(false);
+  const prevPos = useRef({ x, y });
+  useEffect(() => {
+    if (prevPos.current.x === x && prevPos.current.y === y) return;
+    prevPos.current = { x, y };
+    setIsWalking(true);
+    if (!transitionMs) return;
+    const timer = setTimeout(() => setIsWalking(false), transitionMs);
+    return () => clearTimeout(timer);
+  }, [x, y, transitionMs]);
+
+  // a stable per-instance blink delay so a whole room of sprites doesn't blink in lockstep
+  const blinkDelay = useMemo(() => `${(Math.random() * 4).toFixed(2)}s`, []);
 
   // click-to-banter: a comic speech bubble with a mood-flavored one-liner, auto-dismissing
   const [quip, setQuip] = useState<string | null>(null);
@@ -135,14 +182,7 @@ export default function OfficeWorker({
         style={slumped ? { transform: "translateY(2px) scaleY(0.94)", transformOrigin: "0px 0px" } : undefined}
       >
         {/* legs and shoes, hidden when seated behind a desk or chair */}
-        {!seated && (
-          <>
-            <line x1={-3} y1={0} x2={-4} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
-            <line x1={3} y1={0} x2={4} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
-            <rect x={-6} y={-1.5} width={4} height={2.4} rx={0.8} fill="#1c1917" />
-            <rect x={2} y={-1.5} width={4} height={2.4} rx={0.8} fill="#1c1917" />
-          </>
-        )}
+        {!seated && (isWalking ? <WalkingLegs /> : <StandingLegs />)}
 
         {/* arms, drawn behind the torso so the shoulder joint reads cleanly */}
         <line x1={SHOULDER[0]} y1={SHOULDER[1]} x2={hands.left[0]} y2={hands.left[1]} stroke={skinTone} strokeWidth={3.4} strokeLinecap="round" />
@@ -166,6 +206,29 @@ export default function OfficeWorker({
         <ellipse cx={0} cy={-34.2} rx={6.4} ry={4} fill={hairColor} />
         <ellipse cx={-5.6} cy={-30.5} rx={1.6} ry={2.6} fill={hairColor} />
         <ellipse cx={5.6} cy={-30.5} rx={1.6} ry={2.6} fill={hairColor} />
+
+        {/* eyes: a simple blink (rather than a static face) is enough to read as "alive" at this
+            sprite scale -- each eye's own transformOrigin keeps the blink's squash centered on
+            itself, and the randomized per-instance delay keeps a room of sprites from blinking
+            in unison */}
+        <ellipse
+          cx={-2.3}
+          cy={-29.6}
+          rx={0.9}
+          ry={1.3}
+          fill="#292524"
+          className="animate-eye-blink"
+          style={{ transformOrigin: "-2.3px -29.6px", animationDelay: blinkDelay }}
+        />
+        <ellipse
+          cx={2.3}
+          cy={-29.6}
+          rx={0.9}
+          ry={1.3}
+          fill="#292524"
+          className="animate-eye-blink"
+          style={{ transformOrigin: "2.3px -29.6px", animationDelay: blinkDelay }}
+        />
 
         {glasses && (
           <g stroke="#1e293b" strokeWidth={0.7} fill="none">
