@@ -61,7 +61,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical blueprint, mathe
 - **Database migrations:** Alembic — the schema is version-controlled and upgraded automatically on every backend startup (`alembic upgrade head` runs inside the FastAPI lifespan). See [Database Migrations](#database-migrations) below.
 - **Simulation Engine:** Deterministic tick loop, cascade failure probability, MTTA/MTTR penalty mechanics, SLA/budget/tech-debt formulas in `backend/app/engine/formulas.py`.
 - **Governance & Compliance:** Real-time audit log streaming persisted to SQLite, with SOX-404 / SOC2 post-mortem generation (Markdown and PDF) into `audits/reports/`.
-- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs linting (Ruff / ESLint), the full backend and frontend test suites with coverage, a TypeScript type-check, and a production build on every push and pull request.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs linting (Ruff / ESLint), the full backend and frontend test suites with coverage, a TypeScript type-check, a production build, and a real end-to-end Playwright suite against both live servers, on every push and pull request.
 
 ---
 
@@ -133,12 +133,17 @@ pytest tests/ -v                                # test suite
 pytest tests/ --cov=app --cov-report=term-missing  # test suite + coverage
 
 # frontend — from frontend/
-npm run lint          # eslint
-npx tsc --noEmit      # type-check
-npm test              # vitest unit suite
-npm run test:coverage  # vitest unit suite + coverage
+npm run lint            # eslint
+npx tsc --noEmit        # type-check
+npm test                # vitest unit suite
+npm run test:coverage   # vitest unit suite + coverage
 npm run build           # production build
+
+# e2e — from frontend/, with the backend's virtualenv active on your PATH
+npm run test:e2e        # Playwright, drives the real app against a real backend + WebSocket
 ```
+
+The e2e suite (`frontend/e2e/`) exists specifically to catch what unit tests structurally can't: every spec in it started as an ad-hoc manual check during a real debugging session (an NPC frozen in place, a UI toast showing the wrong error, a wheel-zoom handler whose `preventDefault()` was silently a no-op) and was kept as a permanent regression test instead of thrown away once the bug was fixed. It launches both servers itself (`playwright.config.ts`'s `webServer` entries) and drives a real Chromium against them — no mocking.
 
 All of the above run automatically in CI on every push and pull request (`.github/workflows/ci.yml`).
 
@@ -172,7 +177,7 @@ The backend exposes 30+ REST endpoints across 13 domain routers plus one WebSock
 ```
 simulator-crisis/
 ├── backend/    FastAPI app: engine, models, schemas, api/v1 routers, alembic migrations, pytest suite
-├── frontend/   React + Vite + TS war-room dashboard, i18n (en/pt-BR/es), vitest suite
+├── frontend/   React + Vite + TS war-room dashboard, i18n (en/pt-BR/es), vitest + Playwright e2e suites
 ├── audits/     Post-mortem template, generated reports, and per-feature implementation specs (audits/docs/)
 ├── docs/       README screenshots
 ├── .github/    CI workflow, Dependabot config, issue/PR templates

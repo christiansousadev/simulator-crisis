@@ -40,5 +40,9 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     globals: true,
     css: false,
+    // e2e/ holds Playwright specs (a different test API entirely -- @playwright/test's own
+    // `test`/`expect`, run via `npm run test:e2e`), not vitest's; without this, vitest's default
+    // include glob (`**/*.spec.ts`) picks them up too and fails them against the wrong runner
+    exclude: ["e2e/**", "node_modules/**"],
   },
 });

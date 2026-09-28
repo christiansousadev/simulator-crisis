@@ -1,6 +1,6 @@
 import { Crosshair, Hammer } from "lucide-react";
-import type { MouseEvent, WheelEvent } from "react";
-import { useRef, useState } from "react";
+import type { MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
@@ -205,15 +205,27 @@ export default function IsometricOffice() {
   const redAlert = hasP1 || sessionStatus === "breached";
   const hoveredService = hover ? services.find((s) => s.id === hover.serviceId) : undefined;
 
-  // mouse-wheel zoom, clamped to a sane range around the office's visual center
-  const handleWheelZoom = (evt: WheelEvent<HTMLDivElement>) => {
-    evt.preventDefault();
-    setCameraSmooth(false);
-    setCamera((c) => ({
-      ...c,
-      scale: Math.min(CAMERA_MAX_SCALE, Math.max(CAMERA_MIN_SCALE, c.scale - evt.deltaY * 0.0012)),
-    }));
-  };
+  // mouse-wheel zoom, clamped to a sane range around the office's visual center. Attached below
+  // as a native, explicitly non-passive listener rather than React's onWheel prop: modern
+  // browsers (and React, following suit) register wheel/touch listeners bound through JSX event
+  // props as passive by default, so calling preventDefault() inside a React onWheel handler is
+  // silently ignored -- logging "Unable to preventDefault inside passive event listener
+  // invocation" on every scroll, and never actually stopping the page from scrolling underneath
+  // the camera zoom.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheelZoom = (evt: globalThis.WheelEvent) => {
+      evt.preventDefault();
+      setCameraSmooth(false);
+      setCamera((c) => ({
+        ...c,
+        scale: Math.min(CAMERA_MAX_SCALE, Math.max(CAMERA_MIN_SCALE, c.scale - evt.deltaY * 0.0012)),
+      }));
+    };
+    el.addEventListener("wheel", handleWheelZoom, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheelZoom);
+  }, []);
 
   // left or right mouse button starts a drag-to-pan; a short-lived, unmoved press still reads as a click
   const handlePanStart = (evt: MouseEvent) => {
@@ -302,7 +314,6 @@ export default function IsometricOffice() {
       data-day-phase={dayPhase}
       className="relative flex-1 office-sky overflow-hidden"
       onClick={handleCanvasClick}
-      onWheel={handleWheelZoom}
       onMouseDown={handlePanStart}
       onMouseMove={handlePanMove}
       onMouseUp={handlePanEnd}

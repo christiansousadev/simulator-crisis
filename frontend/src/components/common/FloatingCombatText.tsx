@@ -29,6 +29,8 @@ export default function FloatingCombatText() {
       {texts.map((t) => (
         <span
           key={t.id}
+          data-testid="floating-text"
+          data-tone={t.tone}
           className={`font-mono font-black text-xs uppercase tracking-wider px-3 py-1.5 rounded border animate-combat-text-pop ${TONE_STYLES[t.tone]}`}
         >
           {t.text}

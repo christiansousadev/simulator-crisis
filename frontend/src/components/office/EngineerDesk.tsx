@@ -51,6 +51,7 @@ export default function EngineerDesk({ service, x, y, shirtColor, hairColor, gla
 
   return (
     <g
+      data-service-id={service.id}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(service.id);

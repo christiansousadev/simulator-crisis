@@ -346,7 +346,7 @@ A dilemma offering is pushed as its own out-of-band frame, using the same `_broa
 
 ### 4.1 Topbar Error Budget Meter
 
-`frontend/src/components/layout/Topbar.tsx` currently renders four KPI clusters separated by vertical dividers: `ShieldGauge`, `CreditCounter`, `TechDebtMeter`, `MoraleMeter` (§ "company kpis" block, `Topbar.tsx:64-72`). A fifth cluster, `ErrorBudgetMeter`, is inserted additively into that same flex row, immediately after `ShieldGauge` (the two are conceptually paired — SLA and its complementary Error Budget) and before the existing divider that precedes `CreditCounter`:
+`frontend/src/components/layout/Topbar.tsx` currently renders four KPI clusters separated by vertical dividers: `ShieldGauge`, `CreditCounter`, `TechDebtMeter`, `MoraleMeter` (§ "company kpis" block, `Topbar.tsx:64-72` — since shifted by an unrelated scroll-affordance fix, see `08_QUALITY_GATES_AND_INSTALLABILITY_SPEC.md` § 5; the meter list and order below are still accurate). A fifth cluster, `ErrorBudgetMeter`, is inserted additively into that same flex row, immediately after `ShieldGauge` (the two are conceptually paired — SLA and its complementary Error Budget) and before the existing divider that precedes `CreditCounter`:
 
 ```tsx
 <ShieldGauge slaPercentage={telemetry.sla_percentage} />

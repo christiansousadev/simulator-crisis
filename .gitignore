@@ -63,3 +63,8 @@ Thumbs.db
 # GENERATED AUDIT REPORTS
 audits/reports/*.md
 !audits/reports/.gitkeep
+
+# PLAYWRIGHT E2E
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/

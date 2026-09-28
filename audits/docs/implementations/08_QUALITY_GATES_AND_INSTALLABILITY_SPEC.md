@@ -47,6 +47,14 @@ Both jobs run on `ubuntu-latest` regardless of the fact that day-to-day developm
 Prior to this pass, `Topbar.tsx` and `BottomDock.tsx` — the two chrome bars visible on every screen — had no responsive handling below the `hd` (1400px) breakpoint introduced for KPI-label hiding in an earlier batch; both would overflow badly under roughly 700px. Changes, all additive Tailwind class changes with no layout restructuring:
 
 - **Topbar** — the company name/office-clock text hides below `md`; the connection-status pill drops to an icon-only dot below `sm`; the KPI cluster (`data-tour="topbar-kpis"`) becomes a horizontally-scrollable strip (`overflow-x-auto`, a new `.no-scrollbar` utility in `index.css` to hide the scrollbar track while keeping it swipeable) rather than wrapping or clipping.
+
+  > **Fixed (follow-up):** hiding the scrollbar track had an unintended side effect: a mouse/desktop
+  > user had zero visual cue that content was clipped at all, let alone that scrolling revealed it
+  > — reported directly as "the HUD looks like it's missing a meter." `Topbar.tsx` now tracks the
+  > row's scroll position via a `ResizeObserver` + `scroll` listener (`scrollEdges` state) and
+  > renders a small edge-fade gradient overlay on whichever side still has clipped content,
+  > appearing/disappearing as the row is scrolled — additive, no change to the scroll behavior
+  > itself or to any other file this section describes.
 - **BottomDock** — tab labels hide below `sm`, leaving icon-plus-badge only (the incident-count badge is unaffected); the tab row itself also scrolls horizontally as a safety net. The dock's collapse toggle was deliberately kept **outside** the scrollable region (a sibling, not a child) so a persistent control never scrolls out of view.
 - **CABDilemmaModal** and **IncidentDetailModal** — the outer full-screen overlay was missing the `p-4` side-gutter padding present on every other modal in the app, meaning the card touched the screen edges on a narrow viewport; both gained it plus a `max-h-[90vh] overflow-y-auto` scroll fallback for a dilemma or incident with enough content to exceed a short mobile viewport's height. `CABDilemmaModal`'s two-choice grid stacks to one column below `sm` instead of squeezing two narrow columns.
 

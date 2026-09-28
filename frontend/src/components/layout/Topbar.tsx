@@ -1,4 +1,5 @@
 import { Award, Building2, Gamepad2, HelpCircle, Pause, Play, Settings } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
@@ -33,6 +34,31 @@ export default function Topbar() {
 
   const currentMultiplier = telemetry.is_running ? Math.round(1 / telemetry.tick_rate_seconds) : 0;
 
+  // the KPI strip below is intentionally horizontally scrollable rather than wrapping (a narrow
+  // viewport, or pt-BR's longer label strings, can make it wider than its container) -- but with
+  // no visible scrollbar (`no-scrollbar`), a mouse/desktop user had no cue that a clipped meter
+  // (Morale/Reputation, at the end) even existed, let alone that scrolling reveals it. These two
+  // edge-fade hints only render when there's actually more content in that direction.
+  const kpiRowRef = useRef<HTMLDivElement>(null);
+  const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = kpiRowRef.current;
+    if (!el) return;
+    const updateEdges = () =>
+      setScrollEdges({
+        left: el.scrollLeft > 4,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+      });
+    updateEdges();
+    el.addEventListener("scroll", updateEdges, { passive: true });
+    const observer = new ResizeObserver(updateEdges);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateEdges);
+      observer.disconnect();
+    };
+  }, []);
+
   const handleSpeedChange = async (speed: number) => {
     try {
       if (speed === 0) {
@@ -66,25 +92,34 @@ export default function Topbar() {
       </div>
 
       {/* company kpis: horizontally scrollable so a narrow viewport swipes instead of overflowing */}
-      <div
-        className="flex items-center gap-3 sm:gap-6 overflow-x-auto no-scrollbar min-w-0 [&>*]:shrink-0"
-        data-tour="topbar-kpis"
-      >
-        <DefconMeter telemetry={telemetry} />
-        <div className="h-9 w-px bg-slate-700" />
-        <ShieldGauge slaPercentage={telemetry.sla_percentage} />
-        <div className="h-9 w-px bg-slate-700" />
-        <ErrorBudgetMeter remainingRatio={telemetry.error_budget_remaining_ratio} frozen={telemetry.feature_freeze_active} />
-        <div className="h-9 w-px bg-slate-700" />
-        <CreditCounter budget={telemetry.budget} />
-        <div className="h-9 w-px bg-slate-700" />
-        <TechDebtMeter techDebt={telemetry.tech_debt} />
-        <div className="h-9 w-px bg-slate-700" />
-        <MoraleMeter happiness={telemetry.user_happiness} />
-        <div className="hidden hd:block h-9 w-px bg-slate-700" />
-        <div className="hidden hd:block">
-          <ReputationMeter reputation={telemetry.reputation} />
+      <div className="relative min-w-0 flex-1">
+        {scrollEdges.left && (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-slate-900 to-transparent" />
+        )}
+        <div
+          ref={kpiRowRef}
+          className="flex items-center gap-3 sm:gap-6 overflow-x-auto no-scrollbar min-w-0 [&>*]:shrink-0"
+          data-tour="topbar-kpis"
+        >
+          <DefconMeter telemetry={telemetry} />
+          <div className="h-9 w-px bg-slate-700" />
+          <ShieldGauge slaPercentage={telemetry.sla_percentage} />
+          <div className="h-9 w-px bg-slate-700" />
+          <ErrorBudgetMeter remainingRatio={telemetry.error_budget_remaining_ratio} frozen={telemetry.feature_freeze_active} />
+          <div className="h-9 w-px bg-slate-700" />
+          <CreditCounter budget={telemetry.budget} />
+          <div className="h-9 w-px bg-slate-700" />
+          <TechDebtMeter techDebt={telemetry.tech_debt} />
+          <div className="h-9 w-px bg-slate-700" />
+          <MoraleMeter happiness={telemetry.user_happiness} />
+          <div className="hidden hd:block h-9 w-px bg-slate-700" />
+          <div className="hidden hd:block">
+            <ReputationMeter reputation={telemetry.reputation} />
+          </div>
         </div>
+        {scrollEdges.right && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-slate-900 to-transparent" />
+        )}
       </div>
 
       {/* meta controls and simulation speed */}

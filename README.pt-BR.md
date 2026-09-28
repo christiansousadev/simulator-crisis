@@ -52,7 +52,7 @@ Veja [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) para o blueprint técnico
 - **Migrações de banco de dados:** Alembic — o schema é versionado e atualizado automaticamente a cada inicialização do backend (`alembic upgrade head` roda dentro do lifespan do FastAPI). Veja [Migrações de Banco de Dados](#migrações-de-banco-de-dados) abaixo.
 - **Motor de simulação:** loop de ticks determinístico, probabilidade de falha em cascata, mecânicas de penalidade de MTTA/MTTR, fórmulas de SLA/orçamento/dívida técnica em `backend/app/engine/formulas.py`.
 - **Governança e Compliance:** streaming de log de auditoria em tempo real persistido em SQLite, com geração de post-mortem SOX-404 / SOC2 (Markdown e PDF) em `audits/reports/`.
-- **CI:** GitHub Actions (`.github/workflows/ci.yml`) roda lint (Ruff / ESLint), a suíte completa de testes de backend e frontend com cobertura, checagem de tipos TypeScript e build de produção a cada push e pull request.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) roda lint (Ruff / ESLint), a suíte completa de testes de backend e frontend com cobertura, checagem de tipos TypeScript, build de produção e uma suíte end-to-end real com Playwright contra os dois servidores ao vivo, a cada push e pull request.
 
 ---
 
@@ -129,7 +129,12 @@ npx tsc --noEmit       # checagem de tipos
 npm test               # suíte de testes unitários (vitest)
 npm run test:coverage  # suíte de testes unitários + cobertura
 npm run build           # build de produção
+
+# e2e — a partir de frontend/, com o virtualenv do backend ativo no PATH
+npm run test:e2e       # Playwright, roda o app de verdade contra um backend + WebSocket reais
 ```
+
+A suíte e2e (`frontend/e2e/`) existe especificamente para pegar o que testes unitários estruturalmente não conseguem: cada spec nasceu de uma verificação manual feita durante uma sessão de debug real (um NPC travado no lugar, um toast de UI mostrando o erro errado, um handler de zoom cujo `preventDefault()` era um no-op silencioso) e foi mantida como teste de regressão permanente em vez de descartada depois que o bug foi corrigido. Ela mesma sobe os dois servidores (`webServer` no `playwright.config.ts`) e dirige um Chromium real contra eles — nada de mock.
 
 Todas as verificações acima rodam automaticamente no CI a cada push e pull request (`.github/workflows/ci.yml`).
 
@@ -163,7 +168,7 @@ O backend expõe mais de 30 endpoints REST em 13 roteadores de domínio, além d
 ```
 simulator-crisis/
 ├── backend/    App FastAPI: engine, models, schemas, roteadores api/v1, migrações alembic, suíte pytest
-├── frontend/   Dashboard war-room em React + Vite + TS, i18n (en/pt-BR/es), suíte vitest
+├── frontend/   Dashboard war-room em React + Vite + TS, i18n (en/pt-BR/es), suítes vitest + Playwright e2e
 ├── audits/     Template de post-mortem, relatórios gerados e specs de implementação por funcionalidade (audits/docs/)
 ├── docs/       Screenshots do README
 ├── .github/    Workflow de CI, config do Dependabot, templates de issue/PR
