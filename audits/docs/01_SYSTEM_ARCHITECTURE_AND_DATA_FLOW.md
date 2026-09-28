@@ -5,6 +5,16 @@
 **System:** IncidentZero — SRE & IT Governance Crisis Simulator
 **Applies to:** `backend/app/` (FastAPI simulation service) and `frontend/src/` (React operations console)
 
+> **Staleness notice:** this document predates several engine subsystems added since it was
+> written — difficulty presets and governance reputation, CAB dilemmas, the tech-tree/upgrade
+> system, staff on-call and fatigue, achievements/cosmetics/Hall of Fame, build-mode
+> infrastructure nodes, the scripted-scenario engine (including player-authored custom
+> scenarios), the log-triage mini-game, and crash/restart snapshot-resume — and it claims (§3.1)
+> that no migration framework exists, which is no longer true: `backend/app/main.py` now runs
+> real Alembic migrations on startup. Treat this document as historical/architectural framing
+> only; for current behavior see `audits/docs/implementations/*_SPEC.md` (07, 08 and 09 cover
+> the most recent additions) and the source files each spec cites directly.
+
 ---
 
 ## 1. Executive Summary

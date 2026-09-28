@@ -4,6 +4,15 @@
 **Classification:** Internal Architectural Reference / Compliance Package Exhibit B
 **Source of truth:** `backend/app/engine/formulas.py` (pure functions, no I/O), consumed by `backend/app/engine/simulator.py`
 
+> **Staleness notice:** `formulas.py` itself is still the correct source of truth for the core
+> SLA/hazard math below, but `simulator.py` now layers additional multipliers on top of
+> `cascading_failure_probability` at the call site — difficulty preset, governance-reputation
+> threshold, build-mode infrastructure nodes, and active-scenario hazard multipliers — none of
+> which are documented here. See `audits/docs/implementations/02_ERROR_BUDGET_AND_CAB_GOVERNANCE_SPEC.md`,
+> `.../03_STAFF_ONCALL_AND_FATIGUE_SPEC.md` and the `commercial/01_DYNAMIC_TOPOLOGY_BUILDER_SPEC.md`
+> for those additions, and `backend/app/engine/simulator.py::_evaluate_random_failures` for the
+> exact composition order.
+
 ---
 
 ## 0. Notation and Constant Reference

@@ -5,6 +5,14 @@
 **Status:** Approved for implementation — additive only, non-breaking
 **Integration baseline:** `backend/app/api/v1/audits.py`, `audits/templates/post_mortem_template.md`, `audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`, `audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md`
 
+> **Staleness notice:** a later hardening pass changed three things this spec's embedded code
+> excerpts still show in their original form — verify current behavior against the live source,
+> not the snippets below: (1) `apply_interview_verdict` now 404s if `incident_id` doesn't exist
+> in the database, before reading any `.verdict.json` file; (2) `InterviewMessageRequest.message`
+> is now bounded to 1–2000 characters (`backend/app/schemas/interview.py`); (3) `conduct_interview`
+> now enforces a minimal in-process per-client rate limit (10 calls/60s) before invoking the LLM.
+> None of these change the request/response shapes or the verdict schema documented below.
+
 ---
 
 ## 1. System Objective

@@ -97,6 +97,12 @@ class SimulationEngine:
         self.purchased_upgrade_ids: Set[str] = set()
         self.pending_pre_alerts: List[Dict[str, Any]] = []
 
+        # server-side runbook cooldown tracking (action_id -> tick last fired), mirroring the
+        # client-only cooldown MitigationsPanel renders -- without this, apply_mitigation had
+        # no cooldown enforcement of its own, so a scripted client could fire a runbook every
+        # tick regardless of MITIGATION_CATALOG's declared cooldown_ticks
+        self.mitigation_last_fired_tick: Dict[str, int] = {}
+
         # error budget governance
         self._error_budget_history: List[float] = []
         self.error_budget_remaining_ratio: float = 1.0
@@ -705,6 +711,7 @@ class SimulationEngine:
 
         self.purchased_upgrade_ids = set()
         self.pending_pre_alerts = []
+        self.mitigation_last_fired_tick = {}
 
         self._error_budget_history = []
         self.error_budget_remaining_ratio = 1.0
@@ -1207,6 +1214,15 @@ class SimulationEngine:
         if not action:
             return {"success": False, "error": "Unknown mitigation action"}
 
+        last_fired = self.mitigation_last_fired_tick.get(action_id)
+        if last_fired is not None:
+            elapsed = self.current_tick - last_fired
+            if elapsed < action["cooldown_ticks"]:
+                return {
+                    "success": False,
+                    "error": f"Runbook on cooldown: {action['cooldown_ticks'] - elapsed} tick(s) remaining",
+                }
+
         if self.feature_freeze_active and action["category"] == "hotfix":
             return {
                 "success": False,
@@ -1245,6 +1261,7 @@ class SimulationEngine:
         # apply financial and tech debt modifications
         self.budget -= effective_cost
         self.tech_debt = max(0, min(100, self.tech_debt + effective_tdi_delta))
+        self.mitigation_last_fired_tick[action_id] = self.current_tick
 
         # restore service health parameters
         srv["status"] = "healthy"

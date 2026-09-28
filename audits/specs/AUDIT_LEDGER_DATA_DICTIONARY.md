@@ -4,6 +4,16 @@
 **Classification:** Technical Specification / Compliance Package Exhibit E
 **Source of truth:** `backend/app/models/audit.py` (persisted schema), `backend/app/engine/event_generator.py::build_audit_entry` (in-memory/wire schema), and every `_log_audit_event(...)` call site in `backend/app/engine/simulator.py` (payload content per event type)
 
+> **Staleness notice:** § 2's table below is no longer the complete and closed set it claims to
+> be. `backend/app/engine/simulator.py` and `backend/app/api/v1/audits.py` now also emit (at
+> least) `INFRASTRUCTURE_NODE_PLACED`, `INFRASTRUCTURE_NODE_REMOVED`, `ROOT_CAUSE_IDENTIFIED`,
+> `ACHIEVEMENT_UNLOCKED`-style career/cosmetic events, per-scenario events such as
+> `CHAOS_STRIKE`, and the AI Auditor's `AI_AUDITOR_INTERVIEW_TURN` / `AI_AUDITOR_VERDICT_APPLIED`
+> (the latter notably hardcodes `tick=0` rather than the engine's `current_tick` — a real
+> deviation from every other event type's tick-sequencing convention, worth flagging to any
+> reviewer relying on `tick` as the correlation key per § 1.1). Re-derive § 2 from every
+> `_log_audit_event(...)` / `AuditLog(...)` call site before treating it as exhaustive.
+
 ---
 
 ## 1. Table Schema — `audit_logs`

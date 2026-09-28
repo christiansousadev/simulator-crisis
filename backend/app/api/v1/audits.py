@@ -1,9 +1,12 @@
 import hashlib
 import json
+import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -40,6 +43,32 @@ stated severity. Ask one focused question per turn. Respond with a JSON object m
 {"reply": string, "verdict": "PENDING" | "VALID" | "JUSTIFIED" | "NON_COMPLIANT",
 "regulatory_fine_adjustment": number}. Use PENDING while the interview is still in progress. Never invent
 facts not present in the dossier; challenge the operator directly if their claim contradicts it."""
+
+# minimal in-process sliding-window limiter guarding the LLM-backed interview endpoint. Not a
+# substitute for real auth/quota infrastructure (single-process, resets on restart, keyed by
+# client IP which is spoofable/shared behind NAT) -- but it closes the trivial "loop the
+# endpoint as fast as possible" spend-amplification path against settings.LLM_API_KEY, given
+# this endpoint (like the rest of the API) has no auth layer in front of it.
+_INTERVIEW_RATE_LIMIT_WINDOW_SECONDS = 60.0
+_INTERVIEW_RATE_LIMIT_MAX_CALLS = 10
+_interview_call_log: Dict[str, List[float]] = defaultdict(list)
+_interview_rate_limit_lock = Lock()
+
+
+def _check_interview_rate_limit(client_key: str) -> None:
+    """RAISE 429 IF THE CALLER HAS EXCEEDED THE INTERVIEW ENDPOINT'S PER-CLIENT CALL BUDGET"""
+    now = time.monotonic()
+    cutoff = now - _INTERVIEW_RATE_LIMIT_WINDOW_SECONDS
+    with _interview_rate_limit_lock:
+        calls = _interview_call_log[client_key]
+        while calls and calls[0] < cutoff:
+            calls.pop(0)
+        if len(calls) >= _INTERVIEW_RATE_LIMIT_MAX_CALLS:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many interview turns in a short window; please slow down and try again shortly",
+            )
+        calls.append(now)
 
 
 @router.get("/api/audits")
@@ -271,10 +300,13 @@ def _build_postmortem_pdf(
 
 
 @router.post("/api/audits/postmortem/{incident_id}/interview")
-async def conduct_interview(incident_id: str, payload: InterviewMessageRequest) -> Dict[str, Any]:
+async def conduct_interview(incident_id: str, payload: InterviewMessageRequest, request: Request) -> Dict[str, Any]:
     """CONDUCT ONE TURN OF AN LLM-DRIVEN REGULATORY DEFENSE INTERVIEW FOR A RESOLVED INCIDENT"""
     if not settings.LLM_API_KEY:
         raise HTTPException(status_code=503, detail="AI Auditor interview service is not configured")
+
+    client_key = request.client.host if request.client else "unknown"
+    _check_interview_rate_limit(client_key)
 
     db: OrmSession = SessionLocal()
     try:
@@ -307,6 +339,14 @@ async def conduct_interview(incident_id: str, payload: InterviewMessageRequest) 
 @router.post("/api/audits/postmortem/{incident_id}/interview/apply-verdict")
 async def apply_interview_verdict(incident_id: str, request: Request) -> Dict[str, Any]:
     """APPLY THE MOST RECENT INTERVIEW VERDICT'S REGULATORY FINE ADJUSTMENT TO THE LIVE SESSION BUDGET"""
+    db: OrmSession = SessionLocal()
+    try:
+        incident = db.get(Incident, incident_id)
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found in the compliance ledger")
+    finally:
+        db.close()
+
     verdict_meta = _load_latest_verdict(incident_id)
     if not verdict_meta or verdict_meta["verdict"] == "PENDING":
         raise HTTPException(status_code=400, detail="No concluded interview verdict available to apply")

@@ -9,7 +9,10 @@ router = APIRouter(tags=["career"])
 
 
 @router.get("/api/career/records")
-async def list_career_records(player_id: Optional[str] = Query(default=None), scope: str = Query(default="mine")) -> List[Dict[str, Any]]:
+async def list_career_records(
+    player_id: Optional[str] = Query(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    scope: str = Query(default="mine"),
+) -> List[Dict[str, Any]]:
     """LIST HALL-OF-FAME RUNS, EITHER FOR ONE PLAYER OR ACROSS EVERYONE ON THIS SERVER"""
     db = SessionLocal()
     try:

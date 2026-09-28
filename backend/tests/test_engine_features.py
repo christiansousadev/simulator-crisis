@@ -36,8 +36,12 @@ from alembic.config import Config  # noqa: E402
 _backend_root = Path(__file__).resolve().parents[1]
 command.upgrade(Config(str(_backend_root / "alembic.ini")), "head")
 
+from unittest.mock import patch  # noqa: E402
+
 from app.core.database import SessionLocal  # noqa: E402
-from app.engine import dilemmas  # noqa: E402
+from app.engine import dilemmas, formulas  # noqa: E402
+from app.engine.scenarios import SCENARIO_REGISTRY  # noqa: E402
+from app.engine.scenarios.custom_scenario import CustomScenario  # noqa: E402
 from app.engine.simulator import DIFFICULTY_PRESETS, SimulationEngine  # noqa: E402
 from app.models.session import GameSession  # noqa: E402
 
@@ -140,3 +144,77 @@ def test_engine_does_not_restore_a_terminal_or_fresh_session():
     resumed = SimulationEngine(session_id=SESSION_ID)
     assert resumed.current_tick == 0
     assert resumed.budget == DIFFICULTY_PRESETS["standard"]["starting_budget"]
+
+
+def test_apply_mitigation_enforces_server_side_cooldown():
+    # apply_mitigation previously had no cooldown check of its own -- MITIGATION_CATALOG's
+    # cooldown_ticks was only ever enforced client-side by MitigationsPanel's own timer, so a
+    # scripted client could fire the same runbook every tick
+    engine = _fresh_engine()
+    engine.budget = 100000.0
+
+    first = engine.apply_mitigation("rollback", "srv-auth")
+    assert first["success"] is True
+
+    immediate_retry = engine.apply_mitigation("rollback", "srv-auth")
+    assert immediate_retry["success"] is False
+    assert "cooldown" in immediate_retry["error"].lower()
+
+    # advancing past the catalog's declared cooldown window allows it again
+    engine.current_tick += formulas.find_mitigation("rollback")["cooldown_ticks"]
+    after_cooldown = engine.apply_mitigation("rollback", "srv-auth")
+    assert after_cooldown["success"] is True
+
+
+def test_db_read_replica_node_reduces_effective_failure_probability():
+    engine = _fresh_engine()
+    engine.budget = 100000.0
+    engine.tech_debt = 25
+
+    with patch("app.engine.formulas.cascading_failure_probability", return_value=0.5), patch(
+        "random.random", return_value=0.3
+    ):
+        # baseline (no infra node): 0.3 < 0.5 -> the service must fail
+        engine._evaluate_random_failures()
+        assert any(s["id"] == "srv-auth" and s["status"] != "healthy" for s in engine.services)
+
+    # heal it back, then place a db_read_replica node targeting it: infrastructure's
+    # DB_READ_REPLICA_HAZARD_MULTIPLIER (0.40) drops the effective probability to 0.20, so the
+    # exact same 0.3 draw must no longer trigger a failure
+    engine.services = engine._init_default_services()
+    placement = engine.place_infrastructure_node("db_read_replica", 0, 0, target_service_id="srv-auth")
+    assert placement["success"] is True
+
+    with patch("app.engine.formulas.cascading_failure_probability", return_value=0.5), patch(
+        "random.random", return_value=0.3
+    ):
+        engine._evaluate_random_failures()
+        assert all(s["status"] == "healthy" for s in engine.services if s["id"] == "srv-auth")
+
+
+def test_registered_scenarios_evaluate_victory_at_expiry_without_error():
+    engine = _fresh_engine()
+    for scenario_cls in SCENARIO_REGISTRY.values():
+        scenario = scenario_cls(engine)
+        scenario.elapsed_ticks = scenario.duration_ticks
+        outcome = scenario.evaluate_victory()
+        assert outcome is not None
+        assert outcome["scenario_id"] == scenario_cls.scenario_id
+
+
+def test_custom_scenario_evaluates_victory_and_defeat_conditions():
+    engine = _fresh_engine()
+    config = {"duration_ticks": 10, "hazard_multiplier": 1.0, "chaos_injections": [], "budget_floor": 1000.0}
+    scenario = CustomScenario(engine, config)
+
+    # neither expired nor under the budget floor yet -> still in progress
+    assert scenario.evaluate_victory() is None
+
+    # budget at/under the configured floor -> defeat, regardless of elapsed_ticks
+    engine.budget = 500.0
+    assert scenario.evaluate_victory() == {"scenario_id": "custom", "outcome": "defeat", "compliant": False}
+
+    # restore budget and expire the window -> victory
+    engine.budget = 50000.0
+    scenario.elapsed_ticks = scenario.duration_ticks
+    assert scenario.evaluate_victory() == {"scenario_id": "custom", "outcome": "victory", "compliant": True}

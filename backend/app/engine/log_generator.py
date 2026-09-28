@@ -62,6 +62,15 @@ def _root_cause_message(root_cause: str) -> str:
 
 def generate_incident_log_stream(incident: Dict[str, Any]) -> Dict[str, Any]:
     """BUILD A DETERMINISTIC SYNTHETIC LOG STREAM FOR ONE INCIDENT, WITH ONE MARKED ROOT-CAUSE LINE"""
+    # the root-cause message is drawn from the same ERROR/FATAL pools the decoy lines sample
+    # from, so it must be excluded from those pools while generating decoys below -- otherwise
+    # a decoy can land on the exact same text as the "correct" line, making the two
+    # indistinguishable to the player (submit_triage matches by line id, not message text)
+    root_cause_message = _root_cause_message(incident["root_cause"])
+    root_cause_level = "FATAL" if root_cause_message in FATAL_LINES else "ERROR"
+    decoy_error_lines = [m for m in ERROR_LINES if m != root_cause_message]
+    decoy_fatal_lines = [m for m in FATAL_LINES if m != root_cause_message]
+
     lines: List[Dict[str, Any]] = []
     for tick_offset in range(LOG_LINE_COUNT):
         level = random.choices(
@@ -69,7 +78,7 @@ def generate_incident_log_stream(incident: Dict[str, Any]) -> Dict[str, Any]:
             weights=[55, 25, 15, 5],
             k=1,
         )[0]
-        pool = {"INFO": INFO_LINES, "WARN": WARN_LINES, "ERROR": ERROR_LINES, "FATAL": FATAL_LINES}[level]
+        pool = {"INFO": INFO_LINES, "WARN": WARN_LINES, "ERROR": decoy_error_lines, "FATAL": decoy_fatal_lines}[level]
         lines.append(
             {
                 "id": f"log-{uuid.uuid4().hex[:8]}",
@@ -80,8 +89,6 @@ def generate_incident_log_stream(incident: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     # inject the deterministic root-cause line at a random position, always error-or-fatal
-    root_cause_message = _root_cause_message(incident["root_cause"])
-    root_cause_level = "FATAL" if root_cause_message in FATAL_LINES else "ERROR"
     root_cause_index = random.randint(3, LOG_LINE_COUNT - 2)
     root_cause_id = f"log-{uuid.uuid4().hex[:8]}"
     lines[root_cause_index] = {

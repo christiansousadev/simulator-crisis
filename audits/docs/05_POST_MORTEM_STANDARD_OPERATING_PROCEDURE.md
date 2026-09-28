@@ -4,6 +4,15 @@
 **Classification:** Operational Procedure / Compliance Package Exhibit F
 **Source of truth:** `backend/app/api/v1/audits.py` (hydration pipeline), `audits/templates/post_mortem_template.md` (template contract), `backend/app/models/incident.py`, `backend/app/models/session.py`
 
+> **Staleness notice:** `backend/app/api/v1/audits.py` has since grown a PDF export endpoint,
+> an LLM-driven "AI Auditor" interview flow, and a verdict-application endpoint, none of which
+> this SOP describes. As of the hardening pass that added this notice: `apply_interview_verdict`
+> now 404s against an incident id that no longer exists in the database (matching the guard the
+> other three endpoints in this file already had), and `conduct_interview`'s request body is
+> length-bounded and rate-limited per client — both closing gaps this document's sibling specs
+> had flagged as open. See `audits/docs/implementations/06_AI_AUDITOR_POSTMORTEM_INTERVIEW_SPEC.md`
+> and `commercial/05_EXECUTIVE_PDF_GENERATOR_SPEC.md` for those flows.
+
 ---
 
 ## 1. Purpose and Scope

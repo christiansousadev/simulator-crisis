@@ -5,6 +5,14 @@
 **Alignment claimed:** SOX-404 (Section 404 internal-control-over-financial-reporting principles, applied here to simulated financial state), SOC 2 Type II (Trust Services Criteria: Processing Integrity, Availability), ISO/IEC 27001 (Annex A control themes: logging and monitoring, A.8.15)
 **Scope limitation:** This document evaluates the completeness and traceability of the *action ledger*. It does not assert compliance with authentication, encryption-at-rest, or access-control criteria — those gaps are recorded explicitly in Document 01, § 5.2, and are out of scope here by design.
 
+> **Staleness notice:** the ledger has grown substantially since this document was written —
+> new event types now exist for infrastructure placement, achievements/career records, AI
+> Auditor interview turns and verdicts, and per-scenario events (e.g. `CHAOS_STRIKE`), among
+> others — so any control objective below phrased in terms of "the eight event types" or similar
+> closed-set language should be re-verified against `audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md`'s
+> own staleness notice and, ultimately, against every `_log_audit_event(...)` call site in
+> `backend/app/engine/simulator.py` and `backend/app/api/v1/audits.py`.
+
 ---
 
 ## 1. Internal Controls Framework
