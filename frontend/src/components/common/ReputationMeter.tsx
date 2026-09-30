@@ -1,5 +1,6 @@
 import { Landmark, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import DeltaTag from "./DeltaTag";
 
 interface ReputationMeterProps {
   reputation: number;
@@ -27,11 +28,12 @@ export default function ReputationMeter({ reputation }: ReputationMeterProps) {
           {t.governance.reputationLabel}
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
           <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
         </div>
-        <span className={`font-bold text-sm ${tone.text}`}>{reputation.toFixed(0)}</span>
+        <span className={`font-bold text-sm tabular-nums ${tone.text}`}>{reputation.toFixed(0)}</span>
+        <DeltaTag value={Math.round(reputation)} threshold={1} className="top-0 left-full ml-1" />
       </div>
     </div>
   );

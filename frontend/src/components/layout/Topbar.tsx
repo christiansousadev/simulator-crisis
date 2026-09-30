@@ -1,4 +1,4 @@
-import { Award, Building2, Gamepad2, HelpCircle, Pause, Play, Settings } from "lucide-react";
+import { Award, Building2, ChevronDown, Gamepad2, Gauge, HelpCircle, Pause, Play, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
@@ -34,36 +34,28 @@ export default function Topbar() {
 
   const currentMultiplier = telemetry.is_running ? Math.round(1 / telemetry.tick_rate_seconds) : 0;
 
-  // the KPI strip below is intentionally horizontally scrollable rather than wrapping (a narrow
-  // viewport, or pt-BR's longer label strings, can make it wider than its container) -- but with
-  // no visible scrollbar (`no-scrollbar`), a mouse/desktop user had no cue that a clipped meter
-  // (Morale/Reputation, at the end) even existed, let alone that scrolling reveals it. These two
-  // edge-fade hints only render when there's actually more content in that direction.
-  const kpiRowRef = useRef<HTMLDivElement>(null);
-  const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
+  // secondary kpi cluster (runway/tech-debt/morale/reputation): shown inline once there's room
+  // (see the `hd:` breakpoint below), otherwise tucked behind this "more indicators" popover so
+  // nothing is ever silently clipped or hidden without an affordance to reach it
+  const [secondaryOpen, setSecondaryOpen] = useState(false);
+  const secondaryRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = kpiRowRef.current;
-    if (!el) return;
-    const updateEdges = () =>
-      setScrollEdges({
-        left: el.scrollLeft > 4,
-        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
-      });
-    updateEdges();
-    el.addEventListener("scroll", updateEdges, { passive: true });
-    const observer = new ResizeObserver(updateEdges);
-    observer.observe(el);
-    return () => {
-      el.removeEventListener("scroll", updateEdges);
-      observer.disconnect();
+    if (!secondaryOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (secondaryRef.current && !secondaryRef.current.contains(e.target as Node)) setSecondaryOpen(false);
     };
-  }, []);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [secondaryOpen]);
 
   const handleSpeedChange = async (speed: number) => {
     try {
       if (speed === 0) {
         await api.pauseSimulation();
       } else {
+        if (!telemetry.is_running) {
+          await api.startSimulation();
+        }
         await api.setSpeed(speed);
       }
     } catch {
@@ -72,7 +64,7 @@ export default function Topbar() {
   };
 
   return (
-    <header className="h-16 bg-slate-900 text-slate-100 px-2 sm:px-5 flex items-center justify-between gap-2 panel-shadow relative z-20 overflow-hidden">
+    <header className="h-16 bg-slate-900 text-slate-100 px-2 sm:px-5 flex items-center justify-between gap-2 sm:gap-3 panel-shadow relative z-20">
       {/* company identity */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <div className="p-2 rounded-lg bg-sky-500/15 text-sky-400 border border-sky-500/30 shrink-0">
@@ -91,39 +83,53 @@ export default function Topbar() {
         </div>
       </div>
 
-      {/* company kpis: horizontally scrollable so a narrow viewport swipes instead of overflowing */}
-      <div className="relative min-w-0 flex-1">
-        {scrollEdges.left && (
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-slate-900 to-transparent" />
-        )}
-        <div
-          ref={kpiRowRef}
-          className="flex items-center gap-3 sm:gap-6 overflow-x-auto no-scrollbar min-w-0 [&>*]:shrink-0"
-          data-tour="topbar-kpis"
-        >
+      {/* status clusters: critical ops metrics get a visually elevated container so they never
+          compete for attention with the more discreet company kpis or the speed controls */}
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink justify-center mx-auto" data-tour="topbar-kpis">
+        <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1 rounded-lg border border-slate-700/70 bg-slate-800/50 shrink-0">
           <DefconMeter telemetry={telemetry} />
           <div className="h-9 w-px bg-slate-700" />
           <ShieldGauge slaPercentage={telemetry.sla_percentage} />
           <div className="h-9 w-px bg-slate-700" />
           <ErrorBudgetMeter remainingRatio={telemetry.error_budget_remaining_ratio} frozen={telemetry.feature_freeze_active} />
-          <div className="h-9 w-px bg-slate-700" />
-          <CreditCounter budget={telemetry.budget} />
-          <div className="h-9 w-px bg-slate-700" />
-          <TechDebtMeter techDebt={telemetry.tech_debt} />
-          <div className="h-9 w-px bg-slate-700" />
-          <MoraleMeter happiness={telemetry.user_happiness} />
-          <div className="hidden hd:block h-9 w-px bg-slate-700" />
-          <div className="hidden hd:block">
-            <ReputationMeter reputation={telemetry.reputation} />
-          </div>
         </div>
-        {scrollEdges.right && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-slate-900 to-transparent" />
-        )}
+
+        {/* secondary company kpis: inline once there's room, spaced apart and visually quieter
+            than the critical cluster above */}
+        <div className="hidden min-[1720px]:flex items-center gap-3 shrink opacity-95">
+          <CreditCounter budget={telemetry.budget} />
+          <TechDebtMeter techDebt={telemetry.tech_debt} />
+          <MoraleMeter happiness={telemetry.user_happiness} />
+          <ReputationMeter reputation={telemetry.reputation} />
+        </div>
+
+        <div className="min-[1720px]:hidden relative shrink-0" ref={secondaryRef}>
+          <button
+            onClick={() => setSecondaryOpen((v) => !v)}
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-md border text-[11px] font-semibold transition-colors ${
+              secondaryOpen
+                ? "border-sky-500/40 bg-sky-950/40 text-sky-300"
+                : "border-slate-700/60 bg-slate-800/40 text-slate-400 hover:text-slate-200"
+            }`}
+            title={t.common.more}
+          >
+            <Gauge className="w-3.5 h-3.5" />
+            <ChevronDown className={`w-3 h-3 transition-transform ${secondaryOpen ? "rotate-180" : ""}`} />
+          </button>
+          {secondaryOpen && (
+            <div className="absolute top-full right-0 mt-1.5 w-56 rounded-lg border border-slate-800 bg-slate-950/95 backdrop-blur-md shadow-xl p-3 flex flex-col gap-3 z-30">
+              <CreditCounter budget={telemetry.budget} />
+              <TechDebtMeter techDebt={telemetry.tech_debt} />
+              <MoraleMeter happiness={telemetry.user_happiness} />
+              <ReputationMeter reputation={telemetry.reputation} />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* meta controls and simulation speed */}
-      <div className="flex items-center gap-2 shrink-0">
+      {/* meta controls and simulation speed, kept as their own group so they never share visual
+          weight with the metrics above */}
+      <div className="flex items-center gap-2 shrink-0 relative z-10">
         <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
           <button
             onClick={openScenarioSelect}
@@ -154,13 +160,18 @@ export default function Topbar() {
             <Settings className="w-4 h-4" />
           </button>
         </div>
+        {!telemetry.is_running && (
+          <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-400 text-[10px] font-bold tracking-wider animate-pulse">
+            {t.topbar.pausedBadge}
+          </span>
+        )}
         <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
           <button
-            onClick={() => handleSpeedChange(0)}
+            onClick={() => handleSpeedChange(telemetry.is_running ? 0 : 1)}
             className={`p-1.5 rounded-md transition-colors ${
-              !telemetry.is_running ? "bg-amber-500/20 text-amber-400" : "text-slate-300 hover:bg-slate-700"
+              !telemetry.is_running ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-400/50" : "text-slate-300 hover:bg-slate-700"
             }`}
-            title={t.topbar.pause}
+            title={telemetry.is_running ? t.topbar.pause : t.topbar.resume}
           >
             {telemetry.is_running ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
           </button>
@@ -170,7 +181,7 @@ export default function Topbar() {
               onClick={() => handleSpeedChange(opt.multiplier)}
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
                 telemetry.is_running && currentMultiplier === opt.multiplier
-                  ? "bg-emerald-500/20 text-emerald-400"
+                  ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/60 scale-105"
                   : "text-slate-300 hover:bg-slate-700"
               }`}
             >

@@ -4,6 +4,7 @@ import {
   playCriticalHeartbeat,
   playChaChing,
   playIncidentChirp,
+  playMitigationMismatch,
   playRedAlertSiren,
   playRestoredChime,
 } from "../utils/sound";
@@ -49,6 +50,9 @@ export function useGameAudio() {
       knownAuditIds.current.add(audit.id);
       if (audit.event_type === "MONTHLY_AUDIT_CYCLE_SURVIVED") {
         playChaChing();
+      } else if (audit.event_type === "RUNBOOK_EXECUTED" && audit.details.fully_resolved === false) {
+        // a mismatched runbook -- distinct dull tone from the restored chime a genuine full fix gets
+        playMitigationMismatch();
       }
     }
   }, [recentAudits]);

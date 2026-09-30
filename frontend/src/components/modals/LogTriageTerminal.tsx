@@ -1,10 +1,11 @@
-import { Terminal, X } from "lucide-react";
+import { ArrowLeft, Terminal, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
+import { translateLogLine } from "../../i18n/dynamicContent";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import { LogLevel, LogLine } from "../../types/game";
-import { playCashSound, playClickSound } from "../../utils/sound";
+import { playCashSound, playClickSound, playMitigationMismatch } from "../../utils/sound";
 
 const LEVELS: LogLevel[] = ["INFO", "WARN", "ERROR", "FATAL"];
 const LEVEL_COLOR: Record<LogLevel, string> = {
@@ -17,7 +18,9 @@ const LEVEL_COLOR: Record<LogLevel, string> = {
 // DARK CRT-STYLE TERMINAL DRAWER FOR THE ROOT-CAUSE LOG TRIAGE MINI-GAME
 export default function LogTriageTerminal() {
   const t = useTranslation();
+  const language = useGameStore((s) => s.language);
   const incidentId = useGameStore((s) => s.triageIncidentId);
+  const originIncidentId = useGameStore((s) => s.selectedIncident?.id);
   const close = useGameStore((s) => s.closeTriageTerminal);
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const [lines, setLines] = useState<LogLine[]>([]);
@@ -58,6 +61,8 @@ export default function LogTriageTerminal() {
         playCashSound();
       } else {
         setWrongLineId(line.id);
+        playMitigationMismatch();
+        pushFloatingText(t.logTriage.incorrectLine, "warning");
         setTimeout(() => setWrongLineId(null), 500);
       }
     } catch {
@@ -81,9 +86,17 @@ export default function LogTriageTerminal() {
             <Terminal className="w-4 h-4" />
             {t.logTriage.title}
           </div>
-          <button onClick={close} className="text-emerald-600 hover:text-emerald-300">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {originIncidentId === incidentId && (
+              <button onClick={close} className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300">
+                <ArrowLeft className="w-3.5 h-3.5" />
+                {t.incidentDetail.backToIncident}
+              </button>
+            )}
+            <button onClick={close} className="text-emerald-600 hover:text-emerald-300" title={t.common.close}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 px-4 py-2 border-b border-emerald-500/20 shrink-0">
@@ -120,7 +133,7 @@ export default function LogTriageTerminal() {
             >
               <span className="text-slate-600 mr-2">T+{line.tick_offset}</span>
               <span className={`mr-2 ${LEVEL_COLOR[line.level]}`}>[{line.level}]</span>
-              <span className="text-slate-300">{line.message}</span>
+              <span className="text-slate-300">{translateLogLine(line.message, language)}</span>
             </div>
           ))}
         </div>

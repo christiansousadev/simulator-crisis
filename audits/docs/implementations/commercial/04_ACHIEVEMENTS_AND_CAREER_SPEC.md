@@ -1,62 +1,100 @@
 # Achievements, Progression & Career Governance — Implementation Specification
 
-**Document ID:** IZ-COMM-04
-**Classification:** Implementation Contract — Commercial Pillar 4
-**Status:** Implemented, additive only, non-breaking
-**Integration baseline:** `backend/app/engine/simulator.py`, `backend/app/models/session.py`
+**Document ID:** IZ-COMM-04  
+**Classification:** Technical Specification / Career, Achievements & Player Progression  
+**Status:** Implementado  
+**Source of Truth:** `backend/app/engine/achievements.py`, `backend/app/models/career.py`, `backend/app/api/v1/career.py`, `frontend/src/components/modals/PostMatchDebriefModal.tsx`, `frontend/src/components/modals/HallOfFameModal.tsx`
 
 ---
 
 ## 1. System Objective
 
-A 12-entry achievement catalog evaluated continuously against real, already-tracked engine state (no new gameplay systems invented solely to make an achievement checkable), paying out prestige points redeemable for purely cosmetic office props — a progression layer with zero effect on simulation balance, appropriate for a commercial release's retention loop.
+A multi-tiered retention and progression system tracking player career records, achievement unlocks, operational rank advancement, and dynamic challenge recommendations across sessions:
+1. **Achievement Catalog:** Exactly 12 achievements continuously checked against authoritative engine state.
+2. **Career Record Persistence:** Durable archival of every completed or liquidated match in the `CareerRecord` database model.
+3. **Operational Ranks:** 5 derived career titles reflecting accumulated prestige and unlocked achievements.
+4. **Post-Match Debrief:** Rich debriefing experience via `PostMatchDebriefModal` evaluating performance, personal bests, and unlocks.
+5. **Next Challenge Recommender:** Backend-driven recommendation engine suggesting the next optimal milestone.
 
-## 2. Achievement Catalog
+---
 
-`backend/app/engine/achievements.py` defines `ACHIEVEMENT_CATALOG`, 12 entries of `{id, name, description, prestige_points}`, each paired with a predicate function keyed by `id` in `ACHIEVEMENT_CHECKS: Dict[str, Callable[[SimulationEngine], bool]]`:
+## 2. Verified Achievement Catalog
 
-| id | Name | Unlock Condition | Prestige |
+The engine evaluates `ACHIEVEMENT_CHECKS` on each tick. Unlocked achievements award one-time prestige and emit `ACHIEVEMENT_UNLOCKED` events:
+
+| ID | Name | Unlock Condition | Prestige |
 |---|---|---|---|
 | `zero_trust_architect` | Zero Trust Architect | `multi_az_clusters` upgrade purchased | 50 |
 | `chaos_survivor` | Chaos Survivor | `chaos_engineering_drill` scenario completed with `compliant: true` | 75 |
-| `soc2_type_ii_certified` | SOC-2 Type II Certified | Session status reaches `victory` | 150 |
-| `budget_master` | Budget Master | `current_tick >= 200` and `budget >= 200000` | 60 |
-| `night_shift_hero` | Night Shift Hero | An incident acknowledged while the office-clock hour (`tick % 24`) is `>= 22` or `< 5` | 40 |
+| `soc2_type_ii_certified` | SOC-2 Type II Certified | Session status reaches `victory` (sandbox or scenario) | 150 |
+| `budget_master` | Budget Master | `current_tick >= 200` and `budget >= 200000.0` | 60 |
+| `night_shift_hero` | Night Shift Hero | Incident acknowledged during night shift (`tick % 24 >= 22` or `< 5`) | 40 |
 | `zero_downtime_week` | Zero Downtime Week | `quiet_ticks >= 168` (7 in-game days with no active incident) | 80 |
 | `debt_free` | Debt Free | `tech_debt == 0` | 45 |
-| `first_response` | First Response | An incident acknowledged with `mtta_seconds <= 1` | 30 |
+| `first_response` | First Response | Incident acknowledged within 1 tick of creation (`mtta_seconds <= 1`) | 30 |
 | `ransomware_repelled` | Ransomware Repelled | `ransomware_infiltration` scenario completed with `compliant: true` | 100 |
 | `full_roster` | Full Roster | 3 or more hired engineers | 35 |
 | `century_club` | Century Club | `current_tick >= 100` | 20 |
-| `emergency_room` | Emergency Room | 10 or more incidents resolved across the session (cumulative counter, not a live count) | 55 |
+| `emergency_room` | Emergency Room | 10 or more incidents resolved across the session | 55 |
 
-This is the complete, exhaustive set for this release.
+---
 
-## 3. Tracking and Persistence
+## 3. Career Record Data Model (`CareerRecord`)
 
-`SimulationEngine` gains `self.achievements_unlocked: Set[str]`, `self.prestige_points: int`, and a cumulative `self._resolved_incident_count: int` (incremented in `apply_mitigation` wherever `resolved_count` is currently computed — additive, the existing per-call `resolved_count` local variable is unchanged, only added onto the new cumulative counter afterward). A new tick step, `_evaluate_achievements()`, appended to `_update_simulation_tick` after `_evaluate_cab_dilemma()`, iterates every not-yet-unlocked catalog id, runs its predicate, and on a true result: adds the id to `achievements_unlocked`, adds its `prestige_points`, persists a new `Achievement` row, logs `ACHIEVEMENT_UNLOCKED`, and queues an out-of-band `{"type": "ACHIEVEMENT_UNLOCKED", ...}` broadcast frame using the existing `_pending_broadcasts` mechanism.
-
-`backend/app/models/achievement.py`:
+Every concluded session (via victory or bankruptcy/defeat) commits an immutable row to `career_records`:
 
 ```python
-class Achievement(Base):
-    __tablename__ = "achievements"
+class CareerRecord(Base):
+    __tablename__ = "career_records"
+
     id = Column(String(36), primary_key=True)
-    session_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False)
-    achievement_key = Column(String(50), nullable=False)
-    unlocked_at_tick = Column(Integer, nullable=False)
+    player_id = Column(String(64), nullable=False, default="local-player")
+    scenario_id = Column(String(50), nullable=True)
+    difficulty = Column(String(20), nullable=True, default="standard")
+    outcome = Column(String(20), nullable=False) # "victory", "bankrupted", "scenario_defeat"
+    days_survived = Column(Integer, nullable=False)
+    final_sla_percentage = Column(Numeric(5, 2), nullable=False)
+    final_budget = Column(Numeric(12, 2), nullable=False)
+    prestige_earned = Column(Integer, nullable=False, default=0)
+    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recovered_from_snapshot = Column(Boolean, nullable=False, default=False)
+    final_tech_debt = Column(Integer, nullable=True)
+    final_reputation = Column(Numeric(5, 2), nullable=True)
+    incidents_total = Column(Integer, nullable=True)
+    incidents_resolved = Column(Integer, nullable=True)
+    scenario_outcome_json = Column(Text, nullable=True)
+    objectives_json = Column(Text, nullable=True)
 ```
 
-`GameSession` gains one additive column, `prestige_points = Column(Integer, nullable=False, default=0)`.
+---
 
-## 4. Cosmetic Reward System
+## 4. Operational Rank Hierarchy
 
-`COSMETIC_CATALOG` (3 entries): `golden_coffee_machine` (200 pts), `executive_leather_sofa` (150 pts), `marble_reception_desk` (300 pts) — purely visual reskins of existing `EspressoMachine`/`Sofa`/`ReceptionDesk` props, selected client-side once unlocked. `backend/app/models/cosmetic.py` adds `unlocked_cosmetics(id, session_id, cosmetic_id, unlocked_at_tick)`. `SimulationEngine.unlock_cosmetic(cosmetic_id)` deducts `prestige_points` (never real budget — cosmetics cannot be bought with cash, preserving the economic simulation's integrity), persists, and logs `COSMETIC_UNLOCKED`.
+Operational rank is derived dynamically in `_calculate_operator_rank()` from lifetime prestige and achievement counts:
 
-## 5. REST Endpoints
+| Rank | Required Prestige / Achievements |
+|---|---|
+| **Junior On-Call Engineer** | Baseline rank (0 prestige) |
+| **Site Reliability Engineer** | $\ge 50$ Prestige OR $\ge 2$ Achievements |
+| **Senior Chaos Operator** | $\ge 150$ Prestige OR $\ge 4$ Achievements |
+| **Principal Infrastructure Architect** | $\ge 300$ Prestige OR $\ge 7$ Achievements |
+| **VP of Reliability & Governance** | $\ge 500$ Prestige OR $\ge 10$ Achievements |
 
-`GET /api/achievements/catalog`, `GET /api/cosmetics/catalog`, `POST /api/cosmetics/{id}/unlock`. `TICK_BROADCAST` gains `achievements_unlocked: string[]`, `prestige_points: int`, `unlocked_cosmetics: string[]`.
+---
 
-## 6. Frontend
+## 5. Next Challenge Recommendation Engine (`/api/career/summary`)
 
-An achievement unlock renders as a distinct celebratory toast (new `AchievementToast.tsx`, gold-accented, reusing the floating-text queue pattern but with its own longer-lived, larger presentation) triggered off the `ACHIEVEMENT_UNLOCKED` WebSocket frame. A new `AchievementsPanel.tsx` dock tab lists all 12 with locked/unlocked state and a prestige-point balance; a cosmetics sub-section lets the player spend points, and unlocked cosmetics swap the corresponding office prop's visual variant in `IsometricOffice.tsx`.
+The backend functions as the single authority recommending the player's next challenge (`_derive_next_challenge`):
+1. **First-time player:** Recommends Sandbox on `intern` difficulty ("First Operational Shift").
+2. **Unbeaten Sandbox:** Recommends completing 720-tick Sandbox on `standard` difficulty ("Monthly Audit Defense").
+3. **Unbeaten Scenarios:** Progressively recommends `black_friday_rush` $\to$ `chaos_engineering_drill` $\to$ `ransomware_infiltration`.
+4. **Chaos Difficulty Step-Up:** If all scenarios are beaten on standard, recommends mastering `chaos` difficulty (+40% hazard).
+5. **Achievement Pursuit:** Recommends remaining locked achievements.
+6. **Mastery:** Recommends "SRE Grandmaster" (Ransomware under Chaos difficulty).
+
+---
+
+## 6. Hall of Fame & Match Debrief
+
+- **`PostMatchDebriefModal.tsx`:** Primary post-match screen mounted on session termination. Renders scenario outcome, duration, SLA, final cash runway, tech debt, objectives completed, personal best comparisons (against prior runs with matching scenario and difficulty), and prestige gains.
+- **`HallOfFameModal.tsx`:** Displays match history filtered by player (`scope="mine"`) or server-wide (`scope="global"`), with scenario and difficulty filters. Compares personal bests locally without relying on external online cloud services.

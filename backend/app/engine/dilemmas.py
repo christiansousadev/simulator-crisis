@@ -10,7 +10,20 @@ DILEMMA_POOL = [
         "title": "Vendor Lock-In Discount Offer",
         "narrative": "A cloud vendor offers a 15% infrastructure discount in exchange for a 12-month exclusivity commitment, bypassing the standard architecture review.",
         "choices": [
-            {"id": "accept", "label": "Accept the discount", "budget_delta": 12000.0, "tech_debt_delta": 6, "happiness_delta": 0.0, "reputation_delta": -4},
+            {
+                "id": "accept",
+                "label": "Accept the discount",
+                "budget_delta": 12000.0,
+                "tech_debt_delta": 6,
+                "happiness_delta": 0.0,
+                "reputation_delta": -4,
+                # skipping the architecture review to lock in a vendor discount leaves the
+                # platform running on unvetted assumptions for a while -- elevated hazard, not an
+                # instant failure, so the consequence stays connected to the decision without
+                # being a guaranteed/deterministic punishment
+                "risk_window_ticks": 20,
+                "risk_multiplier": 1.25,
+            },
             {"id": "decline", "label": "Decline, escalate to full CAB review", "budget_delta": 0.0, "tech_debt_delta": 0, "happiness_delta": -1.0, "reputation_delta": 3},
         ],
         "default_choice_id": "decline",
@@ -20,7 +33,16 @@ DILEMMA_POOL = [
         "title": "Compressed Release Timeline",
         "narrative": "Product leadership requests skipping the full load-testing cycle to hit an external launch deadline.",
         "choices": [
-            {"id": "skip", "label": "Skip load testing, ship on time", "budget_delta": 6000.0, "tech_debt_delta": 10, "happiness_delta": 2.0, "reputation_delta": -5},
+            {
+                "id": "skip",
+                "label": "Skip load testing, ship on time",
+                "budget_delta": 6000.0,
+                "tech_debt_delta": 10,
+                "happiness_delta": 2.0,
+                "reputation_delta": -5,
+                "risk_window_ticks": 15,
+                "risk_multiplier": 1.35,
+            },
             {"id": "delay", "label": "Delay launch, run full test suite", "budget_delta": -4000.0, "tech_debt_delta": -1, "happiness_delta": -1.5, "reputation_delta": 4},
         ],
         "default_choice_id": "delay",
@@ -30,7 +52,18 @@ DILEMMA_POOL = [
         "title": "Unpaid Overtime Push",
         "narrative": "A director proposes an unpaid weekend on-call push to close a backlog of low-priority tickets before the board review.",
         "choices": [
-            {"id": "push", "label": "Approve the overtime push", "budget_delta": 3000.0, "tech_debt_delta": -3, "happiness_delta": -6.0, "reputation_delta": -6},
+            {
+                "id": "push",
+                "label": "Approve the overtime push",
+                "budget_delta": 3000.0,
+                "tech_debt_delta": -3,
+                "happiness_delta": -6.0,
+                "reputation_delta": -6,
+                # exhausted engineers rushing a backlog make mistakes; the elevated hazard window
+                # is the mechanical echo of "we burned out the team to get this done"
+                "risk_window_ticks": 12,
+                "risk_multiplier": 1.20,
+            },
             {"id": "refuse", "label": "Refuse, schedule it as paid sprint work", "budget_delta": -5000.0, "tech_debt_delta": -3, "happiness_delta": 1.0, "reputation_delta": 5},
         ],
         "default_choice_id": "refuse",
@@ -40,7 +73,16 @@ DILEMMA_POOL = [
         "title": "Third-Party Security Audit Waiver",
         "narrative": "Legal proposes waiving this quarter's mandatory third-party penetration test to save budget, citing an unblemished track record.",
         "choices": [
-            {"id": "waive", "label": "Waive the audit", "budget_delta": 9000.0, "tech_debt_delta": 4, "happiness_delta": 0.0, "reputation_delta": -5},
+            {
+                "id": "waive",
+                "label": "Waive the audit",
+                "budget_delta": 9000.0,
+                "tech_debt_delta": 4,
+                "happiness_delta": 0.0,
+                "reputation_delta": -5,
+                "risk_window_ticks": 25,
+                "risk_multiplier": 1.20,
+            },
             {"id": "proceed", "label": "Proceed with the audit as scheduled", "budget_delta": -9000.0, "tech_debt_delta": -2, "happiness_delta": 0.5, "reputation_delta": 4},
         ],
         "default_choice_id": "proceed",

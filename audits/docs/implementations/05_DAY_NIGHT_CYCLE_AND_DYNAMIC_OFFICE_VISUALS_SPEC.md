@@ -1,9 +1,9 @@
 # Day/Night Cycle and Dynamic Office Visuals — Implementation Specification
 
-**Document ID:** IZ-IMPL-05
-**Classification:** Implementation Contract / Next-Phase Architecture Blueprint
-**Status:** Approved for implementation — additive only, non-breaking, frontend-only (no backend or database changes)
-**Integration baseline:** `frontend/src/components/layout/Topbar.tsx`, `frontend/src/components/office/IsometricOffice.tsx`, `frontend/src/components/office/isoMath.ts`, `frontend/src/components/office/WanderingEmployee.tsx`, `frontend/src/components/office/OfficeWorker.tsx`, `frontend/src/components/office/EmergencyFx.tsx`, `frontend/src/components/office/SkylineBackdrop.tsx`
+**Document ID:** IZ-IMPL-05  
+**Classification:** Technical Specification / Office Presentation Layer  
+**Status:** Implementado  
+**Source of Truth:** `frontend/src/components/layout/Topbar.tsx`, `frontend/src/components/office/IsometricOffice.tsx`, `frontend/src/components/office/SkylineBackdrop.tsx`, `frontend/src/components/office/PathfindingEmployee.tsx`, `frontend/src/utils/officeClock.ts`
 
 ---
 

@@ -19,7 +19,7 @@ export default function TitleScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950 text-white overflow-hidden">
+    <div className="fixed inset-0 z-[40] flex flex-col items-center justify-center bg-slate-950 text-white overflow-hidden">
       {/* faint animated grid backdrop, purely decorative */}
       <div
         className="absolute inset-0 opacity-20"
@@ -35,7 +35,17 @@ export default function TitleScreen() {
           <Building2 className="w-12 h-12" />
         </div>
         <h1 className="font-heading font-bold text-4xl sm:text-5xl tracking-wide mt-2">IncidentZero Corp.</h1>
-        <p className="text-slate-400 text-sm tracking-[0.2em] uppercase">{t.titleScreen.tagline}</p>
+        <p className="text-slate-400 text-sm tracking-[0.15em] uppercase">{t.titleScreen.tagline}</p>
+        <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2 max-w-sm">
+          {t.titleScreen.pillars.map((pillar) => (
+            <span
+              key={pillar}
+              className="px-2 py-0.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-400 text-[10px] font-semibold"
+            >
+              {pillar}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="relative flex flex-col gap-2.5 w-full max-w-xs px-4">

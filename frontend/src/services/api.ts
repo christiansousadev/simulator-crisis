@@ -5,20 +5,23 @@ import {
   ActiveScenario,
   AuditLogEntry,
   CareerRecord,
+  CareerSummary,
   CosmeticCatalogEntry,
   CustomScenarioConfig,
   DifficultyId,
+  DifficultyPresetInfo,
   Engineer,
   InfrastructureCatalogEntry,
   InfrastructureNode,
   LogLine,
   ScenarioCatalogEntry,
+  TelemetryState,
   Upgrade,
 } from "../types/game";
 import { getOrCreatePlayerId } from "../utils/playerId";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-export const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/telemetry";
+export const WS_URL = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/telemetry"}?player_id=${encodeURIComponent(getOrCreatePlayerId())}`;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -35,7 +38,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string; engine_active: boolean; current_tick: number }>("/api/health"),
 
-  getState: () => request("/api/session/state"),
+  // full telemetry snapshot, same shape as a websocket TICK_BROADCAST frame -- used to keep the
+  // ui live while the tick loop (and with it, broadcasting) is paused, e.g. during onboarding
+  getState: () => request<TelemetryState>("/api/session/state"),
 
   startSimulation: () => request("/api/session/start", { method: "POST" }),
 
@@ -112,7 +117,13 @@ export const api = {
       method: "POST",
     }),
 
-  getScenarioCatalog: () => request<ScenarioCatalogEntry[]>("/api/scenarios/catalog"),
+  getDifficultyPresets: () => request<DifficultyPresetInfo[]>("/api/difficulty/presets"),
+
+  getScenarioCatalog: () =>
+    request<ScenarioCatalogEntry[]>(`/api/scenarios/catalog?player_id=${encodeURIComponent(getOrCreatePlayerId())}`),
+
+  getCareerSummary: () =>
+    request<CareerSummary>(`/api/career/summary?player_id=${encodeURIComponent(getOrCreatePlayerId())}`),
 
   getActiveScenario: () => request<{ active: boolean } & Partial<ActiveScenario>>("/api/scenarios/active"),
 
@@ -166,8 +177,19 @@ export const api = {
 
   getAllAudits: () => request<AuditLogEntry[]>("/api/audits"),
 
-  getCareerRecords: () =>
-    request<CareerRecord[]>(`/api/career/records?player_id=${encodeURIComponent(getOrCreatePlayerId())}&scope=mine`),
+  getCareerRecords: (orderBy = "recorded_at", scenarioId?: string, difficulty?: string) => {
+    const params = new URLSearchParams({
+      player_id: getOrCreatePlayerId(),
+      scope: "mine",
+      order_by: orderBy,
+    });
+    if (scenarioId) params.set("scenario_id", scenarioId);
+    if (difficulty) params.set("difficulty", difficulty);
+    return request<CareerRecord[]>(`/api/career/records?${params.toString()}`);
+  },
 
-  getGlobalCareerRecords: () => request<CareerRecord[]>("/api/career/records?scope=global"),
+  getGlobalCareerRecords: (orderBy = "days_survived") => {
+    const params = new URLSearchParams({ scope: "global", order_by: orderBy });
+    return request<CareerRecord[]>(`/api/career/records?${params.toString()}`);
+  },
 };

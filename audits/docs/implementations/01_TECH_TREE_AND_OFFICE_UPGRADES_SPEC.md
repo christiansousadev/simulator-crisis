@@ -1,9 +1,10 @@
 # Tech Tree and Office Upgrades — Implementation Specification
 
-**Document ID:** IZ-IMPL-01
-**Classification:** Implementation Contract / Next-Phase Architecture Blueprint
-**Status:** Approved for implementation — additive only, non-breaking against the current codebase baseline documented in `audits/docs/01_SYSTEM_ARCHITECTURE_AND_DATA_FLOW.md` through `audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`
-**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/models/`, `backend/app/api/v1/`, `frontend/src/components/layout/BottomDock.tsx`, `frontend/src/store/useGameStore.ts`, `frontend/src/i18n/translations.ts`
+**Document ID:** IZ-IMPL-01  
+**Classification:** Implementation Contract / Technical Architecture Specification  
+**Status:** Implementado  
+**Last Updated:** Setembro 2026  
+**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/engine/upgrades.py`, `backend/app/models/upgrade.py`, `backend/app/api/v1/upgrades.py`, `frontend/src/components/dock/UpgradesPanel.tsx`, `frontend/src/store/useGameStore.ts`
 
 ---
 
@@ -11,7 +12,7 @@
 
 Introduce a persistent, budget-gated capital-investment layer — the **Upgrade Shop** — that lets the player convert surplus runway budget into permanent, session-scoped modifiers on the core simulation formulas (Document 02: `formulas.py`). Upgrades are the strategic counterweight to the reactive runbook system (Document 04): where a mitigation heals one incident once, an upgrade permanently reshapes the odds and costs of every future tick. This system introduces no new failure modes to existing mechanics — it only attenuates or accelerates constants already defined in `formulas.py`, applied as multiplicative or additive hooks evaluated at the exact call sites those constants are already read from.
 
-**Non-breaking guarantee:** no existing column, endpoint, WebSocket field, Zustand store field, or i18n key is renamed, removed, or given new required semantics. Every artifact introduced here is either a new table, a new endpoint, a new optional broadcast field, or a new UI surface reachable only through a net-new tab.
+**Persistence and Resilience:** Upgrades are persisted in the `purchased_upgrades` table and are fully restored during process restart via `_try_restore_from_snapshot()`.
 
 ---
 

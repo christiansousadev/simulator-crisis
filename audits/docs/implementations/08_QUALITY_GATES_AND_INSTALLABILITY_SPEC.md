@@ -1,9 +1,9 @@
 # Quality Gates and Installability — Implementation Specification
 
-**Document ID:** IZ-IMPL-08
-**Classification:** Implementation Contract
-**Status:** Implemented, additive only, non-breaking
-**Integration baseline:** `frontend/vite.config.ts`, `frontend/src/test/setup.ts`, `.github/workflows/ci.yml`, `frontend/src/components/layout/Topbar.tsx`, `frontend/src/components/layout/BottomDock.tsx`
+**Document ID:** IZ-IMPL-08  
+**Classification:** Technical Specification / Quality Gates & Tooling  
+**Status:** Implementado  
+**Source of Truth:** `frontend/vite.config.ts`, `frontend/src/test/setup.ts`, `.github/workflows/ci.yml`, `frontend/src/components/layout/Topbar.tsx`, `frontend/src/components/layout/BottomDock.tsx`
 
 ---
 
@@ -46,16 +46,21 @@ Both jobs run on `ubuntu-latest` regardless of the fact that day-to-day developm
 
 Prior to this pass, `Topbar.tsx` and `BottomDock.tsx` — the two chrome bars visible on every screen — had no responsive handling below the `hd` (1400px) breakpoint introduced for KPI-label hiding in an earlier batch; both would overflow badly under roughly 700px. Changes, all additive Tailwind class changes with no layout restructuring:
 
-- **Topbar** — the company name/office-clock text hides below `md`; the connection-status pill drops to an icon-only dot below `sm`; the KPI cluster (`data-tour="topbar-kpis"`) becomes a horizontally-scrollable strip (`overflow-x-auto`, a new `.no-scrollbar` utility in `index.css` to hide the scrollbar track while keeping it swipeable) rather than wrapping or clipping.
-
-  > **Fixed (follow-up):** hiding the scrollbar track had an unintended side effect: a mouse/desktop
-  > user had zero visual cue that content was clipped at all, let alone that scrolling revealed it
-  > — reported directly as "the HUD looks like it's missing a meter." `Topbar.tsx` now tracks the
-  > row's scroll position via a `ResizeObserver` + `scroll` listener (`scrollEdges` state) and
-  > renders a small edge-fade gradient overlay on whichever side still has clipped content,
-  > appearing/disappearing as the row is scrolled — additive, no change to the scroll behavior
-  > itself or to any other file this section describes.
+- **Topbar Architecture & Responsiveness:**
+  - **Company Identity (Left):** Retains `shrink-0`, hiding office clock text below `md` and condensing the connection indicator pill to an icon dot below `sm`.
+  - **Side Actions & Controls (Right):** Play/pause speed controls, volume slider, interactive tour trigger, language switcher, and settings button are protected with `shrink-0` to avoid clipping.
+  - **Central KPI Cluster (`min-w-0 shrink justify-center mx-auto`):** Divided into primary and secondary operational clusters to prevent overlap across standard desktop viewports (e.g. 1600×1000 / 1400px):
+    - *Primary Critical Cluster (`shrink-0`):* Houses core operational indicators (`DefconMeter`, `ShieldGauge`, `ErrorBudgetMeter`) within a high-contrast container (`border-slate-700/70 bg-slate-800/50`).
+    - *Secondary Metrics (`min-[1720px]` Breakpoint):* Secondary metrics (`CreditCounter`, `TechDebtMeter`, `MoraleMeter`, `ReputationMeter`) are rendered inline on ultra-wide viewports (`min-[1720px]:flex items-center gap-3`).
+    - *Secondary Gauge Popover (`min-[1720px]:hidden`):* On viewports narrower than `1720px`, secondary metrics are neatly folded into a compact trigger button (`Gauge` icon with chevron). Clicking opens an absolute dropdown popover (`w-56 bg-slate-950/95 border-slate-800 backdrop-blur-md shadow-xl`) containing full secondary meters.
+  - *Historical Note:* An earlier iteration attempted an `overflow-x-auto` horizontal strip with edge-fade gradients, but this produced visual clipping and hidden meters without clear interaction affordance on desktop; the current two-tier primary + popover architecture superseded that design completely.
 - **BottomDock** — tab labels hide below `sm`, leaving icon-plus-badge only (the incident-count badge is unaffected); the tab row itself also scrolls horizontally as a safety net. The dock's collapse toggle was deliberately kept **outside** the scrollable region (a sibling, not a child) so a persistent control never scrolls out of view.
 - **CABDilemmaModal** and **IncidentDetailModal** — the outer full-screen overlay was missing the `p-4` side-gutter padding present on every other modal in the app, meaning the card touched the screen edges on a narrow viewport; both gained it plus a `max-h-[90vh] overflow-y-auto` scroll fallback for a dilemma or incident with enough content to exceed a short mobile viewport's height. `CABDilemmaModal`'s two-choice grid stacks to one column below `sm` instead of squeezing two narrow columns.
 
 Out of scope for this pass: the isometric office canvas and its click/drag interactions were not touched — a real touch-input redesign for the office view is a materially larger project (Document `01_SYSTEM_ARCHITECTURE_AND_DATA_FLOW.md`'s canvas is mouse-hover-driven throughout) than the chrome-bar fixes here, and is not claimed as done.
+
+---
+
+## 6. Quality Gate Status
+
+*Implementação e configurações presentes no código; validação de execução de build e testes fora do escopo desta atualização documental.*

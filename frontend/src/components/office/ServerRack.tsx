@@ -2,7 +2,8 @@ import type { MouseEvent } from "react";
 import { useEffect, useMemo } from "react";
 import { Wrench } from "lucide-react";
 import { useGameStore } from "../../store/useGameStore";
-import { Service } from "../../types/game";
+import { IncidentSeverity, Service } from "../../types/game";
+import { severityTone } from "../../utils/severity";
 import { GroundShadow } from "./OfficeProps";
 import IsoBox from "./IsoBox";
 import { project } from "./isoMath";
@@ -12,12 +13,28 @@ interface ServerRackProps {
   x: number;
   y: number;
   selected: boolean;
+  /** highest-severity active incident currently open against this service, if any */
+  severity?: IncidentSeverity;
+  /** true while this service's incident is open in the log-triage terminal */
+  investigating?: boolean;
+  /** true while the incident-detail modal is focused on a different service, to reduce visual competition */
+  dimmed?: boolean;
   onSelect: (serviceId: string) => void;
   onHover: (serviceId: string, evt: MouseEvent) => void;
   onLeave: () => void;
 }
 
+// solid-fill alert badge tones per severity (distinct from severity.ts's translucent pill tones,
+// which are tuned for text badges rather than this small circular "!" marker)
+const ALERT_BADGE_TONE: Record<IncidentSeverity, string> = {
+  P1_CRITICAL: "bg-rose-500 border-rose-600 text-white",
+  P2_HIGH: "bg-amber-400 border-amber-500 text-amber-950",
+  P3_MEDIUM: "bg-yellow-300 border-yellow-400 text-yellow-900",
+  P4_LOW: "bg-slate-300 border-slate-400 text-slate-800",
+};
+
 const REPAIR_ANIMATION_MS = 1100;
+const RAISED_FLASH_MS = 1500;
 
 // footprint and height tuned to roughly 1.8-2x a standing office worker sprite (~38px tall)
 const RACK_WIDTH = 0.55;
@@ -33,17 +50,25 @@ function statusTone(status: Service["status"]) {
 }
 
 // ISOMETRIC 42U ENTERPRISE SERVER CABINET REPRESENTING ONE MICROSERVICE, WITH LED HEALTH AND INCIDENT FX
-export default function ServerRack({ service, x, y, selected, onSelect, onHover, onLeave }: ServerRackProps) {
+export default function ServerRack({ service, x, y, selected, severity, investigating, dimmed, onSelect, onHover, onLeave }: ServerRackProps) {
   const runAnimations = useGameStore((s) => s.runAnimations);
   const dismissRunAnimation = useGameStore((s) => s.dismissRunAnimation);
+  const sevTone = severity ? severityTone(severity) : null;
 
   const repairAnim = runAnimations.find((a) => a.serviceId === service.id && a.kind === "mitigate");
+  const raisedAnim = runAnimations.find((a) => a.serviceId === service.id && a.kind === "raised");
 
   useEffect(() => {
     if (!repairAnim) return;
     const timer = setTimeout(() => dismissRunAnimation(repairAnim.id), REPAIR_ANIMATION_MS);
     return () => clearTimeout(timer);
   }, [repairAnim, dismissRunAnimation]);
+
+  useEffect(() => {
+    if (!raisedAnim) return;
+    const timer = setTimeout(() => dismissRunAnimation(raisedAnim.id), RAISED_FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [raisedAnim, dismissRunAnimation]);
 
   const tone = statusTone(service.status);
   const height = service.tier === "critical" ? RACK_HEIGHT_CRITICAL : RACK_HEIGHT_STANDARD;
@@ -90,21 +115,36 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
       onMouseEnter={(e) => onHover(service.id, e)}
       onMouseMove={(e) => onHover(service.id, e)}
       onMouseLeave={onLeave}
-      className={`cursor-pointer ${service.status === "down" ? "animate-shake" : ""}`}
+      className={`cursor-pointer transition-opacity duration-300 ${service.status === "down" ? "animate-shake" : ""}`}
+      style={{ opacity: dimmed ? 0.35 : 1 }}
     >
       <GroundShadow x={x + RACK_WIDTH / 2} y={y + RACK_DEPTH / 2} rx={16} ry={8} />
 
-      {/* localized red floor reflection, confined strictly to this cabinet's own tile */}
-      {service.status === "down" && (
+      {/* localized floor reflection, tinted by the worst active incident's severity so a P1 reads
+          hotter/more saturated than a P2/P3 on the same rack -- confined to this cabinet's tile so
+          several simultaneous incidents never bleed into each other */}
+      {sevTone ? (
         <ellipse
           cx={floorReflectionAnchor.x}
           cy={floorReflectionAnchor.y}
-          rx={19}
+          rx={sevTone.urgent ? 21 : 18}
           ry={9}
-          fill="#ef4444"
-          opacity={0.4}
+          fill={sevTone.glow}
+          opacity={sevTone.urgent ? 0.45 : 0.28}
           className="animate-glow-pulse"
         />
+      ) : (
+        service.status === "down" && (
+          <ellipse
+            cx={floorReflectionAnchor.x}
+            cy={floorReflectionAnchor.y}
+            rx={19}
+            ry={9}
+            fill="#ef4444"
+            opacity={0.4}
+            className="animate-glow-pulse"
+          />
+        )
       )}
 
       {/* selection highlight pad on the shared floor */}
@@ -143,6 +183,20 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
           className="animate-blink"
         />
       ))}
+
+      {/* sky-blue investigation pulse: the one extra signal for "under investigation", shown only
+          while this exact incident is open in the log-triage terminal -- never stacked with any
+          other extra effect on the same rack */}
+      {investigating && (
+        <circle
+          cx={bubbleAnchor.x}
+          cy={bubbleAnchor.y - 6}
+          r={3.2}
+          fill="#38bdf8"
+          style={{ filter: "drop-shadow(0 0 4px rgba(56,189,248,0.9))" }}
+          className="animate-beacon-flash"
+        />
+      )}
 
       {/* rooftop cooling fan, spins while the node is healthy */}
       <g className={service.status === "healthy" ? "animate-fan-spin" : ""} style={{ transformOrigin: `${fanAnchor.x}px ${fanAnchor.y}px` }}>
@@ -218,19 +272,37 @@ export default function ServerRack({ service, x, y, selected, onSelect, onHover,
         </g>
       )}
 
-      {/* bouncy cartoon alert badge for any active incident */}
+      {/* bouncy cartoon alert badge for any active incident, colored by its severity so a P1
+          reads as more urgent than a P2/P3 at a glance rather than just by status */}
       {unhealthy && (
         <foreignObject x={bubbleAnchor.x - 11} y={bubbleAnchor.y - 24} width={22} height={22} className="overflow-visible">
           <div
             className={`alert-bubble relative w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center text-[10px] font-extrabold animate-pop-in animate-bounce-panic ${
-              service.status === "down"
-                ? "bg-rose-500 border-rose-600 text-white"
-                : "bg-amber-400 border-amber-500 text-amber-950"
+              severity
+                ? ALERT_BADGE_TONE[severity]
+                : service.status === "down"
+                  ? "bg-rose-500 border-rose-600 text-white"
+                  : "bg-amber-400 border-amber-500 text-amber-950"
             }`}
+            style={sevTone?.urgent ? { animationDuration: "0.35s" } : undefined}
           >
             !
           </div>
         </foreignObject>
+      )}
+
+      {/* one-shot entrance flash the instant this service's incident is raised -- a quick bloom
+          over the rack, distinct from the severity glow's continuous pulse, reusing the same
+          impact-flash keyframe ImpactFlash.tsx already uses for the screen-wide version */}
+      {raisedAnim && (
+        <ellipse
+          cx={bubbleAnchor.x}
+          cy={project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height * 0.5).y}
+          rx={26}
+          ry={30}
+          fill={sevTone?.glow ?? "rgba(248,113,113,0.9)"}
+          className="animate-impact-flash-fx"
+        />
       )}
 
       {/* wrench repair overlay while a mitigation is being applied */}

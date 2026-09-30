@@ -1,15 +1,16 @@
 # Error Budget and Change Advisory Board Governance — Implementation Specification
 
-**Document ID:** IZ-IMPL-02
-**Classification:** Implementation Contract / Next-Phase Architecture Blueprint
-**Status:** Approved for implementation — additive only, non-breaking
-**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/schemas/websocket.py`, `frontend/src/components/layout/Topbar.tsx`, `frontend/src/store/useGameStore.ts`
+**Document ID:** IZ-IMPL-02  
+**Classification:** Implementation Contract / Technical Architecture Specification  
+**Status:** Implementado  
+**Last Updated:** Setembro 2026  
+**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/engine/dilemmas.py`, `backend/app/api/v1/dilemmas.py`, `frontend/src/components/layout/Topbar.tsx`, `frontend/src/store/useGameStore.ts`
 
 ---
 
 ## 1. System Objective
 
-Introduce a Google SRE-aligned **Error Budget** tracking layer computed from the existing `sla_percentage` field, and a **Change Advisory Board (CAB) Dilemma Engine** that periodically interrupts the tick loop with a scored, timed player decision. Both systems are read-layers and event-generators on top of state the engine already maintains (`sla_percentage`, `budget`, `tech_debt`, `user_happiness`) — neither introduces a competing source of truth for those fields.
+Introduce a Google SRE-aligned **Error Budget** tracking layer computed from the 720-sample rolling-window `sla_percentage`, and a **Change Advisory Board (CAB) Dilemma Engine** that periodically interrupts the tick loop with a scored, timed player decision. Both systems are read-layers and event-generators on top of state the engine already maintains (`sla_percentage`, `budget`, `tech_debt`, `user_happiness`) — neither introduces a competing source of truth for those fields.
 
 ---
 
@@ -23,7 +24,7 @@ $$
 \text{TotalErrorBudget} = 100 - \text{SLA\_BENCHMARK} = 100 - 99.90 = 0.10 \ (\text{percentage points})
 $$
 
-This is added as a new named constant in `backend/app/engine/formulas.py`, directly beside `SLA_BENCHMARK`, with **zero modification** to the existing constant's value or usage:
+This is added as a named constant in `backend/app/engine/formulas.py`:
 
 ```python
 TOTAL_ERROR_BUDGET_PCT = 100.0 - SLA_BENCHMARK  # 0.10 percentage points, per the 99.90% SLA commitment
@@ -31,91 +32,42 @@ TOTAL_ERROR_BUDGET_PCT = 100.0 - SLA_BENCHMARK  # 0.10 percentage points, per th
 
 ### 2.2 Error Budget Consumption and Remaining Budget
 
-At any tick $t$, the platform's cumulative unavailability is precisely the complement of `sla_percentage` (Document 02, § 1.3's cumulative arithmetic-mean SLA integration — this specification reads that existing field, it does not recompute SLA independently):
+At any tick $t$, the platform's window unavailability is precisely the complement of the 720-sample rolling-window `sla_percentage`:
 
 $$
-\text{CumulativeUnavailabilityPct}(t) = 100 - \text{sla\_percentage}(t)
+\text{WindowUnavailabilityPct}(t) = 100 - \text{sla\_percentage}(t)
 $$
 
 $$
-\text{ErrorBudgetRemainingPct}(t) = \text{TOTAL\_ERROR\_BUDGET\_PCT} - \text{CumulativeUnavailabilityPct}(t)
+\text{ErrorBudgetRemainingPct}(t) = \text{TOTAL\_ERROR\_BUDGET\_PCT} - \text{WindowUnavailabilityPct}(t)
 $$
 
-Expressed as a **burn ratio** (the presentation format for the Topbar meter, § 5.1), bounded to $[0, 1]$ for display purposes but computed unbounded internally so an over-budget session is distinguishable from an exactly-exhausted one:
+Expressed as a **burn ratio** (the presentation format for the Topbar meter, § 5.1):
 
 $$
-\text{ErrorBudgetBurnRatio}(t) = \frac{\text{CumulativeUnavailabilityPct}(t)}{\text{TOTAL\_ERROR\_BUDGET\_PCT}}
+\text{ErrorBudgetBurnRatio}(t) = \frac{\text{WindowUnavailabilityPct}(t)}{\text{TOTAL\_ERROR\_BUDGET\_PCT}}
 $$
 
-A `BurnRatio` of `0.0` means zero cumulative unavailability so far; `1.0` means the entire monthly allowance has been consumed exactly; any value `> 1.0` means the budget is over-spent (equivalent to `sla_percentage < SLA_BREACH_THRESHOLD`, i.e., the existing `"breached"` session status, Document 02 § 1.4 — the Error Budget framing and the existing breach mechanic are two lenses on the identical underlying `sla_percentage` value, not two independently-computed figures that could disagree).
-
-**Worked example:** at tick 200, if `cumulative_sla_points / (current_tick + 1)` (the existing formula, `simulator.py::_update_simulation_tick`) yields `sla_percentage = 99.95`, then:
-
-- `CumulativeUnavailabilityPct = 100 - 99.95 = 0.05`
-- `ErrorBudgetBurnRatio = 0.05 / 0.10 = 0.50` — exactly half the monthly Error Budget has been consumed at the halfway point of the tracked 720-tick cycle (Document 02, § "VICTORY_TICK_THRESHOLD").
+A `BurnRatio` of `0.0` means zero window unavailability (`sla_percentage` at 100.00%); `1.0` means the entire monthly allowance has been consumed exactly (`sla_percentage` at the 99.90% benchmark); any value `> 1.0` means the budget is over-spent.
 
 ### 2.3 Real-Time Burn Rate
 
-The *rate* of consumption (not the cumulative total) is computed as a rolling per-tick delta, added as a new engine attribute rather than a `formulas.py` pure function (it requires history, which `formulas.py`'s stateless design deliberately excludes — Document 02 § 0's design rationale):
+The *rate* of consumption is computed across a rolling 10-tick sample window (`ERROR_BUDGET_BURN_RATE_WINDOW = 10`):
 
 ```python
-# added to SimulationEngine.__init__
-self._error_budget_history: List[float] = []  # last N burn-ratio samples, newest last
-ERROR_BUDGET_BURN_RATE_WINDOW = 10  # ticks
+self._error_budget_history: List[float] = []
+ERROR_BUDGET_BURN_RATE_WINDOW = 10
 ```
 
-```python
-def _update_error_budget_tracking(self):
-    """SAMPLE CUMULATIVE ERROR BUDGET BURN AND DERIVE A ROLLING BURN RATE"""
-    unavailability_pct = 100.0 - self.sla_percentage
-    burn_ratio = unavailability_pct / formulas.TOTAL_ERROR_BUDGET_PCT
-    self._error_budget_history.append(burn_ratio)
-    if len(self._error_budget_history) > ERROR_BUDGET_BURN_RATE_WINDOW:
-        self._error_budget_history.pop(0)
-    if len(self._error_budget_history) >= 2:
-        self.error_budget_burn_rate = (
-            self._error_budget_history[-1] - self._error_budget_history[0]
-        ) / (len(self._error_budget_history) - 1)
-    else:
-        self.error_budget_burn_rate = 0.0
-    self.error_budget_remaining_ratio = max(0.0, 1.0 - burn_ratio)
-```
+`_error_budget_history` is persisted to SQLite as `error_budget_history_json` and restored via `_deserialize_error_budget_history`, maintaining historical trajectory across restarts.
 
-This method is called from `_update_simulation_tick`, appended after the existing `self.sla_percentage = ...` assignment and before `_apply_budget_burn()` — an additive insertion, not a reordering of any existing step. `error_budget_burn_rate` is expressed in **burn-ratio units per tick**; a sustained rate of `+0.01`/tick means the entire monthly budget would be exhausted in 100 ticks at the current trajectory, a figure directly presentable to the player as a "time to exhaustion" projection: `ticks_to_exhaustion = (1.0 - burn_ratio) / burn_rate` when `burn_rate > 0`, else `None` (budget is stable or recovering).
+### 2.4 Feature Freeze State & Remediation Exception
 
-### 2.4 Feature Freeze State
+When `error_budget_remaining_ratio` reaches `0.0`, the engine activates `feature_freeze_active = True`, logging `FEATURE_FREEZE_ENGAGED` (`compliance_flag=False`).
 
-When `error_budget_remaining_ratio` reaches `0.0` (equivalently, `sla_percentage <= SLA_BREACH_THRESHOLD`, i.e., the existing `"breached"` status), a new **Feature Freeze** flag is raised — additive to, not replacing, the existing `status` field:
-
-```python
-# added to SimulationEngine.__init__
-self.feature_freeze_active: bool = False
-```
-
-```python
-def _evaluate_feature_freeze(self):
-    """ENGAGE OR LIFT THE FEATURE FREEZE BASED ON ERROR BUDGET DEPLETION"""
-    if self.error_budget_remaining_ratio <= 0.0 and not self.feature_freeze_active:
-        self.feature_freeze_active = True
-        self._log_audit_event(
-            event_type="FEATURE_FREEZE_ENGAGED",
-            actor="AUDIT_SYSTEM",
-            details={"sla_percentage": round(self.sla_percentage, 2), "tech_debt": self.tech_debt},
-            compliance_flag=False,
-        )
-    elif self.error_budget_remaining_ratio > 0.0 and self.feature_freeze_active:
-        self.feature_freeze_active = False
-        self._log_audit_event(
-            event_type="FEATURE_FREEZE_LIFTED",
-            actor="AUDIT_SYSTEM",
-            details={"sla_percentage": round(self.sla_percentage, 2)},
-            compliance_flag=True,
-        )
-```
-
-**Effect of Feature Freeze on runbook availability:** while `feature_freeze_active` is `True`, `apply_mitigation` rejects any `action_id` whose catalog `category` is `"hotfix"` (currently only `emergency_patch`, Document 04 § 1) with HTTP 400 and `{"success": false, "error": "Feature freeze active: high-risk runbooks disabled pending tech debt remediation"}`. This is implemented as one additional guard clause at the top of `apply_mitigation`, before the existing budget check — additive, and the only category gated is `hotfix`; `deployment`, `infra`, and `resilience` runbooks remain available so the player retains a path to actually resolve incidents and work down technical debt during a freeze. `rollback`'s negative `tech_debt_delta` (Document 04 § 3) becomes the primary freeze-recovery lever, by design.
-
-This introduces two additive audit event types, bringing the enumerated set (originally 8, extended to 9 by `01_TECH_TREE_AND_OFFICE_UPGRADES_SPEC.md`'s `UPGRADE_PURCHASED`) to 11:
+- **Operational Restriction:** While `feature_freeze_active` is `True`, `apply_mitigation` rejects discretionary hotfix runbooks (`emergency_patch`).
+- **Remediation Exception:** To prevent unrecoverable soft-locks, if the target service has an **already-open active incident**, `emergency_patch` is permitted. This ensures acute defects that require hotfixes can always be mitigated to lift the freeze.
+- When SLA recovers such that `error_budget_remaining_ratio > 0.0`, `FEATURE_FREEZE_LIFTED` is logged (`compliance_flag=True`).
 
 | `event_type` | Trigger | Actor | `compliance_flag` | Payload |
 |---|---|---|---|---|

@@ -23,7 +23,9 @@ export interface Incident {
   service_id: string;
   severity: IncidentSeverity;
   title: string;
-  root_cause: string;
+  // withheld by the backend (null) until triage_solved is true -- see
+  // SimulationEngine.public_incidents() -- never guess or fall back to a placeholder string here
+  root_cause: string | null;
   mtta_seconds: number;
   mttr_seconds: number;
   status: IncidentStatus;
@@ -115,6 +117,63 @@ export interface ScenarioCatalogEntry {
   scenario_id: ScenarioId;
   display_name: string;
   duration_ticks: number;
+  description?: string;
+  special_conditions?: string[];
+  objectives?: string[];
+  unlock_requirement?: string | null;
+  unlocked?: boolean;
+  best_record?: {
+    id: string;
+    outcome: "victory" | "bankrupted" | "scenario_defeat";
+    difficulty: DifficultyId;
+    days_survived: number;
+    final_sla_percentage: number;
+    final_budget: number;
+    recorded_at: string | null;
+  } | null;
+}
+
+export interface DifficultyPresetInfo {
+  id: DifficultyId;
+  name: string;
+  starting_budget: number;
+  hazard_multiplier: number;
+  budget_delta_label: string;
+  incident_rate_label: string;
+  cascade_severity: string;
+  description: string;
+}
+
+export interface NextChallengeSuggestion {
+  type: "first_run" | "scenario" | "difficulty" | "achievement" | "mastery";
+  challenge_key?: string;
+  scenario_id: ScenarioId | null;
+  difficulty: DifficultyId;
+  title: string;
+  description: string;
+  target_achievement?: string;
+  target_achievement_name?: string;
+}
+
+export interface CareerSummary {
+  total_runs: number;
+  victories: number;
+  bankruptcies: number;
+  defeats: number;
+  total_incidents_resolved: number;
+  lifetime_prestige: number;
+  operator_rank: string;
+  operator_rank_key?: string;
+  best_runs: Record<string, CareerRecord | null>;
+  recommended_challenge: NextChallengeSuggestion;
+}
+
+// a scenario's own objectives, entirely backend-computed (ScenarioEngine.objectives()) -- the
+// frontend only ever renders `done`, it never decides completion itself
+export interface ScenarioObjective {
+  id: string;
+  description: string;
+  done: boolean;
 }
 
 export interface ActiveScenario {
@@ -123,6 +182,7 @@ export interface ActiveScenario {
   duration_ticks: number;
   completed: boolean;
   outcome: Record<string, unknown> | null;
+  objectives: ScenarioObjective[];
 }
 
 // build-mode infrastructure, mirrors app.engine.infrastructure.INFRASTRUCTURE_CATALOG
@@ -219,16 +279,27 @@ export interface TelemetryState {
 // difficulty presets, mirrors app.engine.simulator.DIFFICULTY_PRESETS
 export type DifficultyId = "intern" | "standard" | "chaos";
 
-// permanent hall-of-fame entry, mirrors app.models.career.CareerRecord — never wiped by a reset
+// permanent hall-of-fame entry, mirrors app.models.career.CareerRecord — never wiped by a reset.
+// the fields below final_budget are all nullable: a record written before they existed has no
+// historical value to backfill (see backend's own migration comment), so the frontend must treat
+// their absence as "not available" rather than assuming 0/empty.
 export interface CareerRecord {
   id: string;
   player_id: string;
   scenario_id: string | null;
-  outcome: "victory" | "bankrupted";
+  difficulty?: DifficultyId;
+  outcome: "victory" | "bankrupted" | "scenario_defeat";
   days_survived: number;
   final_sla_percentage: number;
   final_budget: number;
   prestige_earned: number;
+  recorded_at?: string | null;
+  final_tech_debt: number | null;
+  final_reputation: number | null;
+  incidents_total: number | null;
+  incidents_resolved: number | null;
+  scenario_outcome: Record<string, unknown> | null;
+  objectives: ScenarioObjective[] | null;
 }
 
 export const SLA_BENCHMARK = 99.9;

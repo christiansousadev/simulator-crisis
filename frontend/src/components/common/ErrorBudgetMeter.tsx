@@ -1,5 +1,6 @@
 import { Gauge } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import DeltaTag from "./DeltaTag";
 
 interface ErrorBudgetMeterProps {
   remainingRatio: number;
@@ -33,7 +34,7 @@ export default function ErrorBudgetMeter({ remainingRatio, frozen }: ErrorBudget
         <Gauge className={`w-3.5 h-3.5 ${tone.text}`} />
         <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.errorBudget.label}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
@@ -42,6 +43,7 @@ export default function ErrorBudgetMeter({ remainingRatio, frozen }: ErrorBudget
         </div>
         <span className={`font-bold text-sm tabular-nums ${tone.text} hd:hidden`}>{pct.toFixed(0)}%</span>
         <span className={`font-bold text-sm tabular-nums ${tone.text} hidden hd:inline`}>{t.errorBudget.remaining(pct)}</span>
+        <DeltaTag value={Math.round(pct)} format={(d) => `${d > 0 ? "+" : ""}${d}%`} className="top-0 left-full ml-1" />
         {frozen && (
           <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 text-[9px] font-bold uppercase tracking-wide animate-pulse">
             {t.errorBudget.featureFreezeActive}

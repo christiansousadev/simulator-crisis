@@ -1,12 +1,14 @@
 import { Crosshair, Hammer } from "lucide-react";
 import type { MouseEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
-import { InfrastructureNodeType } from "../../types/game";
+import { IncidentSeverity, InfrastructureNodeType } from "../../types/game";
 import { DayPhase, getDayPhase, getHourOfDay } from "../../utils/officeClock";
+import { highestSeverity } from "../../utils/severity";
 import ObjectiveHint from "../common/ObjectiveHint";
+import ObjectiveTracker from "../common/ObjectiveTracker";
 import BoardRoom from "./BoardRoom";
 import BreakRoom from "./BreakRoom";
 import BuildModeOverlay from "./BuildModeOverlay";
@@ -22,7 +24,7 @@ import OfficeTooltip from "./OfficeTooltip";
 import { MeetingNook, OfficePlant, Sofa, WallClock, WasteBin } from "./OfficeProps";
 import PerimeterWalls from "./PerimeterWalls";
 import ReceptionLobby from "./ReceptionLobby";
-import ServerRoom from "./ServerRoom";
+import ServerRoom, { rackGridPosition } from "./ServerRoom";
 import SkylineBackdrop from "./SkylineBackdrop";
 import WanderingEmployee from "./WanderingEmployee";
 import { project } from "./isoMath";
@@ -181,9 +183,12 @@ interface DragState {
 export default function IsometricOffice() {
   const t = useTranslation();
   const services = useGameStore((s) => s.telemetry.services);
+  const activeIncidents = useGameStore((s) => s.telemetry.active_incidents);
   const infrastructureNodes = useGameStore((s) => s.telemetry.infrastructure_nodes);
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
   const selectService = useGameStore((s) => s.selectService);
+  const selectedIncident = useGameStore((s) => s.selectedIncident);
+  const triageIncidentId = useGameStore((s) => s.triageIncidentId);
   const currentTick = useGameStore((s) => s.telemetry.tick);
   const buildModeActive = useGameStore((s) => s.buildModeActive);
   const toggleBuildMode = useGameStore((s) => s.toggleBuildMode);
@@ -204,6 +209,28 @@ export default function IsometricOffice() {
   // defcon/red-alert lighting rig: any live p1, or a confirmed sla breach, puts the office on emergency power
   const redAlert = hasP1 || sessionStatus === "breached";
   const hoveredService = hover ? services.find((s) => s.id === hover.serviceId) : undefined;
+
+  // highest-severity active incident per service, for the office incident-highlight fx (ring/glow
+  // color and alert-badge tone) -- recomputed only when the incident list or topology actually changes
+  const serviceSeverities = useMemo(() => {
+    const map = new Map<string, IncidentSeverity>();
+    for (const service of services) {
+      const severities = activeIncidents.filter((i) => i.service_id === service.id).map((i) => i.severity);
+      const worst = highestSeverity(severities);
+      if (worst) map.set(service.id, worst);
+    }
+    return map;
+  }, [services, activeIncidents]);
+
+  // service whose incident is currently open in the log-triage terminal, for the rack's investigation LED
+  const investigatingServiceId = useMemo(
+    () => activeIncidents.find((i) => i.id === triageIncidentId)?.service_id ?? null,
+    [activeIncidents, triageIncidentId]
+  );
+
+  // service the incident-detail modal is currently focused on, if any -- drives both the camera
+  // centering below and a visual dimming of every other rack while it's open
+  const focusedServiceId = selectedIncident?.service_id ?? null;
 
   // mouse-wheel zoom, clamped to a sane range around the office's visual center. Attached below
   // as a native, explicitly non-passive listener rather than React's onWheel prop: modern
@@ -254,6 +281,38 @@ export default function IsometricOffice() {
     setCameraSmooth(true);
     setCamera({ scale, x: -scale * (target.x - CAMERA_ORIGIN.x), y: -scale * (target.y - CAMERA_ORIGIN.y) });
   };
+
+  // smooth-pans and zooms the camera onto a specifically selected service rack
+  const handleFocusService = (serviceId: string) => {
+    const pos = rackGridPosition(serviceId, services, SERVER_ROOM_ORIGIN.x, SERVER_ROOM_ORIGIN.y);
+    if (!pos) return;
+    const target = project(pos.x, pos.y, 0.5);
+    const scale = 1.7;
+    setCameraSmooth(true);
+    setCamera({ scale, x: -scale * (target.x - CAMERA_ORIGIN.x), y: -scale * (target.y - CAMERA_ORIGIN.y) });
+  };
+
+  // remembers the framing the player had right before the incident detail modal auto-focused the
+  // camera on a specific rack, so closing it can smoothly restore exactly where they were --
+  // reuses the same setCameraSmooth(true) + setCamera(...) transition handleCenterOnCrisis already
+  // uses, just aimed at one particular service instead of the server vault's fixed center
+  const preFocusCameraRef = useRef<{ scale: number; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (focusedServiceId) {
+      const pos = rackGridPosition(focusedServiceId, services, SERVER_ROOM_ORIGIN.x, SERVER_ROOM_ORIGIN.y);
+      if (!pos) return;
+      if (!preFocusCameraRef.current) preFocusCameraRef.current = camera;
+      const target = project(pos.x, pos.y, 0.5);
+      const scale = 1.7;
+      setCameraSmooth(true);
+      setCamera({ scale, x: -scale * (target.x - CAMERA_ORIGIN.x), y: -scale * (target.y - CAMERA_ORIGIN.y) });
+    } else if (preFocusCameraRef.current) {
+      setCameraSmooth(true);
+      setCamera(preFocusCameraRef.current);
+      preFocusCameraRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedServiceId]);
 
   const handleHover = (serviceId: string, evt: MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -412,6 +471,9 @@ export default function IsometricOffice() {
           originY={SERVER_ROOM_ORIGIN.y}
           services={services}
           selectedServiceId={selectedServiceId}
+          serviceSeverities={serviceSeverities}
+          investigatingServiceId={investigatingServiceId}
+          focusedServiceId={focusedServiceId}
           onSelect={handleServiceSelect}
           onHoverService={handleHover}
           onLeaveService={handleLeave}
@@ -454,12 +516,26 @@ export default function IsometricOffice() {
       </svg>
 
       {hoveredService && <OfficeTooltip service={hoveredService} x={hover!.x} y={hover!.y} />}
-      <NodeInspector />
+      <NodeInspector onFocusService={handleFocusService} />
       <ObjectiveHint />
+      <ObjectiveTracker />
 
-      {/* coherent camera-control panel: centralizar-na-crise and build-mode share one tactical dock
-          instead of two loose buttons floating over the scene */}
+      {/* coherent camera-control panel: centralizar-na-crise, focar-rack and build-mode share one tactical dock */}
       <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 p-1 rounded-lg border border-slate-800/80 bg-slate-950/80 backdrop-blur-md shadow-lg">
+        {selectedServiceId && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleFocusService(selectedServiceId);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-sky-500/50 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 text-xs font-semibold shadow-[0_0_10px_rgba(56,189,248,0.2)] active:scale-95 transition-all"
+            title={t.office.focusService}
+          >
+            <Crosshair className="w-3.5 h-3.5" />
+            {t.office.focusService}
+          </button>
+        )}
+
         {redAlert && (
           <button
             onClick={(e) => {

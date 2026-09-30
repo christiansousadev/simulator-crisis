@@ -1,5 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import DeltaTag from "./DeltaTag";
 
 interface ShieldGaugeProps {
   slaPercentage: number;
@@ -30,7 +31,7 @@ export default function ShieldGauge({ slaPercentage }: ShieldGaugeProps) {
         <ShieldCheck className={`w-3.5 h-3.5 ${tone.text}`} />
         <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.topbar.slaShield}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <div className="flex gap-[2px]">
           {Array.from({ length: SEGMENT_COUNT }).map((_, i) => (
             <span
@@ -42,6 +43,12 @@ export default function ShieldGauge({ slaPercentage }: ShieldGaugeProps) {
           ))}
         </div>
         <span className={`font-bold text-sm tabular-nums ${tone.text}`}>{slaPercentage.toFixed(2)}%</span>
+        <DeltaTag
+          value={Math.round(slaPercentage * 10) / 10}
+          format={(d) => `${d > 0 ? "+" : ""}${d.toFixed(1)}%`}
+          threshold={0.05}
+          className="top-0 left-full ml-1"
+        />
       </div>
     </div>
   );

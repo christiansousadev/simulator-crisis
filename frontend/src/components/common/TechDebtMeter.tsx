@@ -1,5 +1,6 @@
 import { Wrench } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import DeltaTag from "./DeltaTag";
 
 interface TechDebtMeterProps {
   techDebt: number;
@@ -24,11 +25,12 @@ export default function TechDebtMeter({ techDebt }: TechDebtMeterProps) {
         <Wrench className={`w-3.5 h-3.5 ${tone.text}`} />
         <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.topbar.techDebt}</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
           <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
         </div>
-        <span className={`font-bold text-sm ${tone.text}`}>{techDebt}</span>
+        <span className={`font-bold text-sm tabular-nums ${tone.text}`}>{techDebt}</span>
+        <DeltaTag value={techDebt} invert className="top-0 left-full ml-1" />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Gavel } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
+import { translateDilemma } from "../../i18n/dynamicContent";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import { playDilemmaChime } from "../../utils/sound";
@@ -21,7 +22,12 @@ function ImpactPill({ label, value, invert }: { label: string; value: number; in
 // cinematic change advisory board decision card with a server-authoritative countdown
 export default function CABDilemmaModal() {
   const t = useTranslation();
-  const dilemma = useGameStore((s) => s.activeDilemma);
+  const language = useGameStore((s) => s.language);
+  const rawDilemma = useGameStore((s) => s.activeDilemma);
+  // memoized on the raw dilemma + language, not recomputed (and not a new object) on every
+  // tick-driven re-render, so the chime/reset effect below never mistakes a re-render for a
+  // genuinely new dilemma
+  const dilemma = useMemo(() => (rawDilemma ? translateDilemma(rawDilemma, language) : null), [rawDilemma, language]);
   const currentTick = useGameStore((s) => s.telemetry.tick);
   const tickRateSeconds = useGameStore((s) => s.telemetry.tick_rate_seconds);
   const [resolving, setResolving] = useState(false);
@@ -33,7 +39,7 @@ export default function CABDilemmaModal() {
       setResolving(false);
       playDilemmaChime();
     }
-  }, [dilemma]);
+  }, [dilemma?.dilemma_id]);
 
   if (!dilemma) return null;
 

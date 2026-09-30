@@ -1,85 +1,97 @@
 # Custom Scenario Creator (Chaos Sandbox) — Implementation Specification
 
-**Document ID:** IZ-COMM-06
-**Classification:** Implementation Contract — Commercial Pillar 6
-**Status:** Implemented, additive only, non-breaking
-**Integration baseline:** `backend/app/engine/scenarios/base.py`, `backend/app/api/v1/scenarios.py`
+**Document ID:** IZ-COMM-06  
+**Classification:** Technical Specification / Custom Scenarios & Chaos Scripting  
+**Status:** Implementado  
+**Source of Truth:** `backend/app/schemas/scenario.py`, `backend/app/engine/scenarios/custom_scenario.py`, `backend/app/api/v1/scenarios.py`, `frontend/src/components/modals/ScenarioBuilderModal.tsx`
 
 ---
 
 ## 1. System Objective
 
-Generalize the fixed, hand-authored `ScenarioEngine` subclasses (`04_SCENARIOS_AND_GAME_MODES_SPEC.md`) into a fifth, data-driven scenario whose entire behavior is supplied by the player as a JSON configuration at load time, rather than compiled into a Python class — the foundation for a scenario-sharing community feature.
+Allow operators to script and load data-driven custom crisis scenarios via structured JSON configurations. Operators can configure custom hazard multipliers, starting economic parameters, duration windows, victory constraints, and scheduled chaos failure injections across canonical services.
 
-## 2. `CustomScenario` Engine
+---
 
-`backend/app/engine/scenarios/custom_scenario.py` defines `CustomScenario(ScenarioEngine)`, **not** registered in `SCENARIO_REGISTRY` (it has no fixed `scenario_id` string to register under — it is instantiated directly with a config, never looked up by name):
+## 2. `CustomScenario` Engine Integration
 
-```python
-class CustomScenario(ScenarioEngine):
-    scenario_id = "custom"
-    display_name = "Custom Scenario"
+Implemented in `backend/app/engine/scenarios/custom_scenario.py`:
+- Inherits from `ScenarioEngine`.
+- Applies the configured `hazard_multiplier` to the simulation loop.
+- Evaluates scheduled `chaos_injections` on matching ticks, triggering `_trigger_service_failure()` on targeted services.
+- Evaluates dynamic victory: defeat if budget breaches `budget_floor`, victory upon surviving `duration_ticks` without liquidation.
 
-    def __init__(self, engine, config: Dict[str, Any]):
-        super().__init__(engine)
-        self.config = config
-        self.duration_ticks = config["duration_ticks"]
+---
 
-    def on_tick(self):
-        self.engine._scenario_hazard_multiplier = self.config["hazard_multiplier"]
-        for injection in self.config["chaos_injections"]:
-            if injection["at_tick"] == self.elapsed_ticks:
-                srv = next((s for s in self.engine.services if s["id"] == injection["service_id"]), None)
-                if srv and srv["status"] == "healthy":
-                    self.engine._trigger_service_failure(srv)
+## 3. Configuration Schema & Strict Pre-Reset Validations
 
-    def evaluate_victory(self):
-        if self.engine.budget <= self.config["budget_floor"]:
-            return {"scenario_id": self.scenario_id, "outcome": "defeat", "compliant": False}
-        if not self.is_expired():
-            return None
-        return {"scenario_id": self.scenario_id, "outcome": "victory", "compliant": True}
-```
-
-`hazard_multiplier` is read through the same `getattr(self, "_scenario_hazard_multiplier", 1.0)` call site every other scenario already uses (Document `04_SCENARIOS_AND_GAME_MODES_SPEC.md` § 2.1) — no new read path in `_evaluate_random_failures` is required. `chaos_injections` reuses `_trigger_service_failure` verbatim, exactly as `ChaosEngineeringDrillScenario` already does.
-
-## 3. Configuration Schema
-
-`backend/app/schemas/scenario.py` gains `CustomScenarioConfig`:
+Configuration inputs are parsed and strictly validated by Pydantic in `backend/app/schemas/scenario.py`. **All validations occur before any session state is mutated or reset.** An invalid payload immediately aborts with HTTP 422, preserving the running session unharmed:
 
 ```python
 class ChaosInjection(BaseModel):
-    at_tick: int
+    at_tick: int = Field(ge=0)
     service_id: str
 
+    @field_validator("service_id")
+    @classmethod
+    def _service_must_exist(cls, v: str) -> str:
+        # Validates against the engine's canonical topology catalog
+        if v not in CANONICAL_SERVICE_IDS:
+            raise ValueError(f"Unknown service_id: {v!r}")
+        return v
+
+
 class CustomScenarioConfig(BaseModel):
-    duration_ticks: int
-    hazard_multiplier: float
-    budget_floor: float
-    chaos_injections: List[ChaosInjection] = []
+    duration_ticks: int = Field(ge=10, le=100_000)
+    hazard_multiplier: float = Field(ge=0.0, le=20.0) # Rejects negative and non-finite NaN/Inf
+    budget_floor: float = Field(ge=0.0, lt=_STANDARD_STARTING_BUDGET) # Must be < $250,000 baseline
+    chaos_injections: List[ChaosInjection] = Field(default_factory=list, max_length=50)
+    starting_budget: Optional[float] = Field(default=None, ge=1_000.0, le=2_000_000.0)
+    starting_tech_debt: Optional[int] = Field(default=None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _injections_within_window(self) -> "CustomScenarioConfig":
+        for injection in self.chaos_injections:
+            if injection.at_tick >= self.duration_ticks:
+                raise ValueError(f"chaos_injections at_tick {injection.at_tick} must be before duration_ticks {self.duration_ticks}")
+        return self
+
+    @model_validator(mode="after")
+    def _starting_budget_above_floor(self) -> "CustomScenarioConfig":
+        if self.starting_budget is not None and self.starting_budget <= self.budget_floor:
+            raise ValueError(f"starting_budget {self.starting_budget} must be greater than budget_floor {self.budget_floor}")
+        return self
 ```
 
-This is the complete, exhaustive configuration surface: base traffic rate is expressed as `hazard_multiplier` (identical mechanism the built-in `black_friday_rush` scenario already uses for its own traffic-surge effect), failure probability as the same multiplier, budget constraint as `budget_floor`, and scheduled chaos as the `chaos_injections` list.
+### Key Validation Guarantees:
+1. **Canonical Service Verification:** Targeted `service_id` values are checked against `CANONICAL_SERVICE_IDS` (`{"srv-auth", "srv-payment", "srv-order", "srv-inventory", "srv-notify", "srv-api-gw"}`). It does not use `SERVICE_COMPETENCY_MAP`, ensuring strict topological accuracy.
+2. **Temporal Window Bounds:** All scheduled chaos injection ticks must fall strictly before `duration_ticks`.
+3. **Numeric Bounds & Solvency:** Rejects non-finite values (`NaN`, `Infinity`). Ensures starting budget strictly exceeds `budget_floor` to prevent instant defeat traps.
+4. **Pre-Reset Execution:** If validation fails, `engine.reset()` is never called, safeguarding the active session from accidental destruction.
+
+---
 
 ## 4. Loading Endpoint
 
-`POST /api/scenarios/custom/load` — additive to `scenarios.py`. Resets the engine to a clean state first (so a custom scenario always starts from the standard \$250,000/25-tech-debt baseline, never from mid-session leftover state), then attaches the configured instance directly:
+- `POST /api/scenarios/custom/load` accepts `CustomScenarioConfig`.
+- Only after successful schema validation, resets engine state and attaches `CustomScenario(engine, config)`:
+  ```python
+  @router.post("/api/scenarios/custom/load")
+  async def load_custom_scenario(payload: CustomScenarioConfig, request: Request) -> Dict[str, Any]:
+      engine = request.app.state.engine
+      engine.reset()
+      engine.load_custom_scenario(payload.model_dump())
+      return {"success": True}
+  ```
 
-```python
-@router.post("/api/scenarios/custom/load")
-async def load_custom_scenario(payload: CustomScenarioConfig, request: Request) -> Dict[str, Any]:
-    engine = request.app.state.engine
-    engine.reset()
-    engine.load_custom_scenario(payload.model_dump())
-    return {"success": True}
-```
+---
 
-`SimulationEngine.load_custom_scenario(config)` is a new one-line method: `self.active_scenario = CustomScenario(self, config)`.
+## 5. Challenge Codes & Sharing
 
-## 5. Sharing — Challenge Codes
+Scenarios are encoded client-side into base64 challenge strings (`btoa(JSON.stringify(config))`) for sharing. The recipient decodes the string in `ScenarioBuilderModal.tsx` and submits it directly to the load endpoint.
 
-No new database table or backend storage is introduced for saved scenarios. A "challenge code" is simply the JSON configuration, base64-encoded client-side (`btoa(JSON.stringify(config))`) for easy pasting into chat/forums, and decoded (`JSON.parse(atob(code))`) back into the builder form on import. This keeps the feature fully self-contained on the client and requires no scenario-hosting infrastructure for this release.
+---
 
-## 6. Frontend — Scenario Builder
+## 6. Frontend Builder (`ScenarioBuilderModal.tsx`)
 
-`components/modals/ScenarioBuilderModal.tsx`, reachable from the existing `ScenarioSelectModal`, exposes number inputs for duration, hazard multiplier, and budget floor, plus a repeatable chaos-injection row editor (tick + service dropdown), an "Export Code" button (copies the base64 string to the clipboard) and an "Import Code" text field, and a "Test Scenario" button calling `POST /api/scenarios/custom/load`.
+Accessible from `ScenarioSelectModal`. Provides reactive controls for duration, hazard multipliers, starting conditions, and an interactive list for scheduling chaos injection ticks and target services.

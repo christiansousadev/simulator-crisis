@@ -1,9 +1,9 @@
 # Boardroom Live Metrics TV & Observer Dashboard — Implementation Specification
 
-**Document ID:** IZ-COMM-03
-**Classification:** Implementation Contract — Commercial Pillar 3
-**Status:** Implemented, additive only, non-breaking, frontend-only (zero backend changes)
-**Integration baseline:** `frontend/src/components/office/BoardRoom.tsx`, `frontend/src/store/useGameStore.ts`, `frontend/src/main.tsx`
+**Document ID:** IZ-COMM-03  
+**Classification:** Technical Specification / LiveOps & Real-Time Observer Telemetry  
+**Status:** Implementado  
+**Source of Truth:** `frontend/src/components/office/BoardRoom.tsx`, `frontend/src/components/office/BoardroomMetricsDisplay.tsx`, `frontend/src/components/live-ops/LiveOpsView.tsx`, `frontend/src/store/useGameStore.ts`
 
 ---
 

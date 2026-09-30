@@ -126,7 +126,7 @@ export default function BottomDock() {
       </div>
 
       {!collapsed && (
-        <div className="h-40">
+        <div className="h-48">
           {activeTab === "incidents" && <IncidentsPanel />}
           {activeTab === "directives" && <MitigationsPanel />}
           {activeTab === "compliance" && <AuditTicker />}

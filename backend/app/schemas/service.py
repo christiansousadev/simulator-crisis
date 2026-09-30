@@ -19,6 +19,9 @@ class ServiceBase(BaseModel):
     status: ServiceStatus = ServiceStatus.HEALTHY
     latency_ms: int = 45
     error_rate: float = 0.0000
+    # other service ids THIS service depends on (upstream prerequisites) -- see
+    # app.engine.simulator.SimulationEngine._init_default_services's docstring for the direction
+    # convention every mechanic walking this graph must follow
     dependencies: List[str] = Field(default_factory=list)
 
 class ServiceResponse(ServiceBase):

@@ -1,39 +1,47 @@
 # Executive PDF Report Generator — Implementation Specification
 
-**Document ID:** IZ-COMM-05
-**Classification:** Implementation Contract — Commercial Pillar 5
-**Status:** Implemented, additive only, non-breaking
-**Integration baseline:** `backend/app/api/v1/audits.py`, `audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`
+**Document ID:** IZ-COMM-05  
+**Classification:** Technical Specification / Executive Reporting & PDF Generation  
+**Status:** Implementado  
+**Source of Truth:** `backend/app/api/v1/audits.py`, `backend/app/reports/dossier.py`, `backend/app/reports/pdf.py`, `frontend/src/components/modals/PostMortemModal.tsx`
 
 ---
 
 ## 1. System Objective
 
-Give the existing markdown post-mortem pipeline (Document 05) a second, formal export format suitable for external distribution to a board or a real auditor: a branded PDF with the same underlying facts, laid out as an executive document rather than a developer-facing markdown file.
+Provide formal executive and regulatory reporting for concluded incidents by rendering a boardroom-ready PDF document alongside the markdown post-mortem. Both formats, along with the AI Auditor defense interview, are strictly grounded in the unified incident dossier (`_build_incident_dossier()`), guaranteeing that all three representations share identical, point-in-time factual data.
 
-## 2. Dependency
+---
 
-`reportlab` is added to `backend/requirements.txt` — a pure-Python PDF drawing library with no system-level binary dependency (unlike `weasyprint`/`wkhtmltopdf`, which require an external rendering engine), keeping the deployment footprint minimal.
+## 2. Technical Dependencies & Architecture
 
-## 3. Endpoint
+- **Dependency:** `reportlab` in `backend/requirements.txt`. Pure-Python PDF generation with zero external C/binary dependencies or headless browser overhead.
+- **Unified Fact Model (`_build_incident_dossier`):** Located in `backend/app/reports/dossier.py`. Gathers immutable point-in-time facts (`tech_debt_at_creation`, `tech_debt_at_resolution`, `accrued_surcharge`, exact audit log timeline) directly from the database. It explicitly avoids using the live session's current cash or current tech debt to represent historical incident impact.
 
-`GET /api/audits/postmortem/{incident_id}/export-pdf`, additive to `audits.py`, sitting beside (not replacing) `generate_postmortem`. It reuses the exact same `Incident`/`GameSession`/mitigation-lookup query already factored for the markdown path and the AI-auditor interview (Document `06_AI_AUDITOR_POSTMORTEM_INTERVIEW_SPEC.md` § 2.2), so all three export paths (`markdown`, `interview`, `pdf`) draw from one consistent data-gathering source rather than three independently-maintained queries.
+---
 
-## 4. Document Layout
+## 3. REST Endpoint
 
-Built with `reportlab.pdfgen.canvas` directly (no heavier `platypus` flowable dependency needed for a single-page-oriented document):
+`GET /api/audits/postmortem/{incident_id}/export-pdf`
+- Generates a PDF in-memory and returns `Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="postmortem_{incident_id}.pdf"'})`.
+- Emits no state-mutating side effects.
 
-1. **Header band** — "IncidentZero Corp." wordmark, a horizontal rule, "OFFICIAL COMPLIANCE DOSSIER" subtitle, incident id and severity.
-2. **Executive summary block** — root cause, affected service, MTTA/MTTR (ticks), compliance status.
-3. **SLA impact bar** — a single proportional rectangle (filled width = `session.sla_percentage`, drawn against a 100%-width outline), labeled with the exact percentage — a real, data-driven chart element, not decorative.
-4. **Timeline of events** — a bulleted list drawn from the same audit-log correlation query used by the interview endpoint, one line per event with its tick and event type.
-5. **Financial cost accounting** — a simple two-column table: passive burn attribution, incident surcharge attribution (recomputed from `formulas.incident_surcharge` at the incident's final MTTR), and the mitigation cost pulled from the matched `RUNBOOK_EXECUTED` audit entry.
-6. **Digital auditor signature seal** — a drawn circle containing "CERTIFIED" and a deterministic pseudo-hash string (`sha256` of the incident id, truncated) presented as a verification code, plus the current server wall-clock export timestamp — explicitly labeled as a **document integrity stamp**, not a cryptographic signature, since no real PKI is involved (an honest-disclosure choice consistent with this project's established documentation voice).
+---
 
-## 5. Response Contract
+## 4. Document Layout & Structure
 
-The endpoint returns `Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="postmortem_{incident_id}.pdf"'})`. Like `generate_postmortem`, it performs no incident-status gate (Document 05 § 2.6's disclosed limitation applies equally here).
+The executive layout is structured into six functional blocks:
+1. **Header Block:** IncidentZero formal banner, classification watermark, incident ID, title, severity, and service node.
+2. **Executive Summary:** Incident timeline, root cause narrative (omitted if unconfirmed at time of resolution), MTTA, and MTTR.
+3. **Point-in-Time Technical Debt & Financial Accounting:** Displays exact `tech_debt_at_creation` and `tech_debt_at_resolution`, along with actual `accrued_surcharge` and runbook execution costs.
+4. **Audit Trail Chronology:** Chronological list of persisted audit ledger events associated with the incident window (`INCIDENT_RAISED`, `INCIDENT_ACKNOWLEDGED`, `INVESTIGATION_STARTED`, `ROOT_CAUSE_IDENTIFIED`, `RUNBOOK_EXECUTED`).
+5. **Regulatory & Compliance Summary:** Flags any SLA breaches or unattended alert violations during the active window.
+6. **Content Checksum Seal:**
+   - Visual verification badge containing a SHA-256 digest computed from the incident's immutable facts (ID, timestamps, root cause).
+   - **Governance Designation:** Formally documented as a **content checksum** for detecting accidental payload corruption or content tampering. It does **not** constitute a cryptographic digital signature or PKI-based authenticity guarantee, as anyone with access can recompute the hash.
 
-## 6. Frontend
+---
 
-`PostMortemModal.tsx` gains an "Export Official PDF" button beside its existing markdown view, pointing directly at the export endpoint's URL via a plain anchor (`<a href=... download>`) rather than a fetch/blob round-trip — the browser's native download handling is sufficient since the endpoint requires no request body and no auth header.
+## 5. UI Integration
+
+- `PostMortemModal.tsx` provides an "Export Official PDF" download button linking directly to the GET endpoint. The browser initiates native download without client-side state mutation.

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import AchievementToast from "./components/common/AchievementToast";
 import FloatingCombatText from "./components/common/FloatingCombatText";
+import IncidentResolutionSummary from "./components/common/IncidentResolutionSummary";
 import ImpactFlash from "./components/common/ImpactFlash";
 import BottomDock from "./components/layout/BottomDock";
 import CorporateNewsTicker from "./components/layout/CorporateNewsTicker";
@@ -10,27 +11,32 @@ import CreditsModal from "./components/modals/CreditsModal";
 import HallOfFameModal from "./components/modals/HallOfFameModal";
 import IncidentDetailModal from "./components/modals/IncidentDetailModal";
 import IncidentReplayModal from "./components/modals/IncidentReplayModal";
-import LiquidationScreen from "./components/modals/LiquidationScreen";
 import LogTriageTerminal from "./components/modals/LogTriageTerminal";
 import OnboardingModal from "./components/modals/OnboardingModal";
+import PostMatchDebriefModal from "./components/modals/PostMatchDebriefModal";
 import PostMortemModal from "./components/modals/PostMortemModal";
+import ScenarioBriefingModal from "./components/modals/ScenarioBriefingModal";
 import ScenarioBuilderModal from "./components/modals/ScenarioBuilderModal";
 import ScenarioSelectModal from "./components/modals/ScenarioSelectModal";
 import SettingsModal from "./components/modals/SettingsModal";
 import TitleScreen from "./components/modals/TitleScreen";
-import VictoryScreen from "./components/modals/VictoryScreen";
 import IsometricOffice from "./components/office/IsometricOffice";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic";
 import { useGameAudio } from "./hooks/useGameAudio";
+import { useScenarioObjectives } from "./hooks/useScenarioObjectives";
 import { useSimulationSocket } from "./hooks/useSimulationSocket";
 import { useGameStore } from "./store/useGameStore";
+import { computeDefconLevel } from "./utils/defcon";
 
 export default function App() {
   useSimulationSocket();
   useGameAudio();
   useBackgroundMusic();
+  useScenarioObjectives();
 
   const status = useGameStore((s) => s.telemetry.status);
+  const telemetry = useGameStore((s) => s.telemetry);
+  const defconLevel = computeDefconLevel(telemetry);
   const titleScreenVisible = useGameStore((s) => s.titleScreenVisible);
   const screenShakeSeq = useGameStore((s) => s.screenShakeSeq);
   const screenShakeMagnitude = useGameStore((s) => s.screenShakeMagnitude);
@@ -42,6 +48,7 @@ export default function App() {
   // restarts the css animation cleanly instead of being swallowed by an unchanged classname
   useEffect(() => {
     if (screenShakeSeq === 0) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const el = rootRef.current;
     if (!el) return;
     const shakeClass = screenShakeMagnitude === "heavy" ? "screen-shake-heavy" : "screen-shake-light";
@@ -61,6 +68,7 @@ export default function App() {
       <HallOfFameModal />
       <ScenarioSelectModal />
       <ScenarioBuilderModal />
+      <ScenarioBriefingModal />
     </>
   );
 
@@ -80,8 +88,10 @@ export default function App() {
       data-colorblind-safe={colorblindSafe || undefined}
       className="h-screen w-screen flex flex-col overflow-hidden select-none relative"
     >
+      <div className="defcon-vignette" data-defcon={defconLevel} />
       <ImpactFlash />
       <FloatingCombatText />
+      <IncidentResolutionSummary />
 
       <Topbar />
       <CorporateNewsTicker />
@@ -97,8 +107,7 @@ export default function App() {
       <AchievementToast />
       {alwaysMountedModals}
 
-      {status === "bankrupted" && <LiquidationScreen />}
-      {status === "victory" && <VictoryScreen />}
+      {(status === "bankrupted" || status === "victory") && <PostMatchDebriefModal />}
     </div>
   );
 }

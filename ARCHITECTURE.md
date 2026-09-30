@@ -146,8 +146,8 @@ simulator-crisis/
    - Outage Surcharge: High latency/downtime imposes direct cloud egress & customer SLA refund costs.
    - Failure Condition: `budget <= 0` (Bankruptcy -> Game Over).
 2. **Global SLA %:**
-   - Target: `99.90%` (Error Budget: `0.10%` = max 43.2 minutes of cumulative weighted downtime per month).
-   - Failure Condition: Cumulative SLA `< 99.00%` triggers an emergency Board Review & Regulatory Audit.
+   - Target: `99.90%` (Error Budget: `0.10%` = max 43.2 minutes of weighted downtime per 720-tick month).
+   - Failure Condition: Rolling window SLA `< 99.00%` (evaluated after 24-tick grace period) triggers regulatory breach (`SLA_BREACH_EMERGENCY_SANCTION`) and emergency Board Review.
 3. **User Happiness (0.0 to 100.0%):**
    - Driven by weighted service latency and error rates.
    - If User Happiness `< 40.0%`, customer churn accelerates passive revenue drain.
@@ -159,7 +159,7 @@ simulator-crisis/
 
 ### 3.3 Mathematical Formulas
 
-#### Formula 1: SLA Availability Calculation Per Tick
+#### Formula 1: SLA Availability Calculation Per Tick & Rolling Window
 Each microservice $i \in \{1, \dots, N\}$ has weight $w_i$:
 - $w_i = 3.0$ for **Critical Tier** (Payment Gateway, Auth Service, Database Master).
 - $w_i = 1.0$ for **Standard Tier** (Search Indexer, Recommendation Engine, Notification Worker).
@@ -174,8 +174,10 @@ $$U_i(t) = \begin{cases}
 Instantaneous Tick SLA:
 $$SLA_{tick}(t) = 1.0 - \frac{\sum_{i=1}^N w_i \cdot U_i(t)}{\sum_{i=1}^N w_i}$$
 
-Cumulative SLA at tick $T$:
-$$SLA_{cumulative}(T) = \left(\frac{1}{T} \sum_{t=1}^T SLA_{tick}(t)\right) \times 100\%$$
+Rolling Window SLA at tick $t$ (up to 720 samples):
+$$SLA_{rolling}(t) = \text{clamp\_percentage}\left(\frac{1}{|W_t|} \sum_{s \in W_t} SLA_{tick}(s)\right) \times 100\%$$
+
+Where $W_t$ is the bounded sliding window (`_sla_window`, maxlen=720 ticks, serialized in `sla_window_json`). Regulatory breach evaluation begins after a 24-tick grace period (`BREACH_GRACE_TICKS = 24`) against `SLA_BREACH_THRESHOLD = 99.00%`.
 
 #### Formula 2: Outage Cascading Probability Based on Technical Debt
 Base spontaneous failure probability per healthy service per tick: $P_{base} = 0.012$ (1.2%).

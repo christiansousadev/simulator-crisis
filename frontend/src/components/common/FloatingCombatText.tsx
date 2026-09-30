@@ -12,29 +12,40 @@ const TONE_STYLES: Record<FloatingTextTone, string> = {
 
 const AUTO_DISMISS_MS = 1600;
 
+function FloatingTextItem({
+  item,
+  onDismiss,
+}: {
+  item: { id: string; text: string; tone: FloatingTextTone };
+  onDismiss: (id: string) => void;
+}) {
+  useEffect(() => {
+    const timer = setTimeout(() => onDismiss(item.id), AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, [item.id, onDismiss]);
+
+  return (
+    <span
+      data-testid="floating-text"
+      data-tone={item.tone}
+      className={`font-mono font-black text-xs uppercase tracking-wider px-3 py-1.5 rounded border animate-combat-text-pop ${TONE_STYLES[item.tone]}`}
+    >
+      {item.text}
+    </span>
+  );
+}
+
 // floating combat-text ticker: brief callouts for spawns, resolutions and penalties
 export default function FloatingCombatText() {
   const texts = useGameStore((s) => s.floatingTexts);
   const dismiss = useGameStore((s) => s.dismissFloatingText);
-
-  useEffect(() => {
-    const timers = texts.map((t) => setTimeout(() => dismiss(t.id), AUTO_DISMISS_MS));
-    return () => timers.forEach(clearTimeout);
-  }, [texts, dismiss]);
 
   if (texts.length === 0) return null;
 
   return (
     <div className="fixed top-24 right-4 z-50 flex flex-col items-end gap-1.5 pointer-events-none max-w-xs">
       {texts.map((t) => (
-        <span
-          key={t.id}
-          data-testid="floating-text"
-          data-tone={t.tone}
-          className={`font-mono font-black text-xs uppercase tracking-wider px-3 py-1.5 rounded border animate-combat-text-pop ${TONE_STYLES[t.tone]}`}
-        >
-          {t.text}
-        </span>
+        <FloatingTextItem key={t.id} item={t} onDismiss={dismiss} />
       ))}
     </div>
   );

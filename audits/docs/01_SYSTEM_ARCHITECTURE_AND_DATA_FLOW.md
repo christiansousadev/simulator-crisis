@@ -1,36 +1,28 @@
 # System Architecture and Data Flow Specification
 
-**Document ID:** IZ-ARCH-01
-**Classification:** Internal Architectural Reference / Compliance Package Exhibit A
-**System:** IncidentZero — SRE & IT Governance Crisis Simulator
-**Applies to:** `backend/app/` (FastAPI simulation service) and `frontend/src/` (React operations console)
-
-> **Staleness notice:** this document predates several engine subsystems added since it was
-> written — difficulty presets and governance reputation, CAB dilemmas, the tech-tree/upgrade
-> system, staff on-call and fatigue, achievements/cosmetics/Hall of Fame, build-mode
-> infrastructure nodes, the scripted-scenario engine (including player-authored custom
-> scenarios), the log-triage mini-game, and crash/restart snapshot-resume — and it claims (§3.1)
-> that no migration framework exists, which is no longer true: `backend/app/main.py` now runs
-> real Alembic migrations on startup. Treat this document as historical/architectural framing
-> only; for current behavior see `audits/docs/implementations/*_SPEC.md` (07, 08 and 09 cover
-> the most recent additions) and the source files each spec cites directly.
+**Document ID:** IZ-ARCH-01  
+**Classification:** Internal Architectural Reference / Compliance Package Exhibit A  
+**System:** IncidentZero — SRE & IT Governance Crisis Simulator  
+**Applies to:** `backend/app/` (FastAPI simulation service) and `frontend/src/` (React operations console)  
+**Status:** Implementado (Revisão Técnica Atualizada)  
+**Last Updated:** Setembro 2026  
 
 ---
 
 ## 1. Executive Summary
 
-IncidentZero is a real-time, single-tenant simulation of an SRE/IT-governance operating environment. It models five interdependent microservices, a financial runway, a technical-debt index, a customer-satisfaction score, and a cumulative SLA metric, and it evolves that state on a fixed tick clock. The platform's mission is twofold:
+IncidentZero is a real-time, server-authoritative simulation of an SRE/IT-governance operating environment. It models five interdependent microservices, a financial runway, a technical-debt index (TDI), customer satisfaction/user happiness, a 720-sample rolling-window SLA metric, error budget consumption, and an active governance reputation score, evolving that state on a configurable tick clock. The platform's mission is twofold:
 
-1. **Operational simulation.** Reproduce, with mathematically defined fidelity, the causal chain between technical debt, cascading failures, incident response latency, and financial burn, so that a Head of Infrastructure persona can be evaluated on triage and remediation decisions under pressure.
-2. **Governance modeling.** Treat every state-changing action — automated or human — as a governable event that must be captured in an immutable, queryable ledger, so the same system that generates incidents also generates the audit trail a real compliance function would demand of it.
+1. **Operational simulation.** Reproduce, with mathematically defined fidelity, the causal chain between technical debt, cascading microservice failures, specialist on-call fatigue, incident triage latency, runbook mitigation effectiveness, and financial burn, evaluating operators under realistic crisis pressure.
+2. **Governance modeling.** Treat every state-changing action — automated or human — as an auditable event captured in an immutable, queryable ledger (`AuditLog`), ensuring full traceability from alert generation through triage, mitigation, post-mortem generation, AI auditor examination, and career progression.
 
-The core simulation loop is a server-authoritative tick: the backend advances the world state once per tick, computes SLA/financial/incident-response formulas defined in `backend/app/engine/formulas.py`, persists the resulting rows to SQLite, and broadcasts the full state snapshot to every connected browser over a single WebSocket channel. The frontend is a pure rendering and input surface; it holds no independent simulation logic and cannot advance the world clock itself.
+The core simulation loop is server-authoritative: the backend advances the world state once per tick, computes formulas defined in `backend/app/engine/formulas.py`, persists state snapshots to SQLite with thread synchronization (`_db_write_lock`), and broadcasts telemetry to connected clients via WebSocket (`TICK_BROADCAST`). The frontend is a presentation and interaction surface; it contains no independent simulation math and cannot alter world state or financial balances unilaterally.
 
 Governance objectives realized by this architecture:
 
-- **Non-repudiation of operator actions.** Every Acknowledge, Runbook Execution, and Session Reset is attributed to a named actor and written to `audit_logs` at the moment it occurs, not reconstructed after the fact.
-- **Deterministic, inspectable financial causality.** Every dollar removed from the budget traces to a named formula (`effective_passive_burn`, `incident_surcharge`, `UNATTENDED_BREACH_FINE`) with no hidden or manually-adjustable ledger entries.
-- **Regulatory-grade incident lifecycle tracking.** MTTA and MTTR are tracked in whole ticks from the moment an incident is system-generated, independent of when a human operator happens to view the dashboard.
+- **Non-repudiation of operator actions.** Every Acknowledge, Investigation Attempt, Runbook Execution, Upgrade Purchase, Infrastructure Node Placement, CAB Dilemma Choice, and Session Reset is attributed to a named actor and written synchronously to `audit_logs`.
+- **Deterministic, inspectable financial causality.** Every balance change flows through the central mutator `_apply_financial_event`, tracing directly to named formulas (`effective_passive_burn`, `incident_surcharge`, `regulatory_fine`, `mitigation_cost`, `hiring_cost`, `upgrade_purchase`, `infrastructure_purchase`, `dilemma_outcome`).
+- **Regulatory-grade incident lifecycle tracking.** MTTA and MTTR are tracked in whole ticks from incident generation. Post-mortems, executive PDFs, and AI auditor interviews share a single immutable factual dossier (`_build_incident_dossier()`) anchored to `incident_id`.
 
 ---
 
@@ -38,111 +30,124 @@ Governance objectives realized by this architecture:
 
 | Component | Location | Responsibility | Technology |
 |---|---|---|---|
-| Simulation Engine | `backend/app/engine/simulator.py` | Owns all mutable world state in-process; runs the tick loop; is the single writer to every database table. | Python 3.12, `asyncio` |
-| Formula Library | `backend/app/engine/formulas.py` | Pure, stateless mathematical functions and constants (SLA weighting, cascading-failure hazard, financial burn, regulatory penalties, mitigation catalog). No I/O. | Python 3.12 |
-| Event Generator | `backend/app/engine/event_generator.py` | Constructs incident and audit-log record shapes, including UUID-derived identifiers (`inc-xxxxxx`, `aud-xxxxxxxx`) and narrative text (root cause, title). | Python 3.12, `uuid` |
-| REST API Surface | `backend/app/api/v1/{sessions,services,incidents,mitigations,audits}.py` | Stateless HTTP handlers that read or command the singleton `SimulationEngine` held on `app.state.engine`. No handler contains simulation logic of its own. | FastAPI |
-| WebSocket Telemetry Broadcaster | `backend/app/api/v1/ws.py` + `SimulationEngine.broadcast_state` / `connect_client` | Maintains the set of connected sockets and pushes the full `TICK_BROADCAST` payload to all of them after every tick and on new-connection handshake. | FastAPI `WebSocket`, `asyncio` |
-| Persistence Layer | `backend/app/core/database.py`, `backend/app/models/*.py` | SQLAlchemy engine/session factory and ORM models for `game_sessions`, `services`, `incidents`, `mitigation_actions`, `audit_logs`. | SQLAlchemy 2.x, SQLite |
-| Post-Mortem Generator | `backend/app/api/v1/audits.py` | Reads persisted `Incident`/`GameSession`/`AuditLog` rows, hydrates `audits/templates/post_mortem_template.md`, and writes the artifact to `audits/reports/{incident_id}.md`. | FastAPI, `pathlib` |
-| Frontend State Store | `frontend/src/store/useGameStore.ts` | Single Zustand store holding the last-received telemetry frame plus purely client-local UI state (selection, floating text, run animations, language, and — as of the Phase 2 War Room revision — screen-shake trauma sequencing (`screenShakeSeq` / `screenShakeMagnitude`) triggered on a newly-raised `P1_CRITICAL` incident, a `running → breached` transition, or bankruptcy). Contains no simulation math; the shake/flash sequence numbers are derived entirely from diffing the current telemetry frame against the previous one, never from an independent client-side calculation. | Zustand |
-| WebSocket Client | `frontend/src/hooks/useSimulationSocket.ts` | Opens `ws://.../ws/telemetry`, parses `TICK_BROADCAST` frames, and calls `setTelemetry` on the store. Auto-reconnects after a 2000 ms backoff on close. **Fixed:** the connection effect previously listed the reactive `language` value in its dependency array (used only to localize one floating-text string), so every in-game language change tore the socket down and paid the full 2000 ms reconnect gap for no telemetry-related reason; it now reads the current language via a ref inside the message handler instead. | Native `WebSocket` |
-| REST Client | `frontend/src/services/api.ts` | Thin `fetch` wrapper issuing the exact command set described in Section 4. | Native `fetch` |
-| Audio System | `frontend/src/utils/sound.ts`, `frontend/src/hooks/useGameAudio.ts`, `frontend/src/hooks/useBackgroundMusic.ts` | Synthesized Web Audio API sound bank — no audio file assets are shipped with the client. As of the Phase 2 War Room revision this includes four additional store-reactive cues: `playRedAlertSiren` (looping rotary siren for as long as a `P1_CRITICAL` incident is active or `status === "breached"`), `playChaChing` (retro cash-register cue on a `MONTHLY_AUDIT_CYCLE_SURVIVED` audit entry), `playKeyboardClatter` (mechanical-keyboard clatter fired at runbook execution, alongside the existing `playCashSound`), and `playCriticalHeartbeat` (cardiac-monitor beep looping while `budget` is below the \$15,000 low-runway threshold). Each looping cue is gated in `useGameAudio.ts` on a stable derived boolean rather than the raw, every-tick-new-reference `active_incidents` array or `budget` number, so the underlying `setInterval` is not torn down and restarted on every tick. | Web Audio API (`AudioContext`) |
-| Rendering Surface | `frontend/src/components/office/*`, `frontend/src/components/layout/*`, `frontend/src/components/dock/*`, `frontend/src/components/common/*` | Isometric SVG office visualization, topbar KPI gauges, and the tabbed action dock (Incidents / Directives / Compliance Ledger). As of the Phase 2 War Room revision, the console renders under a unified **Tactical War Room (dark glassmorphism)** visual register rather than the prior light-mode dock: the isometric scene now sits on a structural 3D foundation (`FoundationBlock`, an `IsoBox` slab spanning `z=-0.65` to `z=0` directly beneath the existing parquet floor, plus a wide diffuse `MasterGroundShadow`) instead of a flat, unsupported plane; the topbar carries a `DefconMeter` tactical threat-level indicator (levels 5→1, derived client-side and purely presentationally from `sla_percentage` and `active_incidents` severity — see `frontend/src/utils/defcon.ts`); and transient event feedback (`FloatingCombatText.tsx`) renders as high-contrast, neon-bordered arcade combat-text chips (`font-mono`, per-tone glow shadow) rather than the previous light-mode toast pills. Purely presentational; every mutating action calls back into `services/api.ts`. | React 18, Tailwind CSS, SVG |
-| Localization Layer | `frontend/src/i18n/*` | Typed EN / PT-BR / ES dictionaries; selected language is stored in Zustand and persisted to `localStorage`. | TypeScript |
+| Simulation Engine | `backend/app/engine/simulator.py` | Owns mutable world state in-process; drives tick loop; acts as central coordinator for state mutation, persistence, and broadcasting. | Python 3.12, `asyncio` |
+| Formula Library | `backend/app/engine/formulas.py` | Pure mathematical functions and constants (rolling SLA, error budget burn, cascading failure hazards, mitigation effectiveness matrix, burn rates, audit penalties). | Python 3.12 |
+| Event Generator | `backend/app/engine/event_generator.py` | Builds structured incident models, log triage lines, root cause classifications, and audit entry payloads with deterministic identifiers. | Python 3.12, `uuid` |
+| Subsystem Engines | `backend/app/engine/{dilemmas,infrastructure,log_generator,staff,upgrades,achievements,cosmetics}.py` | Modular domain logic for CAB governance dilemmas, physical topology nodes, log generation, engineer stamina/fatigue, tech-tree unlocks, and career progression. | Python 3.12 |
+| Scripted Scenarios | `backend/app/engine/scenarios/*` | Scenario definitions (Black Friday, Ransomware Infiltration, Chaos Week, Custom Scenario) managing stage progression, dynamic objectives, and lateral threat movements. | Python 3.12 |
+| REST API Surface | `backend/app/api/v1/*.py` | Stateless HTTP endpoints delegating to `app.state.engine`. Handlers validate inputs, check bounds, and return structured schemas. | FastAPI, Pydantic |
+| WebSocket Broadcaster | `backend/app/api/v1/ws.py` + `SimulationEngine.broadcast_state` | Broadcasts `TICK_BROADCAST` telemetry to active clients after every tick and upon initial connection handshake. | FastAPI `WebSocket`, `asyncio` |
+| Persistence & Migrations | `backend/app/core/database.py`, `backend/alembic/`, `backend/app/models/*.py` | SQLAlchemy 2.x ORM models and Alembic migrations (`8907816f55ab` through `a7d8e9f0b1c2`) executed automatically on boot. | SQLAlchemy, Alembic, SQLite |
+| Dossier & Audit Engine | `backend/app/api/v1/audits.py` | Central `_build_incident_dossier()` builder serving post-mortem Markdown, executive PDF generator, and AI auditor LLM evaluations with content checksums. | FastAPI, ReportLab, SHA-256 |
+| Frontend Store | `frontend/src/store/useGameStore.ts` | Single Zustand store holding the latest telemetry snapshot, client-side UI states, active modals, floating combat text queues, and audio preferences. | Zustand |
+| WebSocket Hook | `frontend/src/hooks/useSimulationSocket.ts` | Maintains connection to `/ws/telemetry`, handles reconnection backoff (2000ms), and updates store telemetry. | Native `WebSocket` |
+| REST API Client | `frontend/src/services/api.ts` | Typed `fetch` client executing commands against the FastAPI backend. | TypeScript, `fetch` |
+| Audio Engine | `frontend/src/utils/sound.ts`, `frontend/src/hooks/useGameAudio.ts`, `frontend/src/hooks/useBackgroundMusic.ts` | Synthesized Web Audio API sound generator (no external audio assets). Supports mute, SFX/music volume sliders, and `prefers-reduced-motion` suppression. | Web Audio API |
+| Presentation Surfaces | `frontend/src/components/*` | Isometric SVG office canvas, Tactical HUD, StatusPill indicators, 3-block incident modals, ObjectiveTracker, ScenarioBriefingModal, and PostMatchDebriefModal. | React 18, Tailwind CSS, SVG |
+| Career & Replayability | `frontend/src/components/career/*`, `backend/app/api/v1/career.py` | Career records, Operator Ranks, Hall of Fame benchmark comparisons, unlock trackers, and dynamic Next Challenge recommendations. | React, FastAPI |
 
 ---
 
 ## 3. Architectural Data Flow
 
-### 3.1 Narrative Description
+### 3.1 Lifecycle, Crash Resilience, and Concurrency
 
-1. **Boot.** `backend/app/main.py`'s `lifespan` context calls `Base.metadata.create_all(bind=db_engine)` to ensure every table exists, then instantiates exactly one `SimulationEngine(session_id="incidentzero-alpha")` and stores it on `app.state.engine`. The engine's constructor immediately calls `_persist_bootstrap()`, which deletes any pre-existing `GameSession` row for that session id (cascading to its `services`/`incidents`/`audit_logs` via the ORM relationship `cascade="all, delete-orphan"`) and inserts a fresh session plus the five hardcoded services. The engine then calls `start()`, scheduling `_run_loop()` as an `asyncio.Task`.
-2. **Tick advancement.** `_run_loop` sleeps for `tick_rate_seconds` (1.0s at 1x, 0.2s at 5x, or indefinitely paused at 0x), increments `current_tick`, and calls `_update_simulation_tick()`, which in strict order: computes instantaneous SLA (§ Formula 1 in Document 02), applies budget burn, applies happiness drift, advances every active incident's MTTA/MTTR, grants ambient tech-debt relief during quiet periods, rolls the stochastic cascading-failure check across all healthy services, and evaluates session-status transitions (running → breached / victory / bankrupted).
-3. **Persistence.** Immediately after the tick mutation, `await asyncio.to_thread(self._persist_snapshot)` upserts (via `Session.merge`) the `GameSession` row, all five `Service` rows, and every in-memory `Incident` row. This runs on a worker thread so the synchronous SQLAlchemy session session does not block the asyncio event loop. Audit-log rows are **not** batched here — they are written synchronously, one row at a time, at the exact moment `_log_audit_event` is called (see § 3.3), so the ledger reflects the precise tick of occurrence even if the broadcast that follows is delayed.
-4. **Broadcast.** `await self.broadcast_state()` serializes `get_state_payload()` to JSON once and sends the identical byte string to every socket in `active_websockets`, removing any socket whose `send_text` raises. Because a single serialization is shared across all clients, all connected browsers observe the same tick simultaneously.
-5. **Frontend ingestion.** `useSimulationSocket` receives the `TICK_BROADCAST` message, and if `data.type === "TICK_BROADCAST"` calls `setTelemetry(data)`. The Zustand store's `setTelemetry` reducer performs a diff against the *previous* telemetry frame (not against any independent frontend calculation) to derive purely presentational side effects: newly-raised incidents and newly-resolved incidents drive `floatingTexts` and `resolvedHistory`, and a `running → breached` status transition emits an SLA-warning toast. The store never recomputes SLA, budget, or incident state — it is a passive mirror of the server's payload.
-6. **Operator command.** A click on "Acknowledge" or a runbook card issues an HTTP POST through `services/api.ts` (`POST /api/incidents/{id}/acknowledge` or `POST /api/mitigations/execute`). The handler in `app/api/v1/*.py` calls the corresponding synchronous method on `app.state.engine` (`acknowledge_incident` / `apply_mitigation`), which mutates in-memory state, immediately persists the affected `Incident` row via `_persist_incident`, and immediately writes an `AuditLog` row via `_log_audit_event` — independent of the tick loop's own persistence cadence. The next scheduled tick's broadcast (or, if the simulation is paused, no broadcast at all until it is resumed) is what actually informs other connected clients of the new state; the acting client typically also learns synchronously from the HTTP response body.
+1. **Boot and Migration Sequence.** On application startup (`lifespan` in `backend/app/main.py`), Alembic migrations are invoked via `command.upgrade(alembic_cfg, "head")`. This verifies or migrates the SQLite schema through all migration revisions (`8907816f55ab` to `a7d8e9f0b1c2`).
+2. **Snapshot Resume vs Bootstrap:**
+   - The engine attempts `_try_restore_from_snapshot()` for the target session (`incidentzero-alpha`).
+   - If an existing session snapshot is found and its `schema_version` matches `CURRENT_SCHEMA_VERSION`, the engine rehydrates session scalars, difficulty, scenario state, reputation, rolling 720-sample SLA window (`sla_window_json`), error budget history, active incidents (including triage state and logs), purchased tech upgrades, placed infrastructure nodes, in-flight CAB dilemma, mitigation cooldowns, and RNG state.
+   - If the snapshot's `schema_version` is incompatible, the engine isolates and preserves the outdated data via `_quarantine_incompatible_snapshot()`. Specifically, `GameSession.id` and all session-scoped child rows (`Incident`, `AuditLog`, `Engineer`, `PurchasedUpgrade`, `DilemmaEvent`, `InfrastructureNode`) are re-keyed to a distinct quarantine identifier (`f"{self.session_id}-incompatible-{uuid[:8]}"`), while `Service` rows are dropped to avoid catalog primary-key collisions. A `SNAPSHOT_VERSION_MISMATCH` audit event (`actor="PLATFORM"`, `compliance_flag=False`) is logged. The original `session_id` is thereby freed, `_try_restore_from_snapshot()` returns `False`, and `_persist_bootstrap()` creates a fresh session with default services under the original `session_id`. The frontend connects to the requested `session_id` and receives clean bootstrap telemetry.
+   - If no prior session exists, `_persist_bootstrap()` initializes default services, budget, and starting state under the requested `session_id`.
+3. **Tick Advancement Loop:**
+   - In `_run_loop()`, the engine ticks at `tick_rate_seconds` (1.0s at 1x, 0.5s at 2x, 0.2s at 5x; paused at 0x).
+   - In `_update_simulation_tick()`, the sequence is strictly ordered:
+     a. Compute instantaneous and rolling 720-sample SLA (`formulas.instant_sla_percentage`).
+     b. Compute error budget burn ratio and burn rate.
+     c. Deduct operational burn (`effective_passive_burn`) and incident surcharges (`incident_surcharge`).
+     d. Update engineer stamina, fatigue, on-call status, and user happiness.
+     e. Progress active incident MTTA/MTTR; trigger `UNATTENDED_ALERT_VIOLATION` if MTTA exceeds threshold.
+     f. Evaluate scenario hooks (`on_tick`) and scripted stage transitions.
+     g. Grant quiet-period technical debt relief if no incidents are active.
+     h. Evaluate cascading failure checks (`formulas.cascading_failure_probability`).
+     i. Evaluate session status (`_evaluate_session_status`), checking bankruptcy, scenario victory/defeat, or sandbox survival.
+4. **Thread-Safe Snapshot Persistence:**
+   - Snapshot persistence runs asynchronously (`await asyncio.to_thread(self._persist_snapshot)`).
+   - `self._db_write_lock` (a `threading.Lock`) protects all database writes, ensuring background snapshot flushes and synchronous REST mutations never collide or interleave corrupt state.
+   - Critical operations (such as incident creation, resolution, and associated financial deductions) execute within unified, atomic database transactions.
+5. **Telemetry Broadcast:**
+   - `await self.broadcast_state()` serializes the state dictionary from `get_state_payload()` into a JSON wire frame (`TICK_BROADCAST`) sent to all connected WebSockets.
+   - Any out-of-band frames queued during the tick (e.g., immediate audit events or toasts) are flushed immediately after.
 
 ### 3.2 Data Flow Diagram
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                              BACKEND PROCESS (single)                         │
-│                                                                                │
-│   asyncio tick loop (SimulationEngine._run_loop)                              │
-│   ┌────────────────────────────────────────────────────────────────────┐     │
-│   │ sleep(tick_rate_seconds)                                            │     │
-│   │        │                                                            │     │
-│   │        ▼                                                            │     │
-│   │ current_tick += 1                                                   │     │
-│   │        │                                                            │     │
-│   │        ▼                                                            │     │
-│   │ _update_simulation_tick()                                           │     │
-│   │   ├─ formulas.instant_sla_percentage(services)  ──► sla_percentage  │     │
-│   │   ├─ _apply_budget_burn()          ──► formulas.effective_passive_  │     │
-│   │   │                                    burn / incident_surcharge    │     │
-│   │   ├─ _apply_happiness_drift()      ──► formulas.alert_fatigue_      │     │
-│   │   │                                    penalty                     │     │
-│   │   ├─ _progress_incidents()         ──► formulas.is_unattended_      │     │
-│   │   │                                    breach → UNATTENDED_ALERT_   │     │
-│   │   │                                    VIOLATION audit event        │     │
-│   │   ├─ _apply_quiet_period_refactor()──► PROACTIVE_REFACTOR_CYCLE     │     │
-│   │   ├─ _evaluate_random_failures()   ──► formulas.cascading_failure_  │     │
-│   │   │                                    probability → INCIDENT_      │     │
-│   │   │                                    RAISED                      │     │
-│   │   └─ _evaluate_session_status()    ──► BANKRUPTCY_LIQUIDATION /     │     │
-│   │                                        SLA_BREACH_EMERGENCY_        │     │
-│   │                                        SANCTION /                  │     │
-│   │                                        MONTHLY_AUDIT_CYCLE_SURVIVED │     │
-│   │        │                                                            │     │
-│   │        ▼                                                            │     │
-│   │ await to_thread(_persist_snapshot)  ──► SQLite: game_sessions,      │     │
-│   │                                          services, incidents        │     │
-│   │        │                                  (merge/upsert)            │     │
-│   │        ▼                                                            │     │
-│   │ await broadcast_state()             ──► WebSocket fan-out to every  │     │
-│   │                                          connected client            │     │
-│   └────────────────────────────────────────────────────────────────────┘     │
-│                                                                                │
-│   Out-of-band writer (fires immediately, independent of tick cadence):        │
-│   _log_audit_event(...)  ──►  SQLite: audit_logs  (single-row INSERT,         │
-│                                committed synchronously at call time)          │
-│                                                                                │
-│   REST command surface (app/api/v1/*):                                       │
-│   POST /api/incidents/{id}/acknowledge  ──► engine.acknowledge_incident()     │
-│   POST /api/mitigations/execute         ──► engine.apply_mitigation()        │
-│   POST /api/session/{start,pause,speed,reset} ──► engine lifecycle control   │
-│   GET  /api/audits/postmortem/{incident_id}   ──► reads SQLite, renders      │
-│                                                    audits/templates/*.md,     │
-│                                                    writes audits/reports/*.md │
+│                              BACKEND PROCESS                                 │
+│                                                                              │
+│   asyncio tick loop (SimulationEngine._run_loop)                             │
+│   ┌────────────────────────────────────────────────────────────────────┐    │
+│   │ sleep(tick_rate_seconds)                                           │    │
+│   │        │                                                           │    │
+│   │        ▼                                                           │    │
+│   │ current_tick += 1                                                  │    │
+│   │        │                                                           │    │
+│   │        ▼                                                           │    │
+│   │ _update_simulation_tick()                                          │    │
+│   │   ├─ formulas.instant_sla_percentage(services) ──► sla_window (720)│    │
+│   │   ├─ _apply_budget_burn() ──► passive burn & incident surcharge    │    │
+│   │   ├─ _update_engineers()  ──► stamina, fatigue, on-call drift      │    │
+│   │   ├─ _progress_incidents()──► MTTA/MTTR & UNATTENDED_ALERT         │    │
+│   │   ├─ active_scenario.on_tick() ──► stages, dynamic objectives      │    │
+│   │   ├─ _evaluate_random_failures() ──► cascading failure hazard      │    │
+│   │   └─ _evaluate_session_status()  ──► victory, defeat, bankruptcy   │    │
+│   │        │                                                           │    │
+│   │        ▼                                                           │    │
+│   │ with _db_write_lock: await to_thread(_persist_snapshot)            │    │
+│   │   └──► SQLite: game_sessions, services, incidents, nodes, upgrades │    │
+│   │        │                                                           │    │
+│   │        ▼                                                           │    │
+│   │ await broadcast_state() ──► WebSocket broadcast (TICK_BROADCAST)    │    │
+│   └────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│   Out-of-band Synchronous Handlers (with _db_write_lock):                    │
+│   _apply_financial_event() ──► AuditLog INSERT + Runtime ledger cache        │
+│                                                                              │
+│   REST Command Surface (app/api/v1/*):                                       │
+│   POST /api/incidents/{id}/acknowledge   ──► engine.acknowledge_incident()   │
+│   POST /api/incidents/{id}/investigate   ──► engine.investigate_incident()   │
+│   POST /api/mitigations/execute          ──► engine.apply_mitigation()       │
+│   POST /api/upgrades/purchase            ──► engine.purchase_upgrade()       │
+│   POST /api/infrastructure/place         ──► engine.place_infrastructure()   │
+│   POST /api/dilemmas/{id}/choose         ──► engine.resolve_dilemma()        │
+│   POST /api/audits/interview/{id}        ──► AI auditor LLM verification     │
+│   GET  /api/audits/postmortem/{id}/pdf   ──► Executive PDF generation        │
 └──────────────────────────────────────────────────────────────────────────────┘
                                      │
-                                     │  ws://.../ws/telemetry  (TICK_BROADCAST JSON)
+                                     │ ws://.../ws/telemetry (TICK_BROADCAST)
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                              FRONTEND (React SPA)                             │
-│                                                                                │
+│                              FRONTEND (React SPA)                            │
+│                                                                              │
 │  useSimulationSocket ──► useGameStore.setTelemetry(payload)                  │
-│                              │                                                │
-│                              ▼                                                │
-│                    Zustand store (single source of truth on the client)      │
-│                              │                                                │
-│              ┌───────────────┼────────────────────────────┐                  │
-│              ▼               ▼                             ▼                 │
-│         Topbar gauges   IsometricOffice canvas        BottomDock tabs        │
-│         (SLA / Runway / (racks, desks, tooltips,      (Incidents /           │
-│          Tech Debt /     hover selection)              Directives /          │
-│          Morale)                                        Compliance Ledger)    │
-│                                                                                │
-│  Operator click ──► services/api.ts (fetch) ──► backend REST endpoint        │
+│                              │                                               │
+│                              ▼                                               │
+│                    Zustand store (client single source of truth)             │
+│                              │                                               │
+│         ┌────────────────────┼───────────────────────┐                       │
+│         ▼                    ▼                       ▼                       │
+│    Tactical HUD       Isometric Scene         Bottom Dock / Modals           │
+│    (SLA, Runway,      (3D Foundation, Racks,  (Incident Modal 3-Blocks,      │
+│     TDI, Happiness,    Desks, Real Engineer    Mitigation Panel,             │
+│     Reputation,        States, Pan/Zoom,       Directives, CAB Dilemmas,     │
+│     Defcon Meter)      Floating Combat Text)   PostMatchDebriefModal)        │
+│                                                                              │
+│  User Interaction ──► services/api.ts (fetch) ──► Backend REST Endpoint      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 3.3 The `TICK_BROADCAST` Contract
 
-Every WebSocket frame and the response of `GET /api/session/state` share one payload shape, produced by `SimulationEngine.get_state_payload()`:
+Every WebSocket broadcast payload matches the shape produced by `SimulationEngine.get_state_payload()`:
 
 ```json
 {
@@ -156,78 +161,131 @@ Every WebSocket frame and the response of `GET /api/session/state` share one pay
   "status": "running",
   "is_running": true,
   "tick_rate_seconds": 1.0,
-  "services": [ { "id": "srv-auth", "session_id": "...", "name": "Identity & Auth Service", "tier": "critical", "status": "healthy", "latency_ms": 32, "error_rate": 0.0001, "dependencies": [] }, "... four more services ..." ],
-  "active_incidents": [ { "id": "inc-a1b2c3", "session_id": "...", "service_id": "srv-payment", "severity": "P1_CRITICAL", "title": "Service disruption detected on Payment Gateway Core", "root_cause": "Memory leak in connection pooling thread", "mtta_seconds": 4, "mttr_seconds": 4, "status": "active", "created_tick": 138, "acknowledged_tick": null, "resolved_tick": null } ],
-  "recent_audits": [ "... last 15 audit_logs entries, most-recent-last ..." ]
+  "services": [
+    {
+      "id": "srv-auth",
+      "session_id": "incidentzero-alpha",
+      "name": "Identity & Auth Service",
+      "tier": "critical",
+      "status": "healthy",
+      "latency_ms": 32,
+      "error_rate": 0.0001,
+      "dependencies": []
+    }
+  ],
+  "active_incidents": [
+    {
+      "id": "inc-a1b2c3",
+      "session_id": "incidentzero-alpha",
+      "service_id": "srv-payment",
+      "severity": "P1_CRITICAL",
+      "title": "Service disruption detected on Payment Gateway Core",
+      "root_cause": null,
+      "mtta_seconds": 4,
+      "mttr_seconds": 4,
+      "status": "active",
+      "triage_solved": false,
+      "triage_attempts": 0,
+      "created_tick": 138,
+      "acknowledged_tick": null,
+      "resolved_tick": null
+    }
+  ],
+  "recent_audits": [ /* last 15 audit_logs rows */ ],
+  "purchased_upgrades": ["ci_cd_pipeline", "automated_testing"],
+  "mitigation_cooldowns": { "srv-payment:restart_service": 130 },
+  "error_budget_remaining_ratio": 0.8421,
+  "feature_freeze_active": false,
+  "engineers": [ /* staff models with stamina, fatigue, on-call assignment */ ],
+  "infrastructure_nodes": [ /* placed infrastructure nodes */ ],
+  "achievements_unlocked": ["first_responder"],
+  "prestige_points": 150,
+  "unlocked_cosmetics": ["theme_midnight"],
+  "difficulty": "standard",
+  "reputation": 72.5,
+  "active_scenario": {
+    "scenario_id": "black_friday_surge",
+    "elapsed_ticks": 42,
+    "duration_ticks": 180,
+    "completed": false,
+    "outcome": null
+  }
 }
 ```
 
-`recent_audits` is explicitly capped to the last 15 entries (`self.audit_logs[-15:]`) to bound WebSocket frame size; the full, unbounded ledger is only ever available by querying SQLite directly or via the post-mortem generation pipeline described in Document 05.
+*Note on Wire Security:* `public_incidents()` strips the triage answer key (`log_lines` and `root_cause_line_id`) and withholds `root_cause` until `triage_solved == True`.
 
 ---
 
 ## 4. REST and WebSocket Surface (Authoritative List)
 
-| Method | Path | Handler | Effect |
+| Method | Path | Handler | Description |
 |---|---|---|---|
-| `GET` | `/api/health` | `sessions.health_check` | Liveness probe; returns `engine_active`, `current_tick`, `active_clients`. No state mutation. |
-| `GET` | `/api/session/state` | `sessions.get_state` | Returns the current `TICK_BROADCAST`-shaped snapshot on demand (poll fallback). |
-| `POST` | `/api/session/start` | `sessions.start_simulation` | Resumes the tick loop if not already running and not in a terminal status. |
-| `POST` | `/api/session/pause` | `sessions.pause_simulation` | Sets `is_running = False` and cancels the loop task. |
-| `POST` | `/api/session/speed` | `sessions.set_speed` | Body `{ "multiplier": number }`; sets `tick_rate_seconds = 1 / multiplier`; `multiplier <= 0` is treated as pause. |
-| `POST` | `/api/session/reset` | `sessions.reset_simulation` | Restores all initial constants, wipes and re-seeds the database via `_persist_bootstrap`, restarts the loop. |
-| `GET` | `/api/services` | `services.list_services` | Returns the live in-memory service array. |
-| `GET` | `/api/incidents` | `incidents.list_incidents` | Returns the live in-memory active-incident array. |
-| `POST` | `/api/incidents/{incident_id}/acknowledge` | `incidents.acknowledge_incident` | `404` if the incident does not exist or is not `active`; otherwise transitions it to `acknowledged` and logs `INCIDENT_ACKNOWLEDGED`. |
-| `GET` | `/api/mitigations/catalog` | `mitigations.get_catalog` | Returns `formulas.MITIGATION_CATALOG` verbatim (see Document 04). |
-| `POST` | `/api/mitigations/execute` | `mitigations.execute_mitigation` | Body `{ "action_id": string, "service_id": string }`; `400` on unknown action, unknown service, or insufficient budget; otherwise deducts cost, applies TDI delta, heals the service, resolves matching incidents, logs `RUNBOOK_EXECUTED`. |
-| `GET` | `/api/audits` | `audits.list_audits` | Returns the live in-memory audit-log array (unbounded, unlike the 15-entry WebSocket slice). |
-| `GET` | `/api/audits/postmortem/{incident_id}` | `audits.generate_postmortem` | `404` if the incident row cannot be found in SQLite; otherwise renders and persists the Markdown report (Document 05). |
-| `WS` | `/ws/telemetry` | `ws.websocket_telemetry_endpoint` | On connect: `accept()` then immediately send one `TICK_BROADCAST` snapshot. Thereafter: passive `receive_text()` loop purely to detect `WebSocketDisconnect`; the server does not currently interpret any inbound client message. |
+| `GET` | `/api/health` | `sessions.health_check` | Liveness probe; returns engine status, current tick, active clients. |
+| `GET` | `/api/session/state` | `sessions.get_state` | Returns the current state snapshot on demand. |
+| `POST` | `/api/session/start` | `sessions.start_simulation` | Starts or resumes the simulation loop. |
+| `POST` | `/api/session/pause` | `sessions.pause_simulation` | Pauses simulation clock execution. |
+| `POST` | `/api/session/speed` | `sessions.set_speed` | Sets tick speed multiplier (`1.0`, `2.0`, `5.0`). Auto-unpauses if paused. |
+| `POST` | `/api/session/reset` | `sessions.reset_simulation` | Resets session, re-seeds database, resets timers, restarts loop. |
+| `GET` | `/api/services` | `services.list_services` | Returns the current services collection. |
+| `GET` | `/api/incidents` | `incidents.list_incidents` | Returns active incidents with redacted root cause for unsolved triage. |
+| `POST` | `/api/incidents/{id}/acknowledge` | `incidents.acknowledge_incident` | Acknowledges an active incident; logs `INCIDENT_ACKNOWLEDGED`. |
+| `POST` | `/api/incidents/{id}/investigate` | `incidents.investigate_incident` | Submits a triage line guess. Validates guess, manages stress, updates accuracy, reveals cause on match. |
+| `GET` | `/api/mitigations/catalog` | `mitigations.get_catalog` | Returns the mitigation action catalog and baseline parameters. |
+| `POST` | `/api/mitigations/execute` | `mitigations.execute_mitigation` | Executes runbook against service. Applies effectiveness matrix, partial recovery, cooldowns, and costs. |
+| `GET` | `/api/audits` | `audits.list_audits` | Returns persisted audit log history from SQLite. |
+| `GET` | `/api/audits/postmortem/{id}` | `audits.generate_postmortem` | Builds post-mortem Markdown report from factual dossier. |
+| `GET` | `/api/audits/postmortem/{id}/pdf` | `audits.generate_postmortem_pdf` | Generates official executive PDF report with content checksum. |
+| `POST` | `/api/audits/interview/{id}` | `audits.conduct_auditor_interview` | Submits post-mortem interview to AI auditor; verifies verdict and applies fine deterministically. |
+| `GET` | `/api/upgrades/catalog` | `upgrades.get_catalog` | Returns tech tree upgrades catalog with costs and requirements. |
+| `POST` | `/api/upgrades/purchase` | `upgrades.purchase_upgrade` | Purchases tech upgrade; applies immediate effect and logs audit event. |
+| `GET` | `/api/infrastructure/nodes` | `infrastructure.list_nodes` | Lists deployed infrastructure topology nodes. |
+| `POST` | `/api/infrastructure/place` | `infrastructure.place_node` | Places topology node in grid; validates bounds and deducts funds. |
+| `GET` | `/api/staff` | `staff.list_engineers` | Returns engineer roster with fatigue, stamina, on-call assignments. |
+| `POST` | `/api/staff/{id}/assign` | `staff.assign_engineer` | Assigns engineer to service or standby. Validates `service_id`. |
+| `GET` | `/api/dilemmas/active` | `dilemmas.get_active_dilemma` | Returns currently pending CAB governance dilemma, if any. |
+| `POST` | `/api/dilemmas/{id}/choose` | `dilemmas.choose_option` | Submits choice for CAB dilemma; applies operational/reputation deltas. |
+| `GET` | `/api/scenarios` | `scenarios.list_scenarios` | Lists available standard and custom scenarios. |
+| `GET` | `/api/scenarios/active` | `scenarios.get_active_scenario` | Returns active scenario state and backend-computed dynamic objectives. |
+| `POST` | `/api/scenarios/start` | `scenarios.start_scenario` | Initializes and starts a scenario run. |
+| `POST` | `/api/scenarios/custom` | `scenarios.create_custom_scenario` | Validates and registers custom scenario payload before session reset. |
+| `GET` | `/api/career/summary` | `career.get_career_summary` | Returns career records, Operator Rank, personal bests, and recommended next challenge. |
+| `GET` | `/api/achievements` | `achievements.list_achievements` | Returns 12 achievements catalog with unlock statuses. |
+| `GET` | `/api/cosmetics` | `cosmetics.list_cosmetics` | Returns office cosmetic themes and unlocked states. |
+| `WS` | `/ws/telemetry` | `ws.websocket_telemetry_endpoint` | Telemetry streaming connection for live HUD and scene synchronization. |
 
 ---
 
 ## 5. Security & Isolation Boundaries
 
-This section documents the **as-implemented** security posture. Where a control is not present, it is stated plainly rather than implied, consistent with the audit standard of reporting findings faithfully.
+This section documents the **as-implemented** security and authority boundaries.
 
-### 5.1 CORS Policy
+### 5.1 Backend Authority Architecture
+The backend is the sole authority for:
+- Financial ledger balances, budget deductions, and audit fines;
+- Incident generation, severity assignment, cascading failure probabilities, and resolution statuses;
+- SLA calculations, rolling window tracking, and error budget exhaustion;
+- Technical debt accumulation and quiet-period relief;
+- Runbook cooldown enforcement and feature freeze restrictions;
+- Scenario completion, victory/defeat evaluation, and career progression records.
 
-`backend/app/main.py` configures `CORSMiddleware` with:
+The client cannot fabricate financial credit, force incident resolution without runbook execution, or bypass mitigation cooldowns.
 
-```python
-allow_origins=["*"]
-allow_credentials=True
-allow_methods=["*"]
-allow_headers=["*"]
-```
+### 5.2 Input Validation and Bounds Enforcement
+- **Speed Multiplier:** Clamped to positive finite values (`1.0`, `2.0`, `5.0`). Non-numeric or negative values are rejected.
+- **Topology Grid Coordinates:** Infrastructure placement strictly validates grid bounds (`0 <= x < 8`, `0 <= y < 8`).
+- **Custom Scenarios:** Validated against `CANONICAL_SERVICE_IDS` and bounded ranges (duration, budget, hazard multiplier) prior to applying any session reset.
+- **AI Auditor Outputs:** Treated as untrusted external text. Schema fields (`verdict`, `score`, `penalties`) are parsed and clamped; the actual financial penalty is computed deterministically by backend formula (`formulas.eligible_audit_adjustment`), bounded by a severity-scaled ceiling.
 
-**Finding:** This is a fully permissive cross-origin policy appropriate for local development and single-operator demo deployment. Combining `allow_origins=["*"]` with `allow_credentials=True` is flagged by browsers and by CORS best practice as unsafe for any deployment that relies on cookies or HTTP auth for session integrity; this system does not use cookie-based auth (see § 5.2), which limits the practical exposure, but the configuration should be narrowed to an explicit origin allow-list (driven by the existing `VITE_API_URL` / `FRONTEND_PORT` environment variables) before any multi-tenant or public deployment.
+### 5.3 Player Identification & Authentication Posture
+- **Identity Model:** The application operates with an anonymous local player identity (`DEFAULT_PLAYER_ID = "local-player"`).
+- **Limitation (Documented Design Boundary):** No multi-tenant user authentication (OAuth2/JWT) or per-operator cryptographic signatures are implemented. Role strings in audit records (`VP_OF_INFRA`, `PLATFORM_TEAM`, `AUDIT_SYSTEM`, `AI_GOVERNANCE_AUDITOR`) identify system roles, not authenticated human principals. Any client reaching the REST surface can trigger actions. This design is appropriate for a single-operator crisis simulation console.
 
-### 5.2 Session Token Integrity
-
-**Finding — no authentication layer exists.** `backend/app/core/config.py`'s `Settings` class exposes only `PROJECT_NAME`, `PORT`, `DATABASE_URL`, and `ENVIRONMENT`. The `.env.example` file at the repository root defines a `SESSION_SECRET` value, but no module in `backend/app/` reads, signs, or verifies anything with it — it is present as a placeholder for future work and is not part of the current control surface. The application:
-
-- Runs exactly one `SimulationEngine` instance per process, keyed to the hardcoded session id `"incidentzero-alpha"` (set in `main.py`'s `lifespan`).
-- Accepts every REST call and every WebSocket connection unauthenticated; there is no per-user identity, no bearer token, and no session cookie.
-- Attributes every audit-log actor string (`VP_OF_INFRA`, `AUTOMATED_MONITOR`, `AUDIT_SYSTEM`, `BOARD_OF_DIRECTORS`, `PLATFORM_TEAM`) to a **role**, not an authenticated principal. Any client that can reach the HTTP surface can act as `VP_OF_INFRA`.
-
-This is an accepted design boundary for a single-operator simulation and is explicitly out of scope for the SOX-404/SOC 2/ISO 27001 alignment claimed elsewhere in this package with respect to *access control*; the alignment claimed by Document 03 is narrower and pertains specifically to audit-trail completeness and traceability of *actions*, not to authentication or authorization of *actors*.
-
-### 5.3 Environment Configuration
-
-| Variable | Source | Consumed By | Purpose |
-|---|---|---|---|
-| `PORT` | `.env` / OS environment | `Settings.PORT` | Uvicorn bind port (default `8000`). |
-| `DATABASE_URL` | `.env` / OS environment | `Settings.DATABASE_URL`, `core/database.py` | SQLAlchemy connection string; defaults to `sqlite:///./incidentzero.db` (a file relative to the backend working directory). |
-| `ENVIRONMENT` | `.env` / OS environment | `Settings.ENVIRONMENT` | Advisory only; no branch in the codebase currently changes behavior based on this value. |
-| `VITE_API_URL` / `VITE_WS_URL` | `.env` (frontend, read via `envDir`) | `frontend/src/services/api.ts` | Base URL for REST calls and the WebSocket URL; both default to `http://localhost:8000` / `ws://localhost:8000/ws/telemetry` if unset. |
-
-The SQLite connection is opened with `connect_args={"check_same_thread": False}`, which is required because tick-loop persistence runs on a worker thread via `asyncio.to_thread` while request-handling persistence runs on the event-loop thread; SQLAlchemy's `SessionLocal` sessionmaker creates a short-lived `Session` per call site (each `_persist_snapshot`, `_persist_incident`, and `_log_audit_event` invocation opens and closes its own session), so there is no long-lived cross-thread session object in play.
-
-### 5.4 State Immutability Safeguards
-
-- **Formula purity.** Every function in `formulas.py` is a pure function of its arguments with no reference to engine state, which makes the mathematical layer independently unit-testable and prevents order-of-evaluation bugs from silently altering constants.
+### 5.4 Database Concurrency & Immutability
+- **Write Serialization:** Background snapshot commits execute via `asyncio.to_thread` protected by `_db_write_lock`, eliminating race conditions against concurrent synchronous API writes.
+- **Audit Immutability:** `AuditLog` records are strictly append-only (`db.add()`). The application provides no update or delete routes for audit records. Full session reset performs an intentional cascaded cleanup of the session, logged with `SESSION_RESET`.
+- **Durable Persistence vs Runtime Cache:** `AuditLog` is the permanent, durable ledger for discrete financial and operational transactions (`RUNBOOK_EXECUTED`, `UNATTENDED_ALERT_VIOLATION`, `AI_AUDITOR_VERDICT_APPLIED`, `DILEMMA_RESOLVED`, `ENGINEER_HIRED`, `UPGRADE_PURCHASED`, `INFRASTRUCTURE_NODE_PLACED`). The current cash balance is durably stored in `GameSession.budget`, and incident-specific cumulative financial impacts are durably stored in `Incident.accrued_surcharge`. In-memory `financial_ledger` is a bounded (500 entries) runtime cache reconstructed upon session restore from `AuditLog` via `_LEDGER_RECONSTRUCTION_MAP`. Routine per-tick cloud burn (`operational_expense`) and per-tick incident surcharges (`incident_surcharge`) are debited directly from `budget` without creating per-tick `AuditLog` rows; hence, only their individual line items in the in-memory cache are lost upon restart, while the resulting session balance in `GameSession.budget` and incident surcharges in `Incident.accrued_surcharge` remain completely durable in SQLite.
+- **Mathematical Purity.** Every function in `formulas.py` is a pure function of its arguments with no reference to engine state, which makes the mathematical layer independently unit-testable and prevents order-of-evaluation bugs from silently altering constants.
 - **Single writer.** `SimulationEngine` is the only component in the codebase that opens a SQLAlchemy `Session` for writing; no API handler constructs its own database session or bypasses the engine to mutate rows directly. This guarantees that every write to `services`, `incidents`, or `audit_logs` passed through the tick-evolution or player-action code paths documented in Section 3.
 - **Audit rows are never updated or deleted by application code.** The ORM model `AuditLog` (`backend/app/models/audit.py`) is only ever the target of `db.add(...)` calls in `_log_audit_event`; no code path in the repository issues an `UPDATE` or `DELETE` against `audit_logs`. The only way an audit row disappears is the cascade delete triggered by `_persist_bootstrap()` deleting the parent `GameSession` on session reset — an explicit, logged operational reset, not silent tampering (see Document 03, § Ledger Tamper-Evident Design, for the full analysis of this boundary).
 - **Idempotent upserts for mutable rows.** `services` and `incidents` are persisted via `Session.merge()`, which is safe to call repeatedly with the same primary key and cannot create duplicate rows; `audit_logs` is persisted via `db.add()` with a freshly generated UUID-derived id (`aud-{uuid4().hex[:6..8]}`) per call, which cannot collide with a prior row's id in a way that would overwrite it.

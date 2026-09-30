@@ -1,9 +1,9 @@
 # Dynamic Topology Builder & Infrastructure Expansion — Implementation Specification
 
-**Document ID:** IZ-COMM-01
-**Classification:** Implementation Contract — Commercial Pillar 1
-**Status:** Implemented, additive only, non-breaking
-**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/models/`, `frontend/src/components/office/ServerRoom.tsx`
+**Document ID:** IZ-COMM-01  
+**Classification:** Technical Specification / Infrastructure Topology  
+**Status:** Implementado  
+**Source of Truth:** `backend/app/engine/infrastructure.py`, `backend/app/engine/simulator.py`, `backend/app/models/infrastructure.py`, `frontend/src/components/office/BuildModeOverlay.tsx`
 
 ---
 

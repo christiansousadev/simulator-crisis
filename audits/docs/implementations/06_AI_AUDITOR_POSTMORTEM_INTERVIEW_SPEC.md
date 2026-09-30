@@ -1,17 +1,9 @@
 # AI Auditor Post-Mortem Interview — Implementation Specification
 
-**Document ID:** IZ-IMPL-06
-**Classification:** Implementation Contract / Next-Phase Architecture Blueprint
-**Status:** Approved for implementation — additive only, non-breaking
-**Integration baseline:** `backend/app/api/v1/audits.py`, `audits/templates/post_mortem_template.md`, `audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`, `audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md`
-
-> **Staleness notice:** a later hardening pass changed three things this spec's embedded code
-> excerpts still show in their original form — verify current behavior against the live source,
-> not the snippets below: (1) `apply_interview_verdict` now 404s if `incident_id` doesn't exist
-> in the database, before reading any `.verdict.json` file; (2) `InterviewMessageRequest.message`
-> is now bounded to 1–2000 characters (`backend/app/schemas/interview.py`); (3) `conduct_interview`
-> now enforces a minimal in-process per-client rate limit (10 calls/60s) before invoking the LLM.
-> None of these change the request/response shapes or the verdict schema documented below.
+**Document ID:** IZ-IMPL-06  
+**Classification:** Technical Specification / Regulatory Interview & AI Governance  
+**Status:** Implementado  
+**Source of Truth:** `backend/app/api/v1/audits.py`, `backend/app/engine/formulas.py`, `backend/app/schemas/interview.py`, `backend/app/reports/dossier.py`
 
 ---
 
@@ -251,29 +243,29 @@ This introduces one additive audit event type:
 |---|---|---|---|---|
 | `AI_AUDITOR_INTERVIEW_TURN` | Each `POST .../interview` call completes | `AUDIT_SYSTEM` | `False` only when `verdict == "NON_COMPLIANT"` | `{"incident_id": string, "verdict": string, "regulatory_fine_adjustment": float}` |
 
-### 2.6 Applying the Regulatory Fine Adjustment
+### 2.6 Applying the Regulatory Fine Adjustment & Backend Financial Authority
 
-A verdict's `regulatory_fine_adjustment` is **not automatically applied** to the live session's `budget` by this endpoint — `conduct_interview` is read-and-log only, matching `generate_postmortem`'s existing non-mutating design (Document 05 § 2.4). Applying a fine or waiver to a *live* session's budget is a distinct, explicit action requiring its own confirmation step, implemented as a second, separate endpoint:
+The AI Auditor functions as an advisory and investigative agent: **the LLM may analyze and propose adjustments, but the backend is the sole authority deciding what is financially applicable.**
 
-```python
-@router.post("/api/audits/postmortem/{incident_id}/interview/apply-verdict")
-async def apply_interview_verdict(incident_id: str, request: Request) -> Dict[str, Any]:
-    """APPLY THE MOST RECENT INTERVIEW VERDICT'S REGULATORY FINE ADJUSTMENT TO THE LIVE SESSION BUDGET"""
-    transcript_meta = _load_latest_verdict(incident_id)
-    if not transcript_meta or transcript_meta["verdict"] == "PENDING":
-        raise HTTPException(status_code=400, detail="No concluded interview verdict available to apply")
-    engine = request.app.state.engine
-    engine.budget = max(0.0, engine.budget - transcript_meta["regulatory_fine_adjustment"])
-    engine._log_audit_event(
-        event_type="AI_AUDITOR_VERDICT_APPLIED",
-        actor="AUDIT_SYSTEM",
-        details={"incident_id": incident_id, "verdict": transcript_meta["verdict"], "amount": transcript_meta["regulatory_fine_adjustment"]},
-        compliance_flag=transcript_meta["verdict"] != "NON_COMPLIANT",
-    )
-    return {"success": True, "budget": engine.budget}
-```
+Applying a fine or credit requires an explicit call to `POST /api/audits/postmortem/{incident_id}/interview/apply-verdict`. The backend enforces the following controls:
 
-This split — score first, apply only on explicit confirmation — mirrors the project's existing separation between `_evaluate_session_status`'s automatic, unconditional penalty application (Document 02 § 4.2's `UNATTENDED_BREACH_FINE`, which *is* auto-applied because it is a mechanical rule, not a judgment call) and a scenario like this one where an LLM's qualitative judgment should not silently and irreversibly alter a live session's finances without a distinct, auditable confirmation action. `AI_AUDITOR_VERDICT_APPLIED` is a second additive event type, bringing this document's total new event types to two.
+1. **Session & Incident Association:**
+   - Verifies that `incident.session_id == engine.session_id`. An incident from a previous or different session cannot be applied against the live session (HTTP 400).
+2. **Dual-Layer Idempotency:**
+   - **Cache-layer guard:** Checks `verdict_meta.get("applied")`. If already flagged, rejects duplicate application.
+   - **Ledger-layer persistence guard (`_verdict_already_applied`):** Queries `AuditLog` for existing `AI_AUDITOR_VERDICT_APPLIED` events with matching `incident_id`. Even across server restarts, cache corruption, or network retries, no fine or credit can ever be applied twice.
+3. **Safe Parsing and Non-Finite Number Guards:**
+   - Free-form LLM outputs are treated as untrusted. If `proposed_amount` is non-finite (`NaN`, `+Infinity`, `-Infinity`), `formulas.eligible_audit_adjustment()` immediately zeroes it to `0.0` rather than defaulting to floor/ceiling bounds.
+4. **Deterministic Backend Clamping (`formulas.eligible_audit_adjustment`):**
+   - **`NON_COMPLIANT`:** Permitted adjustments are strictly non-negative fines ($[0, \text{ceiling}]$). Ceilings are strictly scaled by incident severity:
+     - `P1_CRITICAL`: Max fine \$6,000.00
+     - `P2_HIGH`: Max fine \$3,000.00
+     - `P3_MEDIUM`: Max fine \$1,500.00
+     - `P4_LOW`: Max fine \$750.00
+   - **`VALID` / `JUSTIFIED`:** Permitted adjustments are strictly non-positive credits ($[-2000.0, 0.0]$), capped by `AUDIT_CREDIT_CEILING` (\$2,000.00).
+   - **`PENDING` / Other:** Eligible amount is strictly \$0.00.
+5. **Centralized Financial Ledger Integration:**
+   - Applied adjustments are routed through `engine._apply_financial_event(category="regulatory_fine", amount=-eligible_amount, reference=incident_id, ...)` ensuring unified ledger balance updates and durable audit logging under `AI_AUDITOR_VERDICT_APPLIED`.
 
 ---
 
@@ -281,12 +273,12 @@ This split — score first, apply only on explicit confirmation — mirrors the 
 
 The complete, closed set of verdict values is:
 
-| Verdict | Meaning | Typical `regulatory_fine_adjustment` sign |
-|---|---|---|
-| `PENDING` | Interview still in progress; no final judgment yet | Always `0.0` |
-| `VALID` | The operator's actions were fully compliant; no wrongdoing found | `0.0`, or negative if a prior mechanical fine is waived |
-| `JUSTIFIED` | The operator deviated from standard procedure (e.g., used `emergency_patch` without CAB approval) but articulated a credible, evidence-grounded business justification the auditor accepts | `0.0` or a small negative (partial waiver) |
-| `NON_COMPLIANT` | The operator's defense failed to justify a recorded deviation, or contradicted the dossier's facts | Positive (an additional fine) |
+| Verdict | Meaning | Permitted Adjustment Range | Backend Enforcement |
+|---|---|---|---|
+| `PENDING` | Interview in progress; non-final | Exactly \$0.00 | Ineligible for application |
+| `VALID` | Operator actions fully compliant | $[-\$2,000.00, \$0.00]$ | Capped credit waiver |
+| `JUSTIFIED` | Procedure deviated with acceptable justification | $[-\$2,000.00, \$0.00]$ | Capped credit waiver |
+| `NON_COMPLIANT` | Defense rejected or contradicted ground truth | $[\$0.00, \text{Severity Ceiling}]$ | Clamped fine (\$750 – \$6,000) |
 
 This four-value enum is the exhaustive, closed set this specification defines — the LLM integration is constrained (via the `response_format: {"type": "json_object"}` structured-output request and the explicit schema in the system prompt, § 2.3) to emit exactly one of these four strings, never a free-text or novel verdict category, keeping the outcome machine-actionable by `apply_interview_verdict` without any string-matching heuristics on unconstrained model prose.
 

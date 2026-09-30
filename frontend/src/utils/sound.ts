@@ -269,6 +269,24 @@ export function playRestoredChime() {
   ]);
 }
 
+// CRISP TWO-BEEP CONFIRMATION WHEN AN ON-CALL ENGINEER ACKNOWLEDGES AN INCIDENT -- DISTINCT FROM
+// THE GENERIC UI CLICK SO "I'M ON IT" HAS ITS OWN, RECOGNIZABLE FEEDBACK
+export function playAcknowledgeBeep() {
+  playToneSequence([
+    { freq: 740, type: "square", start: 0, duration: 0.06, gain: 0.07 },
+    { freq: 990, type: "square", start: 0.07, duration: 0.08, gain: 0.07 },
+  ]);
+}
+
+// DULL, DESCENDING TONE WHEN A MITIGATION ONLY PARTIALLY FIXES THE ROOT CAUSE (fully_resolved:
+// false) -- NEVER USED FOR A GENUINE FAILURE/ERROR, JUST "THAT RUNBOOK WASN'T A GREAT FIT"
+export function playMitigationMismatch() {
+  playToneSequence([
+    { freq: 320, type: "triangle", start: 0, duration: 0.16, gain: 0.07 },
+    { freq: 230, type: "triangle", start: 0.12, duration: 0.22, gain: 0.06 },
+  ]);
+}
+
 // SOLEMN BOARDROOM CHIME WHEN A CAB DILEMMA IS OFFERED
 export function playDilemmaChime() {
   playToneSequence([

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Crosshair, X } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useGameStore } from "../../store/useGameStore";
 
@@ -8,8 +8,12 @@ const STATUS_STYLES: Record<string, string> = {
   down: "bg-rose-500/15 text-rose-300 border-rose-500/40",
 };
 
+interface NodeInspectorProps {
+  onFocusService?: (serviceId: string) => void;
+}
+
 // SLIDE-IN DIAGNOSTICS DRAWER FOR THE CURRENTLY SELECTED RACK OR DESK, ANCHORED TO THE LEFT EDGE
-export default function NodeInspector() {
+export default function NodeInspector({ onFocusService }: NodeInspectorProps) {
   const t = useTranslation();
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
   const service = useGameStore((s) => s.telemetry.services.find((svc) => svc.id === selectedServiceId));
@@ -35,6 +39,15 @@ export default function NodeInspector() {
               title={t.common.close}
             >
               <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="px-4 py-2 bg-slate-950/40 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+            <button
+              onClick={() => onFocusService?.(service.id)}
+              className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded border border-sky-500/40 bg-sky-950/50 hover:bg-sky-900/60 text-sky-300 text-xs font-semibold active:scale-95 transition-all"
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              {t.office.focusService}
             </button>
           </div>
           <div className="p-4 flex flex-col gap-3 text-xs font-mono text-slate-300 overflow-y-auto">

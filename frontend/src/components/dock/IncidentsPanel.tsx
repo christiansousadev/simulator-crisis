@@ -1,46 +1,59 @@
-import { AlertTriangle, CheckCircle2, TimerReset } from "lucide-react";
+import { CheckCircle2, Terminal, TimerReset } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
+import { translateIncidentTitle } from "../../i18n/dynamicContent";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import { Incident } from "../../types/game";
-import { playClickSound } from "../../utils/sound";
+import { activeDurationTicks, countDependents, isBreachImminent, ticksToRegulatoryBreach } from "../../utils/incidentImpact";
+import { deriveIncidentPipelineStatus } from "../../utils/incidentPipeline";
+import { severityTone } from "../../utils/severity";
+import { playAcknowledgeBeep, playClickSound } from "../../utils/sound";
+import SeverityBadge from "../common/SeverityBadge";
+import StatusPill from "../common/StatusPill";
 
-// ticks until an unacknowledged incident triggers the regulatory breach fine, per formulas.UNATTENDED_BREACH_TICK
-const REGULATORY_BREACH_TICK = 12;
-
-function severityTone(severity: Incident["severity"]) {
-  if (severity === "P1_CRITICAL") {
-    return {
-      badge: "bg-rose-500/15 text-rose-300 border-rose-500/40",
-      icon: "text-rose-400",
-      card: "border-rose-500/60 shadow-[0_0_15px_rgba(244,63,94,0.15)] bg-rose-950/20",
-    };
-  }
-  if (severity === "P2_HIGH") {
-    return {
-      badge: "bg-amber-500/15 text-amber-300 border-amber-500/40",
-      icon: "text-amber-400",
-      card: "border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.1)] bg-amber-950/20",
-    };
-  }
-  return { badge: "bg-slate-500/15 text-slate-300 border-slate-500/40", icon: "text-slate-400", card: "" };
-}
-
-// CLEAN PRIORITY NOTIFICATION LIST FOR ACTIVE INCIDENTS
+// CLEAN PRIORITY NOTIFICATION LIST FOR ACTIVE INCIDENTS, ORDERED SEVERITY -> SERVICE -> TITLE ->
+// ACTIVE TIME -> IMPACT -> STATUS -> IMMEDIATE ACTION, WITH THE TECHNICAL ID RELEGATED TO A FOOTNOTE
 export default function IncidentsPanel() {
   const t = useTranslation();
+  const language = useGameStore((s) => s.language);
   const incidents = useGameStore((s) => s.telemetry.active_incidents);
+  const services = useGameStore((s) => s.telemetry.services);
+  const currentTick = useGameStore((s) => s.telemetry.tick);
+  const triageIncidentId = useGameStore((s) => s.triageIncidentId);
+  const runAnimations = useGameStore((s) => s.runAnimations);
   const openIncidentDetail = useGameStore((s) => s.openIncidentDetail);
+  const openTriageTerminal = useGameStore((s) => s.openTriageTerminal);
+  const selectService = useGameStore((s) => s.selectService);
   const triggerRunAnimation = useGameStore((s) => s.triggerRunAnimation);
+  const pushFloatingText = useGameStore((s) => s.pushFloatingText);
+  const [ackingIds, setAckingIds] = useState<Set<string>>(new Set());
 
   const handleAcknowledge = async (incident: Incident) => {
-    playClickSound();
+    if (ackingIds.has(incident.id)) return; // already in flight -- ignore a rapid double-click
+    playAcknowledgeBeep();
+    setAckingIds((prev) => new Set(prev).add(incident.id));
     triggerRunAnimation(incident.service_id, "acknowledge");
     try {
       await api.acknowledgeIncident(incident.id);
     } catch {
-      // next telemetry frame reconciles the actual engine state
+      // the animation already played optimistically; surface the failure explicitly instead of
+      // silently leaving the player thinking it worked -- the button reappearing (status never
+      // changed) is otherwise the only signal, and it's easy to miss
+      pushFloatingText(t.floatingTexts.actionFailed, "danger");
+    } finally {
+      setAckingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(incident.id);
+        return next;
+      });
     }
+  };
+
+  const handleInvestigate = (incident: Incident) => {
+    playClickSound();
+    selectService(incident.service_id);
+    openTriageTerminal(incident.id);
   };
 
   if (incidents.length === 0) {
@@ -57,51 +70,81 @@ export default function IncidentsPanel() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {incidents.map((inc) => {
           const tone = severityTone(inc.severity);
-          const ticksToBreach = Math.max(0, REGULATORY_BREACH_TICK - inc.mtta_seconds);
-          const breachSoon = inc.status === "active" && ticksToBreach <= 3;
+          const service = services.find((s) => s.id === inc.service_id);
+          const pipelineStatus = deriveIncidentPipelineStatus(inc, {
+            isInvestigating: triageIncidentId === inc.id,
+            isMitigating: runAnimations.some((a) => a.serviceId === inc.service_id && a.kind === "mitigate"),
+          });
+          const dependents = countDependents(service, services);
+          const breachSoon = isBreachImminent(inc);
+          const canInvestigate = (inc.status === "active" || inc.status === "acknowledged") && !inc.triage_solved;
 
           return (
             <div
               key={inc.id}
               onClick={() => openIncidentDetail(inc)}
-              className={`flex flex-col gap-1.5 p-3 rounded-lg border bg-slate-900/80 border-slate-800 hover:border-slate-700 cursor-pointer transition-all shadow-md ${tone.card}`}
+              className={`flex flex-col gap-1.5 p-3 rounded-lg border bg-slate-900/80 border-slate-800 hover:border-slate-700 cursor-pointer transition-all shadow-md ${tone.ring}`}
             >
+              {/* severity -> service -> title */}
               <div className="flex items-start gap-2 min-w-0">
-                <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${tone.icon}`} />
+                <SeverityBadge severity={inc.severity} className="mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${tone.badge}`}>
-                      {t.severities[inc.severity]}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-200 truncate">{inc.service_id}</span>
-                  </div>
-                  <p className="text-xs text-slate-400 truncate">{inc.title}</p>
+                  <span className="text-xs font-semibold text-slate-200 truncate block">{service?.name ?? inc.service_id}</span>
+                  <p className="text-xs text-slate-400 truncate">{translateIncidentTitle(inc.title, language)}</p>
                 </div>
               </div>
 
+              {/* active time + impact */}
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                <span>{t.incidents.activeFor(activeDurationTicks(inc, currentTick))}</span>
+                <span className="text-slate-600">·</span>
+                <span>{service?.tier === "critical" ? t.incidents.impactTier.critical : t.incidents.impactTier.standard}</span>
+                {dependents > 0 && (
+                  <>
+                    <span className="text-slate-600">·</span>
+                    <span>{t.incidents.dependentsAffected(dependents)}</span>
+                  </>
+                )}
+              </div>
+
+              {/* status pipeline + immediate action */}
               <div className="flex items-center justify-between gap-2 mt-auto pt-1 border-t border-slate-800/70">
-                <div className="flex items-center gap-2.5 text-[10px] text-slate-400 font-mono min-w-0">
-                  <span>{t.incidents.mtta} {inc.mtta_seconds}t</span>
-                  <span>{t.incidents.mttr} {inc.mttr_seconds}t</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <StatusPill status={pipelineStatus} />
                   {inc.status === "active" && (
-                    <span className={`flex items-center gap-0.5 shrink-0 ${breachSoon ? "text-rose-400 font-bold" : ""}`}>
+                    <span className={`flex items-center gap-0.5 shrink-0 text-[10px] font-mono ${breachSoon ? "text-rose-400 font-bold" : "text-slate-500"}`}>
                       <TimerReset className="w-2.5 h-2.5" />
-                      {t.incidents.sanctionCountdown(ticksToBreach)}
+                      {t.incidents.sanctionCountdown(ticksToRegulatoryBreach(inc))}
                     </span>
                   )}
                 </div>
-                {inc.status === "active" && (
+                {inc.status === "active" ? (
                   <button
+                    disabled={ackingIds.has(inc.id)}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleAcknowledge(inc);
                     }}
-                    className="shrink-0 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold text-[10px] px-3 py-1.5 rounded shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95 transition-all"
+                    className="shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:hover:bg-amber-500 text-slate-950 font-bold text-[10px] px-3 py-1.5 rounded shadow-[0_0_10px_rgba(245,158,11,0.25)] active:scale-95 transition-all"
                   >
                     {t.incidents.acknowledge}
                   </button>
-                )}
+                ) : canInvestigate ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleInvestigate(inc);
+                    }}
+                    className="shrink-0 flex items-center gap-1 bg-sky-500 hover:bg-sky-400 text-white font-bold text-[10px] px-3 py-1.5 rounded active:scale-95 transition-all"
+                  >
+                    <Terminal className="w-2.5 h-2.5" />
+                    {t.incidents.investigate}
+                  </button>
+                ) : null}
               </div>
+
+              {/* technical id, kept as secondary footnote */}
+              <p className="text-[9px] text-slate-600 font-mono truncate">#{inc.id}</p>
             </div>
           );
         })}

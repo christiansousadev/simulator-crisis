@@ -11,7 +11,10 @@
 
 > **"Silencie os alarmes. Defenda o SLA. Sobreviva à auditoria."**
 
-IncidentZero é um jogo de simulação de crise e engenharia de sistemas em tempo real. Como Head of Infrastructure / VP of Engineering, equilibre alta disponibilidade, latência, falhas em cascata, mitigações de runbook, acúmulo de dívida técnica, contratação de equipe e auditorias de compliance sob fogo de plantão ao vivo — tudo renderizado como um escritório isométrico vivo.
+IncidentZero é um jogo de estratégia e gestão tática de operações e confiabilidade de sistemas em tempo real. No papel de Head of Infrastructure / VP of Engineering, equilibre alta disponibilidade, latência, falhas em cascata de microsserviços, mitigações de runbook, acúmulo de dívida técnica, alocação de equipe em plantão e auditorias de conformidade sob fogo operacional ao vivo — tudo renderizado como um escritório isométrico dinâmico.
+
+O loop principal de gameplay reflete o ciclo de vida real de resposta a incidentes:
+**Disparo do Incidente → Detecção → Reconhecimento (MTTA) → Investigação (Log Triage) → Diagnóstico de Causa Raiz → Mitigação (Runbooks) → Consequências Operacionais → Resolução (MTTR) → Dossiê de Pós-Incidente → Auditoria de Compliance → Progressão de Carreira**.
 
 ---
 
@@ -19,56 +22,125 @@ IncidentZero é um jogo de simulação de crise e engenharia de sistemas em temp
 
 ![Tela inicial do IncidentZero](./docs/screenshots/title-screen-pt.png)
 
-![A war room: escritório isométrico, HUD ao vivo e um incidente ativo no andar](./docs/screenshots/office-hud-pt.png)
+![A war room: escritório isométrico, HUD ao vivo e operação nominal](./docs/screenshots/office-hud-pt.png)
 
-Mais capturas de tela (em inglês) estão disponíveis no [README em inglês](./README.md#screenshots).
+<table>
+<tr>
+<td width="33%"><img src="./docs/screenshots/incident-detail-pt.png" alt="Detalhe do incidente — tri-bloco de contexto, impacto, ações e investigação"></td>
+<td width="33%"><img src="./docs/screenshots/mitigations-panel-pt.png" alt="Diretivas Operacionais: catálogo de runbooks e telemetria"></td>
+<td width="33%"><img src="./docs/screenshots/log-triage-pt.png" alt="Investigação e Log Triage via terminal CRT"></td>
+</tr>
+<tr>
+<td align="center"><sub>Detalhe do Incidente (Tri-Bloco)</sub></td>
+<td align="center"><sub>Diretivas de Mitigação</sub></td>
+<td align="center"><sub>Terminal CRT de Log Triage</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="./docs/screenshots/scenario-briefing-pt.png" alt="Briefing de cenário roteirizado com objetivos dinâmicos"></td>
+<td width="33%"><img src="./docs/screenshots/critical-crisis-pt.png" alt="Estado crítico de crise: DEFCON 1, violação de SLA e congelamento"></td>
+<td width="33%"><img src="./docs/screenshots/post-match-debrief-pt.png" alt="Debrief pós-partida com métricas, objetivos e carreira"></td>
+</tr>
+<tr>
+<td align="center"><sub>Briefing de Cenário</sub></td>
+<td align="center"><sub>Crise Crítica (DEFCON 1)</sub></td>
+<td align="center"><sub>Debrief Pós-Partida</sub></td>
+</tr>
+</table>
 
 ---
 
-## Funcionalidades
+## Funcionalidades e Mecânicas Principais
 
-- **Simulação de crise ao vivo** — um loop de ticks determinístico (1 tick = 1 hora no jogo) conduz falhas em cascata de serviços, mecânicas de MTTA/MTTR, orçamento de erro (error budget) e congelamentos de features, tudo transmitido via WebSocket para uma visão isométrica do escritório.
-- **Runbooks e árvore tecnológica** — execute mitigações de SRE contra serviços com falha e compre upgrades de observabilidade/resiliência/instalações (APM tracing, detecção preditiva de anomalias, clusters multi-AZ e mais).
-- **Equipe e plantão** — contrate engenheiros com uma competência principal, alterne turnos e gerencie estresse/energia sob carga sustentada de incidentes.
-- **Governança e dilemas do CAB** — trade-offs periódicos do Change Advisory Board (orçamento vs. dívida técnica vs. moral vs. reputação) com consequências duradouras: uma pontuação persistente de **Reputação com o Conselho** altera a taxa de risco de incidentes e libera dilemas de "retorno" condicionados à reputação.
-- **Níveis de dificuldade** — Estagiário / Padrão / Caos Total, cada um com seu próprio orçamento inicial e multiplicador de risco.
-- **Ledger de compliance e post-mortems** — toda ação relevante para governança é registrada em um log de auditoria; conclua um incidente com um post-mortem em Markdown ou PDF de marca própria, com entrevista de um auditor de IA e **replay** acelerado dos eventos.
-- **Cenários roteirizados e criador de cenários customizados** — Black Friday Rush, Infiltração de Ransomware, Simulação de Chaos Engineering, além de um editor de configuração sandbox para multiplicadores de risco, piso de orçamento e injeções de caos roteirizadas.
-- **Conquistas, cosméticos e progressão de carreira** — um catálogo de 12 conquistas, desbloqueios cosméticos por pontos de prestígio, e um Hall da Fama permanente (ranking por jogador e global) que sobrevive a cada reinício de sessão.
-- **Onboarding guiado** — um tutorial com spotlight que ilumina o elemento real da interface sendo explicado, além de um sistema de dicas contextuais de "o que fazer agora" para novos jogadores.
-- **HUD e escritório polidos** — medidores animados e um contador de orçamento suavizado, estilo visual e transições de entrada consistentes em todos os modais, um ciclo dia/noite que agora também tinge o céu (não só o interior do escritório), e feedback de clique em todos os botões.
-- **Configurações e acessibilidade** — volume de música/efeitos separado, modo de alto contraste, paleta segura para daltonismo e tradução completa da interface.
-- **Internacionalização** — Inglês (padrão), Português (Brasil) e Espanhol, com paridade total entre todas as strings da interface.
-- **PWA instalável** — o app inclui um web manifest e service worker; a casca do app instala e carrega offline, enquanto toda chamada de simulação sempre acessa o backend ao vivo (sem estado de jogo em cache desatualizado).
+### 1. Operação e Simulação de Falhas em Cascata
+- **Microsserviços Interdependentes:** Grafo de dependências central de 5 microsserviços com nós de infraestrutura dinâmicos, onde a degradação de serviços upstream propaga latência e falhas para componentes dependentes.
+- **Ciclo de Vida de Incidentes (P1 a P4):** Severidades geram penalidades crescentes de MTTA/MTTR, sobretaxas financeiras e erosão na satisfação do usuário (moral / user happiness).
+- **Investigação com Causa Raiz Oculta:** A causa raiz do problema permanece sob sigilo (névoa operacional) até que a equipe realize a triagem de logs ou aloque engenheiros para investigação.
+- **Log Triage Interativo:** Gaveta retrô de terminal CRT com streaming de logs contendo timestamps e filtros por nível (ERROR, WARN, INFO); selecionar uma linha com evidência concreta confirma a causa raiz e libera mitigações de alta eficácia.
+- **Catálogo de Runbooks Contextuais:** Ações de mitigação com custo financeiro, eficácia determinística baseada na compatibilidade com a causa raiz (`formulas.MITIGATION_EFFECTIVENESS` com limiar de 0.70 para resolução completa), variação de Dívida Técnica (TDI), tempo de cooldown e restrições operacionais.
 
-Veja [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) para o blueprint técnico completo, fórmulas matemáticas e schemas SQL, e [`audits/docs/`](./audits/docs/) para uma especificação de implementação por funcionalidade de tudo acima.
+### 2. Métricas de SRE e Governança
+- **Janela Móvel de SLA:** Calculada continuamente sobre uma janela deslizante de até 720 amostras (1 amostra por hora/tick no jogo). Adota meta de benchmark de 99.90% (`SLA_BENCHMARK`); cair abaixo do limiar regulatório de 99.00% (`SLA_BREACH_THRESHOLD`) após o período de carência de 24 ticks (`BREACH_GRACE_TICKS`) acarreta uma sanção regulatória emergencial (`SLA_BREACH_EMERGENCY_SANCTION`), emitindo alerta de não-conformidade sem encerrar a sessão imediatamente.
+- **Error Budget e Congelamento de Features:** Derivado do benchmark de 99.90% (orçamento total de erro de 0.10%). O congelamento de deploys é acionado automaticamente quando o error budget zera, bloqueando temporariamente entregas arriscadas e restringindo as operações a runbooks de remediação até que a disponibilidade se recupere.
+- **Caixa Operacional e Falência:** Custos operacionais contínuos (servidores em nuvem, salários e multas de conformidade) consomem o saldo financeiro. Atingir saldo zero ($0,00) acarreta liquidação por falência (`BANKRUPTCY_LIQUIDATION`), encerrando a partida de forma definitiva.
+- **Índice de Dívida Técnica (TDI):** Soluções improvisadas aumentam o TDI, impondo juros operacionais que elevam o MTTR e amplificam o risco de incidentes futuros.
+- **Reputação com o Conselho e Dilemas do CAB:** Votações periódicas do Change Advisory Board (orçamento vs. dívida técnica vs. moral vs. reputação) com impactos duradouros na confiança corporativa.
+
+### 3. Gestão de Equipe e Plantão (On-Call)
+- **Contratação de Engenheiros:** Recrute profissionais em 4 competências essenciais correspondentes às especializações dos serviços: Autenticação (`auth`), Pagamentos (`payments`), API Gateway & Mensageria (`gateway`) e Bancos de Dados (`db`).
+- **Rotação de Turnos e Fadiga:** Alterne turnos de plantão; incidentes contínuos consomem energia (stamina) e elevam o estresse, aumentando a chance de erros operacionais e lentidão de resposta.
+
+### 4. Infraestrutura e Árvore Tecnológica
+- **Upgrades da Tech Tree:** Desbloqueie melhorias divididas em três ramos:
+  - *Observabilidade:* Rastreamento Distribuído (APM), Detecção Preditiva de Anomalias, Real User Monitoring (RUM).
+  - *Resiliência:* Failover Multi-AZ, Clusters com Auto-Scaling, Circuit Breakers, Automação de Caos.
+  - *Instalações:* Geradores de Backup, Estações Ergonômicas, Máquinas de Café (recuperação de moral).
+- **Modo Construção:** Posicionamento modular de nós e expansão de racks diretamente no chão do datacenter.
+
+### 5. Cenários Roteirizados e Modos de Jogo
+- **Modo Sandbox:** Simulação livre com configurações ajustáveis de dificuldade (Estagiário, Padrão, Caos Total).
+- **Black Friday Rush:** Pico extremo de tráfego de usuários e saturação de conexões de banco de dados sob rigorosos requisitos de SLA.
+- **Chaos Engineering Drill:** Injeções programadas de falhas automatizadas testando a resiliência arquitetural e failovers.
+- **Infiltração de Ransomware:** Crise de segurança exigindo isolamento de tráfego lateral suspeito, análise forense de logs e restauração limpa de snapshots.
+- **Cenários Customizados:** Editor e carregador integrado de cenários com validação estrita de schema JSON para definição de multiplicadores de risco, regras de falha e eventos roteirizados.
+
+### 6. Dossiê de Pós-Incidente, Auditoria e Auditor IA
+- **Dossiê Unificado de Incidente:** Registro estruturado consolidando a linha do tempo forense, métricas de MTTA/MTTR, impacto financeiro e mitigações adotadas.
+- **Post-Mortems Estruturados para Conformidade:** Geração de relatórios técnicos em Markdown e relatórios executivos em PDF alinhados com controles de governança no estilo SOX-404 e SOC 2, validados por um **checksum de conteúdo** (hash SHA-256 para integridade de trilha de auditoria).
+- **Entrevista de Auditoria com IA:** Sessão interativa de defesa pós-incidente na qual um auditor virtual interroga o operador sobre decisões tomadas, demoras e medidas preventivas. Todas as propostas de multas ou isenções geradas pela IA são validadas e aplicadas pelo servidor backend sob estrita idempotência.
+
+### 7. Carreira e Replayability
+- **Registros Permanentes de Carreira:** Armazenamento persistente (`CareerRecord`) no banco SQLite contendo resultados de partidas, dificuldade, SLA mantido, dias sobrevividos e prestígio acumulado.
+- **Hall da Fama:** Painel local de carreira rastreando recordes pessoais, histórico detalhado de runs e estatísticas consolidadas.
+- **Conquistas e Postos Operacionais:** 12 conquistas desbloqueáveis e 5 Postos Operacionais (Ranks) conquistados por excelência em governança.
+- **Cosméticos e Recomendação de Desafio:** Personalização visual do escritório e recomendação dinâmica do próximo desafio derivada do progresso da carreira, cenários concluídos, histórico de dificuldade e conquistas pendentes.
+
+---
+
+## War Room Tático e Game Feel
+
+- **Escritório Isométrico Dinâmico:** Visualização vetorial/canvas isométrica com zoom, pan suave e foco contextual/sob comando (botões "Focar Rack" e "Centralizar na Crise", além de click-to-focus no rack de servidores sob alerta).
+- **Estados Visuais dos Racks:** Racks com iluminação dinâmica refletindo seu estado (saudável, degradado, down, investigando, mitigando), telemetria em LED e sinalizador visual de alarme pulsante.
+- **Feedback de Crise e Severidade:** Níveis DEFCON (1 a 5) acionam variações na iluminação ambiente, vinheta de emergência pulsante e breaking news no ticker corporativo.
+- **HUD Tático:** Medidores animados de SLA, Error Budget, Caixa, Dívida Técnica e Moral, complementados por texto flutuante de combate exibindo impactos de MTTR e custos.
+- **Fluxo de Modais Integrado:** Briefing de Cenário, Detalhe Tri-Bloco do Incidente, Terminal CRT de Logs, Banner de Resolução de Incidente e Debrief de Pós-Partida.
+- **Áudio Procedural e Acessibilidade:** Sintetizador sonoro via Web Audio API gerando timbres característicos para alarmes DEFCON, execução de runbooks, cliques de interface e ruído de servidores, com suporte a `prefers-reduced-motion` e paleta segura para daltonismo.
+
+---
+
+## Autoridade do Servidor e Persistência
+
+O IncidentZero adota **Arquitetura Autoritativa no Servidor**:
+- O motor de simulação em FastAPI é a única fonte de verdade para todos os cálculos matemáticos, avaliação de janela de SLA, saldo financeiro, ciclo de vida dos incidentes e objetivos de cenário. O frontend atua como um terminal tático reativo.
+- **Resiliência e Persistência de Sessão:** O estado da simulação é salvo periodicamente como snapshot atômico em SQLite. Reinicializações do backend ou recarregamentos do navegador restauram a partida em andamento sem perda de incidentes ativos, progresso de investigação, upgrades comprados, cooldowns, semente de RNG ou histórico da janela de SLA.
 
 ---
 
 ## Visão Geral da Arquitetura
 
-- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, store Zustand, cliente WebSocket. Testado com Vitest + Testing Library.
-- **Backend:** Python FastAPI, transmissão de telemetria via WebSocket, SQLAlchemy / SQLite, Pydantic v2. Testado com pytest.
-- **Migrações de banco de dados:** Alembic — o schema é versionado e atualizado automaticamente a cada inicialização do backend (`alembic upgrade head` roda dentro do lifespan do FastAPI). Veja [Migrações de Banco de Dados](#migrações-de-banco-de-dados) abaixo.
-- **Motor de simulação:** loop de ticks determinístico, probabilidade de falha em cascata, mecânicas de penalidade de MTTA/MTTR, fórmulas de SLA/orçamento/dívida técnica em `backend/app/engine/formulas.py`.
-- **Governança e Compliance:** streaming de log de auditoria em tempo real persistido em SQLite, com geração de post-mortem SOX-404 / SOC2 (Markdown e PDF) em `audits/reports/`.
-- **CI:** GitHub Actions (`.github/workflows/ci.yml`) roda lint (Ruff / ESLint), a suíte completa de testes de backend e frontend com cobertura, checagem de tipos TypeScript, build de produção e uma suíte end-to-end real com Playwright contra os dois servidores ao vivo, a cada push e pull request.
+- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, gerenciamento de estado Zustand, cliente WebSocket. Testado com Vitest e Playwright.
+- **Backend:** Python 3.12, FastAPI, motor de ticks determinístico (1 tick = 1 hora no jogo), SQLAlchemy, SQLite, Pydantic v2. Testado com pytest.
+- **Migrações de Banco de Dados:** O [Alembic](https://alembic.sqlalchemy.org/) controla o versionamento do schema e aplica migrações automaticamente na inicialização (`alembic upgrade head`).
+- **Stream de Telemetria:** Canal bidirecional WebSocket (`/ws/telemetry`) transmitindo deltas de tick, estados dos racks, métricas operacionais e alertas.
+- **Ledger de Compliance:** Log imutável de auditoria persistido no SQLite rastreando 29 tipos distintos de eventos operacionais e de governança.
+- **Integração com IA (Opcional):** Módulo desacoplado de auditoria de conformidade compatível com OpenAI, Anthropic ou fallback determinístico offline.
+
+Consulte o [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) para diagramas técnicos completos, fórmulas matemáticas e schemas do banco de dados.
 
 ---
 
 ## Início Rápido
 
-### Opção A — scripts de inicialização automática
+### Opção A — Scripts de Inicialização Automática
 
 ```bash
 # Windows PowerShell
 .\start.ps1
 
-# macOS/Linux/Git Bash
+# macOS / Linux / Git Bash
 ./start.sh
 ```
 
-Ambos os scripts criam o ambiente virtual do backend (se não existir), instalam as dependências e rodam os servidores de desenvolvimento do FastAPI e do Vite simultaneamente.
+Ambos os scripts verificam os pré-requisitos, criam o ambiente virtual do backend, instalam as dependências de Python e Node e iniciam simultaneamente os servidores de desenvolvimento do FastAPI e do Vite.
 
 ### Opção B — Docker Compose
 
@@ -76,115 +148,135 @@ Ambos os scripts criam o ambiente virtual do backend (se não existir), instalam
 docker compose up --build
 ```
 
-### Opção C — manual, dois terminais
+### Opção C — Manual (Dois Terminais)
 
-**Backend**
+**Terminal do Backend**
 ```bash
 cd backend
 python -m venv .venv
 .\.venv\Scripts\activate        # Windows
-# source .venv/bin/activate     # Linux/macOS
+# source .venv/bin/activate     # Linux / macOS
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
+*As migrações de banco de dados rodam automaticamente na inicialização pelo Alembic.*
 
-As migrações de banco de dados rodam automaticamente na inicialização — você nunca mais precisa apagar o arquivo do banco manualmente quando um model muda (veja [Migrações de Banco de Dados](#migrações-de-banco-de-dados)).
-
-**Frontend**
+**Terminal do Frontend**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Acesse `http://localhost:5173` para entrar na War Room. A documentação interativa da API do backend fica em `http://localhost:8000/docs`.
+- Acesse `http://localhost:5173` para entrar na War Room.
+- A documentação interativa da API do backend (Swagger UI) fica disponível em `http://localhost:8000/docs`.
 
 ---
 
 ## Migrações de Banco de Dados
 
-Mudanças de schema são gerenciadas com [Alembic](https://alembic.sqlalchemy.org/), não com `Base.metadata.create_all()` — este último só cria tabelas ausentes, nunca altera uma tabela existente para adicionar uma coluna nova, o que antes significava apagar o arquivo SQLite inteiro toda vez que um model mudava. Isso não é mais necessário:
-
-- A cada inicialização do backend, `app/main.py` roda `alembic upgrade head` automaticamente antes do motor de simulação iniciar.
-- Se você alterar um model do SQLAlchemy, gere uma nova migração antes de reiniciar o backend:
+A evolução do banco de dados é automatizada via Alembic:
+- A cada inicialização do backend, `app/main.py` executa `alembic upgrade head` antes de iniciar o motor de simulação.
+- Caso modifique um modelo SQLAlchemy, crie uma nova revisão de migração antes de reiniciar:
   ```bash
   cd backend
-  alembic revision --autogenerate -m "descreva sua mudança"
+  alembic revision --autogenerate -m "descreva a alteração de schema"
   ```
-- Se um banco de dados for anterior ao Alembic (sem a tabela `alembic_version`), a inicialização levanta um erro claro pedindo para você apagar esse arquivo e deixar as migrações recriá-lo — um passo único para um banco genuinamente legado, não manutenção rotineira.
+- Se o banco de dados for anterior à introdução do Alembic (sem tabela `alembic_version`), o backend aborta a inicialização solicitando a remoção do arquivo de banco legado.
 
 ---
 
-## Testes e CI
+## Testes e Controle de Qualidade
 
 ```bash
-# backend — a partir de backend/, com o virtualenv ativo
-ruff check .                                        # lint
-pytest tests/ -v                                     # suíte de testes
-pytest tests/ --cov=app --cov-report=term-missing    # suíte de testes + cobertura
+# Backend — a partir de backend/ com ambiente virtual ativo
+ruff check .                                        # Análise estática e linting
+pytest tests/ -v                                     # Suíte de testes unitários e de integração
+pytest tests/ --cov=app --cov-report=term-missing    # Análise de cobertura de testes
 
-# frontend — a partir de frontend/
-npm run lint           # eslint
-npx tsc --noEmit       # checagem de tipos
-npm test               # suíte de testes unitários (vitest)
-npm run test:coverage  # suíte de testes unitários + cobertura
-npm run build           # build de produção
+# Frontend — a partir de frontend/
+npm run lint           # Análise estática com ESLint
+npx tsc --noEmit       # Verificação de tipos TypeScript
+npm test               # Suíte de testes unitários com Vitest
+npm run test:coverage  # Cobertura de testes unitários
+npm run build          # Build do pacote de produção
 
-# e2e — a partir de frontend/, com o virtualenv do backend ativo no PATH
-npm run test:e2e       # Playwright, roda o app de verdade contra um backend + WebSocket reais
+# Suíte End-to-End — a partir de frontend/ com o backend acessível
+npm run test:e2e       # Suíte Playwright E2E contra servidores reais e WebSocket
 ```
 
-A suíte e2e (`frontend/e2e/`) existe especificamente para pegar o que testes unitários estruturalmente não conseguem: cada spec nasceu de uma verificação manual feita durante uma sessão de debug real (um NPC travado no lugar, um toast de UI mostrando o erro errado, um handler de zoom cujo `preventDefault()` era um no-op silencioso) e foi mantida como teste de regressão permanente em vez de descartada depois que o bug foi corrigido. Ela mesma sobe os dois servidores (`webServer` no `playwright.config.ts`) e dirige um Chromium real contra eles — nada de mock.
-
-Todas as verificações acima rodam automaticamente no CI a cada push e pull request (`.github/workflows/ci.yml`).
+A suíte Playwright (`frontend/e2e/`) valida os fluxos reais da interface contra instâncias ativas do backend e WebSocket sem uso de mocks. O pipeline de CI valida linting, testes unitários, checagem de tipos e testes end-to-end a cada pull request (`.github/workflows/ci.yml`).
 
 ---
 
 ## Principais Endpoints da API
 
-O backend expõe mais de 30 endpoints REST em 13 roteadores de domínio, além de um stream WebSocket. A tabela abaixo os agrupa por domínio; o contrato completo de requisição/resposta de cada endpoint está disponível ao vivo em `http://localhost:8000/docs` (Swagger UI interativo do FastAPI).
+O backend disponibiliza mais de 30 endpoints REST em 13 roteadores de domínio, além do canal WebSocket. A documentação interativa pode ser explorada em `http://localhost:8000/docs`.
 
-| Roteador | Caminho base | Cobre |
+| Roteador | Caminho Base | Descrição |
 |---|---|---|
-| Sessões | `/api/session/*`, `/api/health` | Ciclo de vida (iniciar/pausar/resetar), controle de velocidade, snapshot completo de telemetria |
-| Serviços | `/api/services` | Topologia da malha de serviços |
-| Incidentes | `/api/incidents/*` | Stream de incidentes ativos, reconhecimento, minigame de triagem de logs |
-| Mitigações | `/api/mitigations/*` | Catálogo e execução de runbooks |
-| Auditorias | `/api/audits/*` | Ledger de compliance, post-mortems em Markdown/PDF, entrevista com auditor de IA |
-| Upgrades | `/api/upgrades/*` | Catálogo e compras da árvore tecnológica |
-| Dilemas | `/api/dilemmas/*` | Resolução de dilemas do CAB |
-| Equipe | `/api/staff/*` | Contratação e rotação de turnos |
-| Cenários | `/api/scenarios/*` | Catálogo de cenários roteirizados, estado do cenário ativo, carregador de cenário customizado |
-| Infraestrutura | `/api/infrastructure/*` | Catálogo de nós do modo construção, posicionamento, remoção |
-| Conquistas | `/api/achievements/*` | Catálogo de conquistas |
-| Cosméticos | `/api/cosmetics/*` | Catálogo de cosméticos e desbloqueios por pontos de prestígio |
-| Carreira | `/api/career/records` | Hall da Fama — por jogador (`scope=mine`) ou global (`scope=global`) |
-| WebSocket | `/ws/telemetry` | Stream de transmissão de ticks ao vivo |
+| Sessões | `/api/session/*`, `/api/health` | Ciclo de vida da simulação (iniciar/pausar/resetar), velocidade e snapshots de estado |
+| Serviços | `/api/services` | Topologia da malha de microsserviços e métricas de integridade |
+| Incidentes | `/api/incidents/*` | Stream de incidentes ativos, reconhecimento, investigação e log triage |
+| Mitigações | `/api/mitigations/*` | Catálogo e execução de runbooks de remediação |
+| Auditorias | `/api/audits/*` | Ledger de compliance, post-mortems em Markdown/PDF e entrevista com auditor IA |
+| Upgrades | `/api/upgrades/*` | Melhorias da tech tree em Observabilidade, Resiliência e Instalações |
+| Dilemmas | `/api/dilemmas/*` | Propostas e resolução de dilemas do Change Advisory Board (CAB) |
+| Equipe | `/api/staff/*` | Contratação de engenheiros, competências e rotação de turnos |
+| Cenários | `/api/scenarios/*` | Catálogo de cenários roteirizados, estado ativo e criador de cenários customizados |
+| Infraestrutura | `/api/infrastructure/*` | Catálogo de nós no modo construção, posicionamento e remoção |
+| Conquistas | `/api/achievements/*` | Catálogo e validação de conquistas operacionais |
+| Cosméticos | `/api/cosmetics/*` | Catálogo de cosméticos visuais do escritório e compras por prestígio |
+| Carreira | `/api/career/*` | Hall da Fama, resumo de carreira, recordes pessoais e recomendação de desafio |
+| Telemetria | `/ws/telemetry` | Canal WebSocket em tempo real para transmissão de ticks e telemetria |
 
 ---
 
-## Estrutura do Projeto
+## Documentação Técnica de Referência
+
+Para especificações detalhadas de engenharia e blueprints de arquitetura, consulte:
+- [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) — Arquitetura de sistemas, fórmulas matemáticas e modelos de dados.
+- [`audits/docs/01_SYSTEM_ARCHITECTURE_AND_DATA_FLOW.md`](./audits/docs/01_SYSTEM_ARCHITECTURE_AND_DATA_FLOW.md) — Fluxo de dados e protocolo WebSocket do motor.
+- [`audits/docs/02_MATHEMATICAL_ENGINE_AND_SLA_SPECIFICATION.md`](./audits/docs/02_MATHEMATICAL_ENGINE_AND_SLA_SPECIFICATION.md) — Janela móvel de SLA, fórmulas de MTTA/MTTR e economia.
+- [`audits/docs/03_GOVERNANCE_AND_COMPLIANCE_CONTROLS.md`](./audits/docs/03_GOVERNANCE_AND_COMPLIANCE_CONTROLS.md) — Auditoria, conformidade SOX-404 / SOC2 e segurança do auditor IA.
+- [`audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md`](./audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md) — Catálogo de runbooks e matriz de efeitos de mitigação.
+- [`audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`](./audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md) — Procedimento padrão de post-mortem, dossiês e checksums em PDF.
+
+---
+
+## Estrutura do Repositório
 
 ```
 simulator-crisis/
-├── backend/    App FastAPI: engine, models, schemas, roteadores api/v1, migrações alembic, suíte pytest
-├── frontend/   Dashboard war-room em React + Vite + TS, i18n (en/pt-BR/es), suítes vitest + Playwright e2e
-├── audits/     Template de post-mortem, relatórios gerados e specs de implementação por funcionalidade (audits/docs/)
-├── docs/       Screenshots do README
-├── .github/    Workflow de CI, config do Dependabot, templates de issue/PR
-├── LICENSE, SECURITY.md, CHANGELOG.md
-└── ARCHITECTURE.md, README.md / README.pt-BR.md
+├── backend/            Servidor FastAPI: motor, modelos, schemas, roteadores api/v1, migrações alembic e testes
+├── frontend/           Dashboard em React + Vite + TypeScript, i18n (en/pt-BR/es), testes Vitest e Playwright e2e
+├── audits/             Templates de post-mortem, relatórios gerados e especificações técnicas (audits/docs/)
+├── docs/screenshots/   Capturas de tela oficiais da war room
+├── .github/            Workflows do GitHub Actions para CI/CD, Dependabot e templates de issue
+├── LICENSE             Licença MIT
+├── SECURITY.md         Política de segurança e relato de vulnerabilidades
+├── CHANGELOG.md        Histórico de versões e notas de lançamento
+├── ARCHITECTURE.md     Blueprint completo do sistema e especificações técnicas
+└── README.md           Apresentação geral (Inglês) / README.pt-BR.md (Português)
 ```
+
+---
+
+## Limitações Conhecidas
+
+- **Contexto de Operador Único:** Projetado como uma simulação de estação de trabalho single-player; não possui controle multi-tenant de usuários ou autenticação remota.
+- **Escopo Local de Persistência:** Os registros de carreira, conquistas e o Hall da Fama são armazenados localmente na instância do banco SQLite.
+- **Tratamento de Snapshots Incompatíveis:** Snapshots de sessões corrompidos ou estruturalmente incompatíveis de versões antigas são movidos automaticamente para quarentena sem interface de reparo manual.
 
 ---
 
 ## Contribuindo
 
-Relatos de bugs e ideias de funcionalidades são bem-vindos via [GitHub Issues](https://github.com/christiansousadev/simulator-crisis/issues) (templates disponíveis). Antes de abrir um PR, rode a suíte de verificação local completa da seção [Testes e CI](#testes-e-ci) acima — são as mesmas verificações que rodam no CI. Veja o [CHANGELOG.md](./CHANGELOG.md) para o que já foi entregue.
+Relatos de problemas e sugestões são bem-vindos através de [GitHub Issues](https://github.com/christiansousadev/simulator-crisis/issues). Antes de submeter um pull request, assegure-se de que todos os testes, linter e checagem de tipos passem localmente conforme descrito na seção [Testes e Controle de Qualidade](#testes-e-controle-de-qualidade).
 
 ## Segurança
 
-Este é um projeto de demonstração para um único operador, não um deploy de produção — veja [SECURITY.md](./SECURITY.md) (em inglês) para os limites de segurança documentados e aceitos (sem camada de autenticação, CORS permissivo) e como reportar algo além desses.
+Consulte [SECURITY.md](./SECURITY.md) para detalhes sobre a postura de segurança, modelo de ameaças e como reportar vulnerabilidades.
 
 ## Licença
 

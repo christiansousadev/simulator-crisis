@@ -1,6 +1,7 @@
 import { DollarSign } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
+import DeltaTag from "./DeltaTag";
 
 interface CreditCounterProps {
   budget: number;
@@ -23,9 +24,17 @@ export default function CreditCounter({ budget }: CreditCounterProps) {
         <DollarSign className={`w-3.5 h-3.5 ${tone}`} />
         <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.topbar.runway}</span>
       </div>
-      <span className={`font-bold text-base tabular-nums ${tone}`}>
-        ${Math.round(displayBudget).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-      </span>
+      <div className="relative inline-flex items-baseline">
+        <span className={`font-bold text-base tabular-nums ${tone}`}>
+          ${Math.round(displayBudget).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+        </span>
+        <DeltaTag
+          value={Math.round(budget)}
+          threshold={100}
+          format={(d) => `${d > 0 ? "+$" : "-$"}${Math.abs(d).toLocaleString()}`}
+          className="top-0 left-full ml-1"
+        />
+      </div>
     </div>
   );
 }

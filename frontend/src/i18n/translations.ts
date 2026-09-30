@@ -41,6 +41,8 @@ export interface Translations {
     techDebt: string;
     morale: string;
     pause: string;
+    resume: string;
+    pausedBadge: string;
     newGame: string;
     help: string;
     settings: string;
@@ -53,6 +55,7 @@ export interface Translations {
     auditSummary: (clean: number, flagged: number) => string;
     moraleSummary: (pct: number) => string;
     centerOnCrisis: string;
+    focusService: string;
   };
   nodeInspector: {
     status: string;
@@ -69,14 +72,31 @@ export interface Translations {
     mttr: string;
     sanctionCountdown: (ticks: number) => string;
     acknowledge: string;
+    investigate: string;
+    activeFor: (ticks: number) => string;
+    impactTier: { critical: string; standard: string };
+    dependentsAffected: (count: number) => string;
+    statusPill: {
+      new: string;
+      acknowledged: string;
+      investigating: string;
+      mitigating: string;
+      resolved: string;
+    };
   };
   mitigations: {
     header: string;
     targetLabel: (serviceId: string) => string;
     categories: Record<MitigationCategoryKey, string>;
     actions: Record<MitigationActionId, { name: string; description: string }>;
+    impact: Record<MitigationActionId, string>;
     tdiSuffix: string;
     rejected: string;
+    selectServiceHint: string;
+    affectedServicesLabel: string;
+    highRisk: string;
+    readyIn: (ticks: number) => string;
+    blocked: { budget: string; cooldown: string; featureFreeze: string };
   };
   ledger: {
     header: string;
@@ -96,6 +116,13 @@ export interface Translations {
     status: string;
     createdTick: string;
     acknowledgedTick: string;
+    whatsHappening: string;
+    impactHeader: string;
+    actionsHeader: string;
+    symptoms: string;
+    rootCausePending: string;
+    quickMitigate: string;
+    backToIncident: string;
   };
   liquidation: {
     eyebrow: string;
@@ -109,6 +136,11 @@ export interface Translations {
     footer: string;
     button: string;
     stamp: string;
+    finalReputation: string;
+    objectivesHeader: string;
+    achievementsHeader: string;
+    incidentsHeader: string;
+    chooseScenario: string;
   };
   victory: {
     eyebrow: string;
@@ -121,6 +153,12 @@ export interface Translations {
     runwayLeft: string;
     footer: string;
     button: string;
+    finalTechDebt: string;
+    finalReputation: string;
+    objectivesHeader: string;
+    achievementsHeader: string;
+    incidentsHeader: string;
+    chooseScenario: string;
   };
   language: {
     en: string;
@@ -140,8 +178,18 @@ export interface Translations {
     techDebtWorsened: (amount: number) => string;
     budgetGain: (amount: string) => string;
     budgetLoss: (amount: string) => string;
-    moraleGain: string;
-    moraleLoss: string;
+    moraleGain: (amount: number) => string;
+    moraleLoss: (amount: number) => string;
+    reputationGain: (amount: number) => string;
+    reputationLoss: (amount: number) => string;
+    actionFailed: string;
+    mitigationSuccess: string;
+    mitigationMismatch: string;
+    auditorFineApplied: (amount: string) => string;
+    auditorCreditApplied: (amount: string) => string;
+    featureFreezeEngaged: string;
+    featureFreezeLifted: string;
+    rootCauseIdentified: string;
   };
   workerQuips: {
     idle: string[];
@@ -204,6 +252,15 @@ export interface Translations {
     active: (elapsed: number, duration: number) => string;
     victory: string;
     defeat: string;
+    briefingContext: string;
+    briefingObjectives: string;
+    briefingBegin: string;
+    specialConditions: string;
+    objectives: string;
+    locked: string;
+    unlockCondition: (cond: string) => string;
+    personalBest: (sla: number, days: number, diff: string) => string;
+    noPersonalBest: string;
   };
   difficulty: {
     label: string;
@@ -213,6 +270,9 @@ export interface Translations {
     standardDescription: string;
     chaos: string;
     chaosDescription: string;
+    budgetDim: string;
+    incidentRateDim: string;
+    cascadeDim: string;
   };
   governance: {
     reputationLabel: string;
@@ -225,10 +285,14 @@ export interface Translations {
     back: string;
     getStarted: string;
     reopenTitle: string;
+    pausedNotice: string;
     steps: {
       welcome: { title: string; body: string };
-      topology: { title: string; body: string };
-      crisis: { title: string; body: string };
+      spotIncident: { title: string; body: string; waitingBody: string };
+      acknowledge: { title: string; body: string };
+      investigate: { title: string; body: string };
+      mitigate: { title: string; body: string };
+      consequence: { title: string; body: string };
       governance: { title: string; body: string };
     };
   };
@@ -247,6 +311,7 @@ export interface Translations {
   };
   titleScreen: {
     tagline: string;
+    pillars: string[];
     continue: string;
     newGame: string;
     hallOfFame: string;
@@ -265,11 +330,76 @@ export interface Translations {
     myRecords: string;
     global: string;
     anonymousPlayer: (shortId: string) => string;
+    title: string;
+    recentRuns: string;
+    rankings: string;
+    allScenarios: string;
+    filterScenario: string;
+    operatorRank: (rank: string) => string;
+    lifetimePrestige: (pts: number) => string;
+    totalRuns: (count: number) => string;
+    incidentsHandled: (resolved: number, total: number) => string;
+    noObjectives: string;
+    date: string;
+    outcomeLabel: string;
+    techDebtRepLabel: string;
+    incidentsLabel: string;
+    recordedAtLabel: string;
+    objectivesSnapshot: string;
+    resolvedOfTotal: (resolved: number, total: number) => string;
+  };
+  debrief: {
+    titleVictory: string;
+    titleLiquidation: string;
+    titleDefeat: string;
+    subtitleVictory: string;
+    subtitleLiquidation: string;
+    subtitleDefeat: string;
+    runSummary: string;
+    survivalDuration: string;
+    finalSla: string;
+    remainingBudget: string;
+    techDebt: string;
+    reputation: string;
+    incidentsResolved: string;
+    scenarioObjectives: string;
+    allObjectivesMet: string;
+    objectivesFailed: string;
+    careerProgression: string;
+    prestigeEarned: (pts: number) => string;
+    achievementsUnlocked: string;
+    noAchievements: string;
+    comparisonHeader: string;
+    firstRunRecord: string;
+    newPersonalBest: string;
+    betterThanBest: (metric: string, delta: string) => string;
+    belowBest: (metric: string, delta: string) => string;
+    matchedBest: (metric: string) => string;
+    nextChallengeHeader: string;
+    playAgain: string;
+    increaseDifficulty: string;
+    selectAnotherScenario: string;
+    viewCareerRecord: string;
+    targetGoal: (goal: string) => string;
+    auditGrade: string;
+    acceptChallenge: string;
+    totalRunsLabel: string;
+    victoriesLabel: string;
+    lifetimePrestigeLabel: string;
+    achievementsUnlockedCount: (count: number, total: number) => string;
+    completedCount: (done: number, total: number) => string;
+    slaVsPriorBest: string;
+    survivalVsPriorBest: string;
+    priorOutcome: string;
+    stampBreached: string;
+    stampLiquidated: string;
   };
   newsTicker: {
     label: string;
     flavorLines: string[];
     eventHeadlines: Record<string, string>;
+    eventConsequence: Record<string, string>;
+    moreEvents: (count: number) => string;
   };
   objectiveHints: {
     acknowledgeIncident: string;
@@ -277,6 +407,22 @@ export interface Translations {
     buyUpgrade: string;
     tryBuildMode: string;
     earnAchievement: string;
+  };
+  // compact, always-on tracker for this scenario's REAL backend-computed objectives -- distinct
+  // from objectiveHints above (a single client-derived "what to try next" nudge for new players)
+  objectiveTracker: {
+    header: string;
+    done: string;
+    pending: string;
+  };
+  resolutionSummary: {
+    header: (serviceId: string) => string;
+    mtta: (ticks: number) => string;
+    mttr: (ticks: number) => string;
+    cost: (amount: string) => string;
+    costUnknown: string;
+    techDebt: (delta: number) => string;
+    viewPostmortem: string;
   };
   incidentReplay: {
     openButton: string;
@@ -299,6 +445,7 @@ export interface Translations {
     alreadySolved: string;
     rootCauseConfirmed: string;
     rewardEarned: string;
+    incorrectLine: string;
   };
   achievements: {
     header: string;
@@ -349,6 +496,8 @@ const en: Translations = {
     techDebt: "Tech Debt",
     morale: "Morale",
     pause: "Pause simulation",
+    resume: "Resume simulation",
+    pausedBadge: "PAUSED",
     newGame: "New Game",
     help: "Help & Tutorial",
     settings: "Settings",
@@ -361,6 +510,7 @@ const en: Translations = {
     auditSummary: (clean, flagged) => `${clean} clean / ${flagged} flagged`,
     moraleSummary: (pct) => `morale ${pct.toFixed(0)}%`,
     centerOnCrisis: "Center on Crisis",
+    focusService: "Focus Rack",
   },
   nodeInspector: {
     status: "Status",
@@ -377,6 +527,17 @@ const en: Translations = {
     mttr: "MTTR",
     sanctionCountdown: (ticks) => `T-${ticks}`,
     acknowledge: "Acknowledge",
+    investigate: "Investigate",
+    activeFor: (ticks) => `active ${ticks}t`,
+    impactTier: { critical: "Critical service", standard: "Standard service" },
+    dependentsAffected: (count) => (count === 1 ? "1 dependent service" : `${count} dependent services`),
+    statusPill: {
+      new: "New",
+      acknowledged: "Acknowledged",
+      investigating: "Investigating",
+      mitigating: "Mitigating",
+      resolved: "Resolved",
+    },
   },
   mitigations: {
     header: "Operational Directives",
@@ -393,8 +554,23 @@ const en: Translations = {
       circuit_breaker: { name: "Circuit Breaker", description: "Shed non-critical traffic." },
       emergency_patch: { name: "Hotfix Live", description: "Direct prod hotfix." },
     },
+    impact: {
+      rollback: "Steady resolution, no speed bonus",
+      scale_replicas: "Absorbs load, moderate speed-up",
+      circuit_breaker: "Fast relief for the affected service",
+      emergency_patch: "Fastest fix, highest long-term cost",
+    },
     tdiSuffix: "TDI",
     rejected: "ACTION REJECTED: BUDGET TOO LOW",
+    selectServiceHint: "Select an affected service to compare mitigations.",
+    affectedServicesLabel: "Affected services",
+    highRisk: "High risk",
+    readyIn: (ticks) => `ready in ${ticks}t`,
+    blocked: {
+      budget: "Insufficient runway",
+      cooldown: "Still on cooldown",
+      featureFreeze: "Locked by feature freeze",
+    },
   },
   ledger: {
     header: "Compliance Ledger",
@@ -414,6 +590,13 @@ const en: Translations = {
     status: "Status",
     createdTick: "Created Tick",
     acknowledgedTick: "Acknowledged Tick",
+    whatsHappening: "What's happening",
+    impactHeader: "What's the impact",
+    actionsHeader: "What can I do now",
+    symptoms: "Symptoms",
+    rootCausePending: "Root cause not yet confirmed — investigate the logs to identify it.",
+    quickMitigate: "Quick mitigation",
+    backToIncident: "Back to incident",
   },
   liquidation: {
     eyebrow: "IncidentZero Corp. · Board of Directors",
@@ -427,6 +610,11 @@ const en: Translations = {
     footer: "This decision is final and effective as of the close of business. We thank you for your service.",
     button: "Reapply for the Position",
     stamp: "TERMINATED",
+    finalReputation: "Final Reputation",
+    objectivesHeader: "Objectives",
+    achievementsHeader: "Achievements Unlocked",
+    incidentsHeader: "Recent Incidents",
+    chooseScenario: "Choose a Scenario",
   },
   victory: {
     eyebrow: "IncidentZero Corp. · External Audit Office",
@@ -439,6 +627,12 @@ const en: Translations = {
     runwayLeft: "Runway Left",
     footer: "Certified and filed with the compliance ledger.",
     button: "Begin Next Audit Cycle",
+    finalTechDebt: "Final Tech Debt",
+    finalReputation: "Final Reputation",
+    objectivesHeader: "Objectives",
+    achievementsHeader: "Achievements Unlocked",
+    incidentsHeader: "Recent Incidents",
+    chooseScenario: "Choose a Scenario",
   },
   language: { en: "English", ptBR: "Português (BR)", es: "Español" },
   floatingTexts: {
@@ -454,8 +648,18 @@ const en: Translations = {
     techDebtWorsened: (amount) => `+${amount} TDI`,
     budgetGain: (amount) => `+$${amount}`,
     budgetLoss: (amount) => `-$${amount}`,
-    moraleGain: "+MORALE",
-    moraleLoss: "-MORALE",
+    moraleGain: (amount) => `+${amount} MORALE`,
+    moraleLoss: (amount) => `-${amount} MORALE`,
+    reputationGain: (amount) => `+${amount} REPUTATION`,
+    reputationLoss: (amount) => `-${amount} REPUTATION`,
+    actionFailed: "ACTION FAILED — TRY AGAIN",
+    mitigationSuccess: "MITIGATION SUCCESSFUL",
+    mitigationMismatch: "MITIGATION MISMATCHED — ROOT CAUSE PERSISTS",
+    auditorFineApplied: (amount) => `-$${amount} :: AUDITOR FINE`,
+    auditorCreditApplied: (amount) => `+$${amount} :: AUDITOR CREDIT`,
+    featureFreezeEngaged: "FEATURE FREEZE: Error budget exhausted",
+    featureFreezeLifted: "FEATURE FREEZE LIFTED: Error budget restored",
+    rootCauseIdentified: "ROOT CAUSE IDENTIFIED: Mitigation cost halved",
   },
   upgrades: {
     header: "Upgrades",
@@ -545,15 +749,27 @@ const en: Translations = {
     active: (elapsed, duration) => `Tick ${elapsed} / ${duration}`,
     victory: "Scenario Complete",
     defeat: "Scenario Failed",
+    briefingContext: "Briefing",
+    briefingObjectives: "Objectives",
+    briefingBegin: "Begin",
+    specialConditions: "Special Conditions",
+    objectives: "Core Objectives",
+    locked: "Locked",
+    unlockCondition: (cond) => `Unlock condition: ${cond}`,
+    personalBest: (sla, days, diff) => `Personal Best: ${sla.toFixed(2)}% SLA · ${days}d · ${diff}`,
+    noPersonalBest: "No prior run recorded yet",
   },
   difficulty: {
     label: "Difficulty",
     intern: "Intern",
-    internDescription: "Bigger starting runway, fewer surprise failures. Learn the ropes without the pressure.",
+    internDescription: "Starting runway $320k (+28%), 0.7x incident rate (-30%). Forgiving operational environment for learning runbooks.",
     standard: "Standard",
-    standardDescription: "The intended balance: real pressure, real trade-offs.",
+    standardDescription: "Starting runway $250k (Baseline), 1.0x incident rate. The canonical enterprise crisis simulation experience.",
     chaos: "Chaos",
-    chaosDescription: "Tighter budget, a much higher hazard rate. For veterans of the war room only.",
+    chaosDescription: "Starting runway $180k (-28%), 1.4x incident rate (+40%). High cascading failure probability and strict cost limits.",
+    budgetDim: "Starting Capital",
+    incidentRateDim: "Incident Frequency",
+    cascadeDim: "Cascade Severity",
   },
   governance: {
     reputationLabel: "Board Reputation",
@@ -566,18 +782,32 @@ const en: Translations = {
     back: "Back",
     getStarted: "Get Started",
     reopenTitle: "Replay the tutorial",
+    pausedNotice: "Simulation paused while the tutorial is open",
     steps: {
       welcome: {
         title: "Welcome & Mission",
         body: "Welcome, Head of Infrastructure. IncidentZero Corp. has entrusted you with keeping five critical services online, the books balanced, and the board off your back. Every tick is one office hour — survive a full monthly audit cycle without going bankrupt or breaching your SLA.",
       },
-      topology: {
-        title: "Service Topology",
-        body: "Your office floor mirrors your real infrastructure. Click any server rack or engineering desk to inspect its health, latency, and error rate in the diagnostics drawer. Watch the dependency chain closely — a failure upstream can cascade downstream.",
+      spotIncident: {
+        title: "Spot the Incident",
+        body: "Your office floor mirrors your real infrastructure — click any server rack to inspect its health, latency and error rate. A rack glowing and flashing like this one has an active incident. That's where we start.",
+        waitingBody: "No incident is active right now. Keep an eye on the server room — a rack will start glowing the moment one fires. You can move on for now.",
       },
-      crisis: {
-        title: "Crisis Management",
-        body: "When an alert fires, the clock starts ticking. Acknowledge it fast — wait too long and alert fatigue drains morale, then regulators start fining you every tick until you respond. Pick a runbook wisely: a quick hotfix is cheap but piles on technical debt; a rollback costs more but keeps the platform healthy.",
+      acknowledge: {
+        title: "Acknowledge It",
+        body: "The clock is ticking on this alert. Acknowledging it stops alert fatigue from draining morale and keeps the regulators from fining you every tick. Hit Acknowledge below on the highlighted incident.",
+      },
+      investigate: {
+        title: "Investigate the Logs",
+        body: "The root cause isn't confirmed yet — open the log terminal and find the line that actually explains the failure. Confirming it halves your mitigation cost and MTTR.",
+      },
+      mitigate: {
+        title: "Choose a Mitigation",
+        body: "Every runbook trades cost, speed and technical debt differently. A hotfix is cheap but messy; a rollback is slower but keeps the platform clean. Pick one for the affected service.",
+      },
+      consequence: {
+        title: "Watch the Consequence",
+        body: "Watch the rack: the wrench animation means the fix is being applied, and the status LED should turn back to green shortly. Every action here has a visible, immediate consequence in the office.",
       },
       governance: {
         title: "IT Governance",
@@ -599,7 +829,8 @@ const en: Translations = {
     close: "Close",
   },
   titleScreen: {
-    tagline: "Office Operations Simulator",
+    tagline: "SRE Crisis Management, Gamified",
+    pillars: ["Incidents", "Infrastructure", "Decisions", "Tech Debt", "Runway", "Roster", "Consequences"],
     continue: "Continue",
     newGame: "New Game / Select Mode",
     hallOfFame: "Hall of Fame",
@@ -618,6 +849,69 @@ const en: Translations = {
     myRecords: "My Records",
     global: "Global",
     anonymousPlayer: (shortId) => `Operator #${shortId}`,
+    title: "Career History & Hall of Fame",
+    recentRuns: "Recent Runs",
+    rankings: "Leaderboards",
+    allScenarios: "All Scenarios",
+    filterScenario: "Filter by Scenario",
+    operatorRank: (rank) => `Rank: ${rank}`,
+    lifetimePrestige: (pts) => `${pts} Lifetime Prestige`,
+    totalRuns: (count) => `${count} Runs Recorded`,
+    incidentsHandled: (resolved, total) => `${resolved}/${total} incidents resolved`,
+    noObjectives: "Standard sandbox rules",
+    date: "Date",
+    outcomeLabel: "Outcome",
+    techDebtRepLabel: "Tech Debt / Rep",
+    incidentsLabel: "Incidents",
+    recordedAtLabel: "Recorded At",
+    objectivesSnapshot: "Objectives Snapshot",
+    resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resolved`,
+  },
+  debrief: {
+    titleVictory: "AUDIT CYCLE CERTIFIED",
+    titleLiquidation: "BOARD LIQUIDATION ORDER",
+    titleDefeat: "SCENARIO CONTAINMENT BREACHED",
+    subtitleVictory: "Official Notice of Full Regulatory Compliance & Production Stability",
+    subtitleLiquidation: "Official Notice of Immediate Corporate Insolvency & Asset Foreclosure",
+    subtitleDefeat: "Critical Security Incident Escalation & Uncontained Cascading Failure",
+    runSummary: "Operational Debrief",
+    survivalDuration: "Survival Time",
+    finalSla: "Cumulative SLA",
+    remainingBudget: "Remaining Runway",
+    techDebt: "Technical Debt Index",
+    reputation: "Governance Reputation",
+    incidentsResolved: "Incidents Resolved",
+    scenarioObjectives: "Mission Objectives",
+    allObjectivesMet: "All Scenario Objectives Successfully Completed",
+    objectivesFailed: "Objectives Compromised",
+    careerProgression: "Career Progression",
+    prestigeEarned: (pts) => `+${pts} Prestige Points Earned`,
+    achievementsUnlocked: "Achievements Unlocked This Run",
+    noAchievements: "No new achievements unlocked during this run",
+    comparisonHeader: "Personal Historical Benchmark",
+    firstRunRecord: "First official career record established for this scenario & difficulty!",
+    newPersonalBest: "NEW PERSONAL BEST!",
+    betterThanBest: (metric, delta) => `${metric}: Improved by ${delta} vs personal best`,
+    belowBest: (metric, delta) => `${metric}: ${delta} below personal best`,
+    matchedBest: (metric) => `${metric}: Equal to personal best`,
+    nextChallengeHeader: "Recommended Next Steps",
+    playAgain: "Play Again (Same Setup)",
+    increaseDifficulty: "Increase Difficulty",
+    selectAnotherScenario: "Select Another Scenario",
+    viewCareerRecord: "View Career History",
+    targetGoal: (goal) => `Target Goal: ${goal}`,
+    auditGrade: "Audit Grade",
+    acceptChallenge: "Accept Challenge",
+    totalRunsLabel: "Total Runs:",
+    victoriesLabel: "Victories:",
+    lifetimePrestigeLabel: "Lifetime Prestige:",
+    achievementsUnlockedCount: (count, total) => `Achievements Unlocked: ${count}/${total}`,
+    completedCount: (done, total) => `${done}/${total} Completed`,
+    slaVsPriorBest: "SLA vs Prior Best",
+    survivalVsPriorBest: "Survival vs Prior Best",
+    priorOutcome: "Prior Outcome",
+    stampBreached: "BREACHED",
+    stampLiquidated: "LIQUIDATED",
   },
   newsTicker: {
     label: "IZ NEWS",
@@ -643,6 +937,13 @@ const en: Translations = {
       ROOT_CAUSE_IDENTIFIED: "Engineering praised for rapid root-cause diagnosis",
       COSMETIC_UNLOCKED: "Office decor budget approved for a cosmetic upgrade",
     },
+    eventConsequence: {
+      INCIDENT_RAISED: "A live incident is burning MTTA — acknowledge it before the fine clock starts.",
+      SLA_BREACH_EMERGENCY_SANCTION: "SLA fell below the regulatory floor — expect a board review if this repeats.",
+      BANKRUPTCY_LIQUIDATION: "Runway hit zero — this run is over.",
+      FEATURE_FREEZE_ENGAGED: "Error budget is exhausted — risky runbooks are locked until tech debt comes down.",
+    },
+    moreEvents: (count) => `+${count} more`,
   },
   objectiveHints: {
     acknowledgeIncident: "An alert is waiting — acknowledge it before the fine clock starts.",
@@ -650,6 +951,20 @@ const en: Translations = {
     buyUpgrade: "Your runway can afford your first upgrade — check the Upgrades tab.",
     tryBuildMode: "Try Build Mode: place your first infrastructure node in the server room.",
     earnAchievement: "Keep going — your first career achievement is within reach.",
+  },
+  objectiveTracker: {
+    header: "Objectives",
+    done: "Done",
+    pending: "Pending",
+  },
+  resolutionSummary: {
+    header: (serviceId) => `${serviceId} restored`,
+    mtta: (ticks) => `MTTA ${ticks}t`,
+    mttr: (ticks) => `MTTR ${ticks}t`,
+    cost: (amount) => `Cost $${amount}`,
+    costUnknown: "Cost unavailable",
+    techDebt: (delta) => `TDI ${delta > 0 ? `+${delta}` : delta}`,
+    viewPostmortem: "View postmortem",
   },
   incidentReplay: {
     openButton: "Replay",
@@ -677,6 +992,7 @@ const en: Translations = {
     alreadySolved: "Root Cause Already Identified",
     rootCauseConfirmed: "ROOT CAUSE CONFIRMED",
     rewardEarned: "ROOT CAUSE FOUND: -50% mitigation cost, MTTR halved",
+    incorrectLine: "NOT THE ROOT CAUSE — KEEP LOOKING",
   },
   achievements: {
     header: "Achievements",
@@ -741,9 +1057,11 @@ const ptBR: Translations = {
     techDebt: "Dívida Técnica",
     morale: "Moral",
     pause: "Pausar simulação",
+    resume: "Retomar simulação",
     newGame: "Novo Jogo",
     help: "Ajuda e Tutorial",
     settings: "Configurações",
+    pausedBadge: "PAUSADO",
   },
   office: {
     serverRoom: "SALA DE SERVIDORES",
@@ -753,6 +1071,7 @@ const ptBR: Translations = {
     auditSummary: (clean, flagged) => `${clean} sem ressalvas / ${flagged} sinalizados`,
     moraleSummary: (pct) => `moral ${pct.toFixed(0)}%`,
     centerOnCrisis: "Centralizar na Crise",
+    focusService: "Focar Rack",
   },
   nodeInspector: {
     status: "Status",
@@ -769,6 +1088,17 @@ const ptBR: Translations = {
     mttr: "MTTR",
     sanctionCountdown: (ticks) => `T-${ticks}`,
     acknowledge: "Reconhecer",
+    investigate: "Investigar",
+    activeFor: (ticks) => `ativo há ${ticks}t`,
+    impactTier: { critical: "Serviço crítico", standard: "Serviço padrão" },
+    dependentsAffected: (count) => (count === 1 ? "1 serviço dependente" : `${count} serviços dependentes`),
+    statusPill: {
+      new: "Novo",
+      acknowledged: "Reconhecido",
+      investigating: "Investigando",
+      mitigating: "Mitigando",
+      resolved: "Resolvido",
+    },
   },
   mitigations: {
     header: "Diretivas Operacionais",
@@ -785,8 +1115,23 @@ const ptBR: Translations = {
       circuit_breaker: { name: "Circuit Breaker", description: "Descartar tráfego não crítico." },
       emergency_patch: { name: "Hotfix em Produção", description: "Correção direta em produção." },
     },
+    impact: {
+      rollback: "Resolução estável, sem bônus de velocidade",
+      scale_replicas: "Absorve carga, aceleração moderada",
+      circuit_breaker: "Alívio rápido para o serviço afetado",
+      emergency_patch: "Correção mais rápida, maior custo no longo prazo",
+    },
     tdiSuffix: "TDI",
     rejected: "AÇÃO REJEITADA: ORÇAMENTO INSUFICIENTE",
+    selectServiceHint: "Selecione um serviço afetado para comparar as mitigações.",
+    affectedServicesLabel: "Serviços afetados",
+    highRisk: "Alto risco",
+    readyIn: (ticks) => `pronto em ${ticks}t`,
+    blocked: {
+      budget: "Caixa insuficiente",
+      cooldown: "Ainda em recarga",
+      featureFreeze: "Bloqueado pelo congelamento de funcionalidades",
+    },
   },
   ledger: {
     header: "Registro de Conformidade",
@@ -806,6 +1151,13 @@ const ptBR: Translations = {
     status: "Status",
     createdTick: "Tick de Criação",
     acknowledgedTick: "Tick de Reconhecimento",
+    whatsHappening: "O que está acontecendo",
+    impactHeader: "Qual o impacto",
+    actionsHeader: "O que posso fazer agora",
+    symptoms: "Sintomas",
+    rootCausePending: "Causa raiz ainda não confirmada — investigue os logs para identificá-la.",
+    quickMitigate: "Mitigação rápida",
+    backToIncident: "Voltar ao incidente",
   },
   liquidation: {
     eyebrow: "IncidentZero Corp. · Conselho de Administração",
@@ -819,6 +1171,11 @@ const ptBR: Translations = {
     footer: "Esta decisão é final e entra em vigor no encerramento do expediente. Agradecemos pelos seus serviços.",
     button: "Recandidatar-se ao Cargo",
     stamp: "ENCERRADO",
+    finalReputation: "Reputação Final",
+    objectivesHeader: "Objetivos",
+    achievementsHeader: "Conquistas Desbloqueadas",
+    incidentsHeader: "Incidentes Recentes",
+    chooseScenario: "Escolher um Cenário",
   },
   victory: {
     eyebrow: "IncidentZero Corp. · Escritório de Auditoria Externa",
@@ -831,6 +1188,12 @@ const ptBR: Translations = {
     runwayLeft: "Caixa Restante",
     footer: "Certificado e arquivado no registro de conformidade.",
     button: "Iniciar Próximo Ciclo de Auditoria",
+    finalTechDebt: "Dívida Técnica Final",
+    finalReputation: "Reputação Final",
+    objectivesHeader: "Objetivos",
+    achievementsHeader: "Conquistas Desbloqueadas",
+    incidentsHeader: "Incidentes Recentes",
+    chooseScenario: "Escolher um Cenário",
   },
   language: { en: "English", ptBR: "Português (BR)", es: "Español" },
   floatingTexts: {
@@ -846,8 +1209,18 @@ const ptBR: Translations = {
     techDebtWorsened: (amount) => `+${amount} TDI`,
     budgetGain: (amount) => `+$${amount}`,
     budgetLoss: (amount) => `-$${amount}`,
-    moraleGain: "+MORAL",
-    moraleLoss: "-MORAL",
+    moraleGain: (amount) => `+${amount} MORAL`,
+    moraleLoss: (amount) => `-${amount} MORAL`,
+    reputationGain: (amount) => `+${amount} REPUTAÇÃO`,
+    reputationLoss: (amount) => `-${amount} REPUTAÇÃO`,
+    actionFailed: "AÇÃO FALHOU — TENTE NOVAMENTE",
+    mitigationSuccess: "MITIGAÇÃO BEM-SUCEDIDA",
+    mitigationMismatch: "MITIGAÇÃO INADEQUADA — CAUSA RAIZ PERSISTE",
+    auditorFineApplied: (amount) => `-$${amount} :: MULTA DO AUDITOR`,
+    auditorCreditApplied: (amount) => `+$${amount} :: CRÉDITO DO AUDITOR`,
+    featureFreezeEngaged: "CONGELAMENTO DE RECURSOS: Orçamento de erro esgotado",
+    featureFreezeLifted: "CONGELAMENTO SUSPENSO: Orçamento de erro recuperado",
+    rootCauseIdentified: "CAUSA RAIZ IDENTIFICADA: Custo de mitigação reduzido pela metade",
   },
   upgrades: {
     header: "Melhorias",
@@ -937,15 +1310,27 @@ const ptBR: Translations = {
     active: (elapsed, duration) => `Tick ${elapsed} / ${duration}`,
     victory: "Cenário Concluído",
     defeat: "Cenário Fracassado",
+    briefingContext: "Briefing",
+    briefingObjectives: "Objetivos",
+    briefingBegin: "Começar",
+    specialConditions: "Condições Especiais",
+    objectives: "Objetivos Centrais",
+    locked: "Bloqueado",
+    unlockCondition: (cond) => `Condição de desbloqueio: ${cond}`,
+    personalBest: (sla, days, diff) => `Melhor Histórico: ${sla.toFixed(2)}% SLA · ${days}d · ${diff}`,
+    noPersonalBest: "Nenhuma partida registrada ainda",
   },
   difficulty: {
     label: "Dificuldade",
     intern: "Estagiário",
-    internDescription: "Orçamento inicial maior, menos falhas surpresa. Aprenda o jogo sem tanta pressão.",
+    internDescription: "Orçamento inicial de $320k (+28%), taxa de incidentes 0.7x (-30%). Ambiente operacional tolerante para aprender runbooks.",
     standard: "Padrão",
-    standardDescription: "O equilíbrio pretendido: pressão real, trade-offs reais.",
+    standardDescription: "Orçamento inicial de $250k (Linha de base), taxa de incidentes 1.0x. A experiência formal de simulação corporativa.",
     chaos: "Caos Total",
-    chaosDescription: "Orçamento apertado, taxa de risco muito maior. Só para veteranos da sala de guerra.",
+    chaosDescription: "Orçamento inicial de $180k (-28%), taxa de incidentes 1.4x (+40%). Risco severo de cascata e margem mínima de erros.",
+    budgetDim: "Capital Inicial",
+    incidentRateDim: "Frequência de Incidentes",
+    cascadeDim: "Severidade da Cascata",
   },
   governance: {
     reputationLabel: "Reputação com o Conselho",
@@ -958,18 +1343,32 @@ const ptBR: Translations = {
     back: "Voltar",
     getStarted: "Começar",
     reopenTitle: "Repetir o tutorial",
+    pausedNotice: "Simulação pausada enquanto o tutorial está aberto",
     steps: {
       welcome: {
         title: "Boas-vindas e Missão",
         body: "Bem-vindo, Chefe de Infraestrutura. A IncidentZero Corp. confiou a você a tarefa de manter cinco serviços críticos no ar, as contas em dia e o conselho longe do seu pé. Cada tick é uma hora de expediente — sobreviva a um ciclo mensal completo de auditoria sem falir ou violar o seu SLA.",
       },
-      topology: {
-        title: "Topologia de Serviços",
-        body: "O andar do seu escritório espelha sua infraestrutura real. Clique em qualquer rack de servidor ou mesa de engenharia para inspecionar sua saúde, latência e taxa de erro na gaveta de diagnóstico. Observe a cadeia de dependências com atenção — uma falha a montante pode se propagar para os serviços a jusante.",
+      spotIncident: {
+        title: "Localize o Incidente",
+        body: "O andar do seu escritório espelha sua infraestrutura real — clique em qualquer rack de servidor para inspecionar sua saúde, latência e taxa de erro. Um rack pulsando e piscando como este tem um incidente ativo. É por aí que começamos.",
+        waitingBody: "Nenhum incidente está ativo agora. Fique de olho na sala de servidores — um rack vai começar a pulsar assim que um disparar. Por enquanto, você pode avançar.",
       },
-      crisis: {
-        title: "Gestão de Crises",
-        body: "Quando um alerta dispara, o relógio começa a contar. Reconheça-o rápido — esperar demais drena o moral por fadiga de alertas e, depois, os reguladores começam a multar você a cada tick até você responder. Escolha o runbook com sabedoria: um hotfix rápido é barato, mas acumula dívida técnica; um rollback custa mais, mas mantém a plataforma saudável.",
+      acknowledge: {
+        title: "Reconheça o Incidente",
+        body: "O relógio já está correndo neste alerta. Reconhecê-lo evita que a fadiga de alertas drene o moral e impede que os reguladores multem você a cada tick. Clique em Reconhecer no incidente destacado abaixo.",
+      },
+      investigate: {
+        title: "Investigue os Logs",
+        body: "A causa raiz ainda não foi confirmada — abra o terminal de logs e encontre a linha que realmente explica a falha. Confirmá-la reduz pela metade o custo de mitigação e o MTTR.",
+      },
+      mitigate: {
+        title: "Escolha uma Mitigação",
+        body: "Cada runbook troca custo, velocidade e dívida técnica de um jeito diferente. Um hotfix é barato mas bagunçado; um rollback é mais lento mas mantém a plataforma limpa. Escolha um para o serviço afetado.",
+      },
+      consequence: {
+        title: "Observe a Consequência",
+        body: "Observe o rack: a animação de chave inglesa mostra que a correção está sendo aplicada, e o LED de status deve voltar ao verde em instantes. Toda ação aqui tem uma consequência visível e imediata no escritório.",
       },
       governance: {
         title: "Governança de TI",
@@ -991,7 +1390,8 @@ const ptBR: Translations = {
     close: "Fechar",
   },
   titleScreen: {
-    tagline: "Simulador de Operações de Escritório",
+    tagline: "Gestão de Crises SRE, em Formato de Jogo",
+    pillars: ["Incidentes", "Infraestrutura", "Decisões", "Dívida Técnica", "Caixa", "Equipe", "Consequências"],
     continue: "Continuar",
     newGame: "Novo Jogo / Selecionar Modo",
     hallOfFame: "Hall da Fama",
@@ -1010,6 +1410,69 @@ const ptBR: Translations = {
     myRecords: "Meus Recordes",
     global: "Global",
     anonymousPlayer: (shortId) => `Operador #${shortId}`,
+    title: "Histórico de Carreira & Hall da Fama",
+    recentRuns: "Partidas Recentes",
+    rankings: "Classificação",
+    allScenarios: "Todos os Cenários",
+    filterScenario: "Filtrar por Cenário",
+    operatorRank: (rank) => `Patente: ${rank}`,
+    lifetimePrestige: (pts) => `${pts} Prestígio Acumulado`,
+    totalRuns: (count) => `${count} Partidas Registradas`,
+    incidentsHandled: (resolved, total) => `${resolved}/${total} incidentes resolvidos`,
+    noObjectives: "Regras padrão do sandbox",
+    date: "Data",
+    outcomeLabel: "Resultado",
+    techDebtRepLabel: "Dívida Técnica / Rep",
+    incidentsLabel: "Incidentes",
+    recordedAtLabel: "Registrado Em",
+    objectivesSnapshot: "Instantâneo dos Objetivos",
+    resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resolvidos`,
+  },
+  debrief: {
+    titleVictory: "CICLO DE AUDITORIA CERTIFICADO",
+    titleLiquidation: "ORDEM DE LIQUIDAÇÃO DO CONSELHO",
+    titleDefeat: "CONTENÇÃO DE INCIDENTE VIOLADA",
+    subtitleVictory: "Aviso Oficial de Conformidade Regulatória Integral e Estabilidade Operacional",
+    subtitleLiquidation: "Aviso Oficial de Insolvência Imediata e Execução de Ativos",
+    subtitleDefeat: "Escalação Crítica de Segurança e Falha em Cascata Descontrolada",
+    runSummary: "Debriefing da Partida",
+    survivalDuration: "Tempo de Sobrevivência",
+    finalSla: "SLA Consolidado",
+    remainingBudget: "Caixa Restante",
+    techDebt: "Índice de Dívida Técnica",
+    reputation: "Reputação com o Conselho",
+    incidentsResolved: "Incidentes Resolvidos",
+    scenarioObjectives: "Objetivos da Missão",
+    allObjectivesMet: "Todos os Objetivos do Cenário Foram Cumpridos",
+    objectivesFailed: "Objetivos Comprometidos",
+    careerProgression: "Progressão de Carreira",
+    prestigeEarned: (pts) => `+${pts} Pontos de Prestígio Obtidos`,
+    achievementsUnlocked: "Conquistas Desbloqueadas Nesta Partida",
+    noAchievements: "Nenhuma nova conquista desbloqueada nesta partida",
+    comparisonHeader: "Comparação com Seu Melhor Resultado",
+    firstRunRecord: "Primeiro registro oficial de carreira estabelecido neste cenário e dificuldade!",
+    newPersonalBest: "NOVO RECORDE PESSOAL!",
+    betterThanBest: (metric, delta) => `${metric}: Melhoria de ${delta} em relação ao seu melhor recorde`,
+    belowBest: (metric, delta) => `${metric}: ${delta} abaixo do seu recorde anterior`,
+    matchedBest: (metric) => `${metric}: Igualou o seu recorde histórico`,
+    nextChallengeHeader: "Próximos Passos Sugeridos",
+    playAgain: "Repetir Partida (Mesma Configuração)",
+    increaseDifficulty: "Aumentar Dificuldade",
+    selectAnotherScenario: "Escolher Outro Cenário",
+    viewCareerRecord: "Ver Histórico de Carreira",
+    targetGoal: (goal) => `Meta Recomendada: ${goal}`,
+    auditGrade: "Avaliação de Auditoria",
+    acceptChallenge: "Aceitar Desafio",
+    totalRunsLabel: "Total de Partidas:",
+    victoriesLabel: "Vitórias:",
+    lifetimePrestigeLabel: "Prestígio Total:",
+    achievementsUnlockedCount: (count, total) => `Conquistas Desbloqueadas: ${count}/${total}`,
+    completedCount: (done, total) => `${done}/${total} Concluídos`,
+    slaVsPriorBest: "SLA vs Melhor Anterior",
+    survivalVsPriorBest: "Sobrevivência vs Melhor Anterior",
+    priorOutcome: "Resultado Anterior",
+    stampBreached: "VIOLADO",
+    stampLiquidated: "LIQUIDADO",
   },
   newsTicker: {
     label: "IZ NOTÍCIAS",
@@ -1035,6 +1498,13 @@ const ptBR: Translations = {
       ROOT_CAUSE_IDENTIFIED: "Engenharia elogiada por diagnóstico rápido de causa raiz",
       COSMETIC_UNLOCKED: "Orçamento de decoração aprovado para upgrade estético",
     },
+    eventConsequence: {
+      INCIDENT_RAISED: "Um incidente ativo está consumindo o MTTA — reconheça antes que a multa comece a contar.",
+      SLA_BREACH_EMERGENCY_SANCTION: "O SLA caiu abaixo do piso regulatório — espere uma revisão do conselho se isso se repetir.",
+      BANKRUPTCY_LIQUIDATION: "O caixa chegou a zero — esta partida terminou.",
+      FEATURE_FREEZE_ENGAGED: "O orçamento de erro se esgotou — runbooks arriscados ficam bloqueados até a dívida técnica cair.",
+    },
+    moreEvents: (count) => `+${count} eventos`,
   },
   objectiveHints: {
     acknowledgeIncident: "Há um alerta esperando — reconheça antes que a multa comece a contar.",
@@ -1042,6 +1512,20 @@ const ptBR: Translations = {
     buyUpgrade: "Seu caixa já dá pra sua primeira melhoria — veja a aba Melhorias.",
     tryBuildMode: "Experimente o Modo de Construção: instale seu primeiro módulo na sala de servidores.",
     earnAchievement: "Continue assim — sua primeira conquista de carreira está por perto.",
+  },
+  objectiveTracker: {
+    header: "Objetivos",
+    done: "Concluído",
+    pending: "Pendente",
+  },
+  resolutionSummary: {
+    header: (serviceId) => `${serviceId} restaurado`,
+    mtta: (ticks) => `MTTA ${ticks}t`,
+    mttr: (ticks) => `MTTR ${ticks}t`,
+    cost: (amount) => `Custo $${amount}`,
+    costUnknown: "Custo indisponível",
+    techDebt: (delta) => `Dívida ${delta > 0 ? `+${delta}` : delta}`,
+    viewPostmortem: "Ver pós-mortem",
   },
   incidentReplay: {
     openButton: "Replay",
@@ -1069,6 +1553,7 @@ const ptBR: Translations = {
     alreadySolved: "Causa Raiz Já Identificada",
     rootCauseConfirmed: "CAUSA RAIZ CONFIRMADA",
     rewardEarned: "CAUSA RAIZ ENCONTRADA: -50% no custo de mitigação, MTTR reduzido pela metade",
+    incorrectLine: "NÃO É A CAUSA RAIZ — CONTINUE PROCURANDO",
   },
   achievements: {
     header: "Conquistas",
@@ -1133,9 +1618,11 @@ const es: Translations = {
     techDebt: "Deuda Técnica",
     morale: "Moral",
     pause: "Pausar simulación",
+    resume: "Reanudar simulación",
     newGame: "Nueva Partida",
     help: "Ayuda y Tutorial",
     settings: "Configuración",
+    pausedBadge: "PAUSADO",
   },
   office: {
     serverRoom: "SALA DE SERVIDORES",
@@ -1145,6 +1632,7 @@ const es: Translations = {
     auditSummary: (clean, flagged) => `${clean} limpios / ${flagged} marcados`,
     moraleSummary: (pct) => `moral ${pct.toFixed(0)}%`,
     centerOnCrisis: "Centrar en la Crisis",
+    focusService: "Enfocar Rack",
   },
   nodeInspector: {
     status: "Estado",
@@ -1161,6 +1649,17 @@ const es: Translations = {
     mttr: "MTTR",
     sanctionCountdown: (ticks) => `T-${ticks}`,
     acknowledge: "Reconocer",
+    investigate: "Investigar",
+    activeFor: (ticks) => `activo hace ${ticks}t`,
+    impactTier: { critical: "Servicio crítico", standard: "Servicio estándar" },
+    dependentsAffected: (count) => (count === 1 ? "1 servicio dependiente" : `${count} servicios dependientes`),
+    statusPill: {
+      new: "Nuevo",
+      acknowledged: "Reconocido",
+      investigating: "Investigando",
+      mitigating: "Mitigando",
+      resolved: "Resuelto",
+    },
   },
   mitigations: {
     header: "Directivas Operativas",
@@ -1177,8 +1676,23 @@ const es: Translations = {
       circuit_breaker: { name: "Circuit Breaker", description: "Descartar tráfico no crítico." },
       emergency_patch: { name: "Hotfix en Producción", description: "Corrección directa en producción." },
     },
+    impact: {
+      rollback: "Resolución estable, sin bono de velocidad",
+      scale_replicas: "Absorbe carga, aceleración moderada",
+      circuit_breaker: "Alivio rápido para el servicio afectado",
+      emergency_patch: "Corrección más rápida, mayor costo a largo plazo",
+    },
     tdiSuffix: "TDI",
     rejected: "ACCIÓN RECHAZADA: PRESUPUESTO INSUFICIENTE",
+    selectServiceHint: "Selecciona un servicio afectado para comparar las mitigaciones.",
+    affectedServicesLabel: "Servicios afectados",
+    highRisk: "Alto riesgo",
+    readyIn: (ticks) => `listo en ${ticks}t`,
+    blocked: {
+      budget: "Presupuesto insuficiente",
+      cooldown: "Todavía en recarga",
+      featureFreeze: "Bloqueado por el congelamiento de funciones",
+    },
   },
   ledger: {
     header: "Registro de Cumplimiento",
@@ -1198,6 +1712,13 @@ const es: Translations = {
     status: "Estado",
     createdTick: "Tick de Creación",
     acknowledgedTick: "Tick de Reconocimiento",
+    whatsHappening: "Qué está pasando",
+    impactHeader: "Cuál es el impacto",
+    actionsHeader: "Qué puedo hacer ahora",
+    symptoms: "Síntomas",
+    rootCausePending: "Causa raíz aún no confirmada — investiga los logs para identificarla.",
+    quickMitigate: "Mitigación rápida",
+    backToIncident: "Volver al incidente",
   },
   liquidation: {
     eyebrow: "IncidentZero Corp. · Junta Directiva",
@@ -1211,6 +1732,11 @@ const es: Translations = {
     footer: "Esta decisión es final y efectiva al cierre de operaciones. Le agradecemos sus servicios.",
     button: "Volver a Postularse al Cargo",
     stamp: "TERMINADO",
+    finalReputation: "Reputación Final",
+    objectivesHeader: "Objetivos",
+    achievementsHeader: "Logros Desbloqueados",
+    incidentsHeader: "Incidentes Recientes",
+    chooseScenario: "Elegir un Escenario",
   },
   victory: {
     eyebrow: "IncidentZero Corp. · Oficina de Auditoría Externa",
@@ -1223,6 +1749,12 @@ const es: Translations = {
     runwayLeft: "Fondos Restantes",
     footer: "Certificado y archivado en el registro de cumplimiento.",
     button: "Iniciar Próximo Ciclo de Auditoría",
+    finalTechDebt: "Deuda Técnica Final",
+    finalReputation: "Reputación Final",
+    objectivesHeader: "Objetivos",
+    achievementsHeader: "Logros Desbloqueados",
+    incidentsHeader: "Incidentes Recientes",
+    chooseScenario: "Elegir un Escenario",
   },
   language: { en: "English", ptBR: "Português (BR)", es: "Español" },
   floatingTexts: {
@@ -1238,8 +1770,18 @@ const es: Translations = {
     techDebtWorsened: (amount) => `+${amount} TDI`,
     budgetGain: (amount) => `+$${amount}`,
     budgetLoss: (amount) => `-$${amount}`,
-    moraleGain: "+MORAL",
-    moraleLoss: "-MORAL",
+    moraleGain: (amount) => `+${amount} MORAL`,
+    moraleLoss: (amount) => `-${amount} MORAL`,
+    reputationGain: (amount) => `+${amount} REPUTACIÓN`,
+    reputationLoss: (amount) => `-${amount} REPUTACIÓN`,
+    actionFailed: "ACCIÓN FALLIDA — INTÉNTALO DE NUEVO",
+    mitigationSuccess: "MITIGACIÓN EXITOSA",
+    mitigationMismatch: "MITIGACIÓN INCORRECTA — LA CAUSA RAÍZ PERSISTE",
+    auditorFineApplied: (amount) => `-$${amount} :: MULTA DEL AUDITOR`,
+    auditorCreditApplied: (amount) => `+$${amount} :: CRÉDITO DEL AUDITOR`,
+    featureFreezeEngaged: "CONGELAMIENTO DE FUNCIONES: Presupuesto de errores agotado",
+    featureFreezeLifted: "CONGELAMIENTO LEVANTADO: Presupuesto de errores restaurado",
+    rootCauseIdentified: "CAUSA RAÍZ IDENTIFICADA: Costo de mitigación reducido a la mitad",
   },
   upgrades: {
     header: "Mejoras",
@@ -1329,15 +1871,27 @@ const es: Translations = {
     active: (elapsed, duration) => `Tick ${elapsed} / ${duration}`,
     victory: "Escenario Completado",
     defeat: "Escenario Fallido",
+    briefingContext: "Briefing",
+    briefingObjectives: "Objetivos",
+    briefingBegin: "Comenzar",
+    specialConditions: "Condiciones Especiales",
+    objectives: "Objetivos Principales",
+    locked: "Bloqueado",
+    unlockCondition: (cond) => `Condición de desbloqueo: ${cond}`,
+    personalBest: (sla, days, diff) => `Mejor Histórico: ${sla.toFixed(2)}% SLA · ${days}d · ${diff}`,
+    noPersonalBest: "Sin partidas registradas aún",
   },
   difficulty: {
     label: "Dificultad",
     intern: "Interno",
-    internDescription: "Más presupuesto inicial, menos fallas sorpresa. Aprende sin tanta presión.",
+    internDescription: "Presupuesto inicial de $320k (+28%), tasa de incidentes 0.7x (-30%). Entorno tolerante para aprender runbooks.",
     standard: "Estándar",
-    standardDescription: "El equilibrio previsto: presión real, decisiones reales.",
+    standardDescription: "Presupuesto inicial de $250k (Línea base), tasa de incidentes 1.0x. La experiencia canónica de simulación.",
     chaos: "Caos Total",
-    chaosDescription: "Presupuesto ajustado, tasa de riesgo mucho más alta. Solo para veteranos de la sala de crisis.",
+    chaosDescription: "Presupuesto inicial de $180k (-28%), tasa de incidentes 1.4x (+40%). Riesgo severo de cascadas y margen mínimo.",
+    budgetDim: "Capital Inicial",
+    incidentRateDim: "Frecuencia de Incidentes",
+    cascadeDim: "Severidad de Cascadas",
   },
   governance: {
     reputationLabel: "Reputación ante la Junta",
@@ -1350,18 +1904,32 @@ const es: Translations = {
     back: "Atrás",
     getStarted: "Comenzar",
     reopenTitle: "Repetir el tutorial",
+    pausedNotice: "Simulación pausada mientras el tutorial está abierto",
     steps: {
       welcome: {
         title: "Bienvenida y Misión",
         body: "Bienvenido, Jefe de Infraestructura. IncidentZero Corp. te ha confiado mantener cinco servicios críticos en línea, las cuentas equilibradas y a la junta directiva tranquila. Cada tick es una hora de oficina — sobrevive un ciclo mensual completo de auditoría sin quebrar ni incumplir tu SLA.",
       },
-      topology: {
-        title: "Topología de Servicios",
-        body: "El piso de tu oficina refleja tu infraestructura real. Haz clic en cualquier rack de servidor o escritorio de ingeniería para inspeccionar su estado, latencia y tasa de error en el panel de diagnóstico. Observa bien la cadena de dependencias — una falla en un servicio upstream puede propagarse hacia los que dependen de él.",
+      spotIncident: {
+        title: "Localiza el Incidente",
+        body: "El piso de tu oficina refleja tu infraestructura real — haz clic en cualquier rack de servidor para inspeccionar su estado, latencia y tasa de error. Un rack que pulsa y parpadea así tiene un incidente activo. Por ahí empezamos.",
+        waitingBody: "Ahora mismo no hay ningún incidente activo. Vigila la sala de servidores — un rack empezará a pulsar en cuanto se dispare uno. Por ahora puedes continuar.",
       },
-      crisis: {
-        title: "Gestión de Crisis",
-        body: "Cuando se dispara una alerta, el reloj empieza a correr. Reconócela rápido — esperar demasiado agota la moral por fatiga de alertas y luego los reguladores empiezan a multarte cada tick hasta que respondas. Elige el runbook con cuidado: un hotfix rápido es barato pero acumula deuda técnica; un rollback cuesta más pero mantiene la plataforma sana.",
+      acknowledge: {
+        title: "Reconócelo",
+        body: "El reloj ya corre en esta alerta. Reconocerla evita que la fatiga de alertas agote la moral y que los reguladores te multen cada tick. Haz clic en Reconocer en el incidente destacado abajo.",
+      },
+      investigate: {
+        title: "Investiga los Logs",
+        body: "La causa raíz aún no está confirmada — abre el terminal de logs y encuentra la línea que realmente explica la falla. Confirmarla reduce a la mitad el costo de mitigación y el MTTR.",
+      },
+      mitigate: {
+        title: "Elige una Mitigación",
+        body: "Cada runbook combina costo, velocidad y deuda técnica de forma distinta. Un hotfix es barato pero desordenado; un rollback es más lento pero mantiene la plataforma sana. Elige uno para el servicio afectado.",
+      },
+      consequence: {
+        title: "Observa la Consecuencia",
+        body: "Observa el rack: la animación de la llave inglesa indica que la corrección se está aplicando, y el LED de estado debería volver al verde en breve. Cada acción aquí tiene una consecuencia visible e inmediata en la oficina.",
       },
       governance: {
         title: "Gobernanza de TI",
@@ -1383,7 +1951,8 @@ const es: Translations = {
     close: "Cerrar",
   },
   titleScreen: {
-    tagline: "Simulador de Operaciones de Oficina",
+    tagline: "Gestión de Crisis SRE, en Formato de Juego",
+    pillars: ["Incidentes", "Infraestructura", "Decisiones", "Deuda Técnica", "Fondos", "Personal", "Consecuencias"],
     continue: "Continuar",
     newGame: "Nueva Partida / Seleccionar Modo",
     hallOfFame: "Salón de la Fama",
@@ -1402,6 +1971,69 @@ const es: Translations = {
     myRecords: "Mis Récords",
     global: "Global",
     anonymousPlayer: (shortId) => `Operador #${shortId}`,
+    title: "Historial de Carrera & Salón de la Fama",
+    recentRuns: "Partidas Recientes",
+    rankings: "Clasificación",
+    allScenarios: "Todos los Escenarios",
+    filterScenario: "Filtrar por Escenario",
+    operatorRank: (rank) => `Rango: ${rank}`,
+    lifetimePrestige: (pts) => `${pts} Prestigio Acumulado`,
+    totalRuns: (count) => `${count} Partidas Registradas`,
+    incidentsHandled: (resolved, total) => `${resolved}/${total} incidentes resueltos`,
+    noObjectives: "Reglas estándar de sandbox",
+    date: "Fecha",
+    outcomeLabel: "Resultado",
+    techDebtRepLabel: "Deuda Técnica / Rep",
+    incidentsLabel: "Incidentes",
+    recordedAtLabel: "Registrado En",
+    objectivesSnapshot: "Instantánea de Objetivos",
+    resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resueltos`,
+  },
+  debrief: {
+    titleVictory: "CICLO DE AUDITORÍA CERTIFICADO",
+    titleLiquidation: "ORDEN DE LIQUIDACIÓN DE LA JUNTA",
+    titleDefeat: "CONTENCIÓN DE INCIDENTE FALLIDA",
+    subtitleVictory: "Aviso Oficial de Cumplimiento Regulatorio Total y Estabilidad Operacional",
+    subtitleLiquidation: "Aviso Oficial de Insolvencia Inmediata y Ejecución de Activos",
+    subtitleDefeat: "Escalada Crítica de Seguridad y Falla en Cascada Descontrolada",
+    runSummary: "Debriefing de la Partida",
+    survivalDuration: "Tiempo de Supervivencia",
+    finalSla: "SLA Consolidado",
+    remainingBudget: "Presupuesto Restante",
+    techDebt: "Índice de Deuda Técnica",
+    reputation: "Reputación ante la Junta",
+    incidentsResolved: "Incidentes Resueltos",
+    scenarioObjectives: "Objetivos de la Misión",
+    allObjectivesMet: "Todos los Objetivos del Escenario Fueron Cumplidos",
+    objectivesFailed: "Objetivos Comprometidos",
+    careerProgression: "Progresión de Carrera",
+    prestigeEarned: (pts) => `+${pts} Puntos de Prestigio Ganados`,
+    achievementsUnlocked: "Logros Desbloqueados en Esta Partida",
+    noAchievements: "No se desbloquearon nuevos logros en esta partida",
+    comparisonHeader: "Comparación con tu Mejor Resultado",
+    firstRunRecord: "¡Primer registro oficial de carrera establecido en este escenario y dificultad!",
+    newPersonalBest: "¡NUEVO RÉCORD PERSONAL!",
+    betterThanBest: (metric, delta) => `${metric}: Mejora de ${delta} respecto a tu récord anterior`,
+    belowBest: (metric, delta) => `${metric}: ${delta} por debajo de tu mejor récord`,
+    matchedBest: (metric) => `${metric}: Igual a tu récord histórico`,
+    nextChallengeHeader: "Próximos Pasos Sugeridos",
+    playAgain: "Repetir Partida (Misma Configuración)",
+    increaseDifficulty: "Aumentar Dificultad",
+    selectAnotherScenario: "Elegir Otro Escenario",
+    viewCareerRecord: "Ver Historial de Carrera",
+    targetGoal: (goal) => `Meta Recomendada: ${goal}`,
+    auditGrade: "Evaluación de Auditoría",
+    acceptChallenge: "Aceptar Desafío",
+    totalRunsLabel: "Total de Partidas:",
+    victoriesLabel: "Victorias:",
+    lifetimePrestigeLabel: "Prestigio Total:",
+    achievementsUnlockedCount: (count, total) => `Logros Desbloqueados: ${count}/${total}`,
+    completedCount: (done, total) => `${done}/${total} Completados`,
+    slaVsPriorBest: "SLA vs Mejor Anterior",
+    survivalVsPriorBest: "Supervivencia vs Mejor Anterior",
+    priorOutcome: "Resultado Anterior",
+    stampBreached: "INCUMPLIDO",
+    stampLiquidated: "LIQUIDADO",
   },
   newsTicker: {
     label: "IZ NOTICIAS",
@@ -1427,6 +2059,13 @@ const es: Translations = {
       ROOT_CAUSE_IDENTIFIED: "Ingeniería elogiada por diagnóstico rápido de causa raíz",
       COSMETIC_UNLOCKED: "Presupuesto de decoración aprobado para una mejora estética",
     },
+    eventConsequence: {
+      INCIDENT_RAISED: "Un incidente activo está consumiendo el MTTA — reconócelo antes de que empiece la multa.",
+      SLA_BREACH_EMERGENCY_SANCTION: "El SLA cayó por debajo del umbral regulatorio — espera una revisión de la junta si se repite.",
+      BANKRUPTCY_LIQUIDATION: "El presupuesto llegó a cero — esta partida terminó.",
+      FEATURE_FREEZE_ENGAGED: "El presupuesto de errores se agotó — los runbooks arriesgados quedan bloqueados hasta bajar la deuda técnica.",
+    },
+    moreEvents: (count) => `+${count} más`,
   },
   objectiveHints: {
     acknowledgeIncident: "Hay una alerta esperando — reconócela antes de que empiece la multa.",
@@ -1434,6 +2073,20 @@ const es: Translations = {
     buyUpgrade: "Tu presupuesto ya alcanza para tu primera mejora — revisa la pestaña Mejoras.",
     tryBuildMode: "Prueba el Modo Construcción: instala tu primer módulo en la sala de servidores.",
     earnAchievement: "Sigue así — tu primer logro de carrera está cerca.",
+  },
+  objectiveTracker: {
+    header: "Objetivos",
+    done: "Completado",
+    pending: "Pendiente",
+  },
+  resolutionSummary: {
+    header: (serviceId) => `${serviceId} restaurado`,
+    mtta: (ticks) => `MTTA ${ticks}t`,
+    mttr: (ticks) => `MTTR ${ticks}t`,
+    cost: (amount) => `Costo $${amount}`,
+    costUnknown: "Costo no disponible",
+    techDebt: (delta) => `Deuda ${delta > 0 ? `+${delta}` : delta}`,
+    viewPostmortem: "Ver post-mortem",
   },
   incidentReplay: {
     openButton: "Reproducir",
@@ -1461,6 +2114,7 @@ const es: Translations = {
     alreadySolved: "Causa Raíz Ya Identificada",
     rootCauseConfirmed: "CAUSA RAÍZ CONFIRMADA",
     rewardEarned: "CAUSA RAÍZ ENCONTRADA: -50% en costo de mitigación, MTTR reducido a la mitad",
+    incorrectLine: "NO ES LA CAUSA RAÍZ — SIGUE BUSCANDO",
   },
   achievements: {
     header: "Logros",

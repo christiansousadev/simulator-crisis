@@ -2,6 +2,7 @@ import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
 import { useGameStore } from "../../store/useGameStore";
 import { Service } from "../../types/game";
+import { deriveWorkerMood } from "./engineerMood";
 import { DeskLamp, GroundShadow, PcTower, StickyNote } from "./OfficeProps";
 import IsoBox from "./IsoBox";
 import OfficeWorker, { WorkerMood } from "./OfficeWorker";
@@ -27,8 +28,14 @@ export default function EngineerDesk({ service, x, y, shirtColor, hairColor, gla
   const runAnimations = useGameStore((s) => s.runAnimations);
   const dismissRunAnimation = useGameStore((s) => s.dismissRunAnimation);
   const happiness = useGameStore((s) => s.telemetry.user_happiness);
+  const engineer = useGameStore((s) => s.telemetry.engineers.find((e) => e.assigned_service_id === service.id));
+  const triageIncidentId = useGameStore((s) => s.triageIncidentId);
+  const activeIncidents = useGameStore((s) => s.telemetry.active_incidents);
 
   const ackAnim = runAnimations.find((a) => a.serviceId === service.id && a.kind === "acknowledge");
+  const isMitigating = runAnimations.some((a) => a.serviceId === service.id && a.kind === "mitigate");
+  const isInvestigating = activeIncidents.some((i) => i.id === triageIncidentId && i.service_id === service.id);
+  const hasServiceIncident = activeIncidents.some((i) => i.service_id === service.id);
   const [dashing, setDashing] = useState(false);
 
   useEffect(() => {
@@ -41,12 +48,30 @@ export default function EngineerDesk({ service, x, y, shirtColor, hairColor, gla
     return () => clearTimeout(timer);
   }, [ackAnim, dismissRunAnimation]);
 
-  let mood: WorkerMood = "idle";
-  if (service.status === "down" || service.status === "degraded") mood = "panic";
-  else if (happiness < 40) mood = "tired";
+  const hasActiveAlarm = service.status === "down" || service.status === "degraded" || hasServiceIncident;
+  // a real assigned engineer's own stress/stamina/on-call state drives their mood; a desk with no
+  // engineer on record falls back to the previous service-status/global-happiness heuristic
+  let mood: WorkerMood;
+  if (engineer) {
+    mood = deriveWorkerMood(engineer, hasActiveAlarm, isInvestigating, isMitigating);
+  } else {
+    mood = "idle";
+    if (hasActiveAlarm) mood = "panic";
+    else if (isInvestigating || isMitigating) mood = "running";
+    else if (happiness < 40) mood = "tired";
+  }
 
-  const screenLit = service.status !== "healthy" || Boolean(ackAnim);
-  const monitorColor = service.status === "down" ? "#ef4444" : screenLit ? "#38bdf8" : "#1e293b";
+  const screenLit = service.status !== "healthy" || Boolean(ackAnim) || isInvestigating || isMitigating;
+  const monitorColor =
+    service.status === "down"
+      ? "#ef4444"
+      : isMitigating
+      ? "#10b981"
+      : isInvestigating
+      ? "#f59e0b"
+      : screenLit
+      ? "#38bdf8"
+      : "#1e293b";
   const grommet = project(x + 0.85, y + 0.28, 0.03);
 
   return (

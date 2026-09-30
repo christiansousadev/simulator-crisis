@@ -24,6 +24,28 @@ INCIDENT_TITLE_TEMPLATES = [
     "Availability drop on {service_name}",
 ]
 
+# maps each root cause narrative to one of 4 categories the mitigation compatibility matrix
+# (formulas.MITIGATION_EFFECTIVENESS) understands. Kept as a lookup by exact root-cause text
+# (rather than a field on ROOT_CAUSE_POOL) so the pool itself stays a simple flat list; any
+# future/unrecognized root cause safely defaults to "acute_defect" (needs a direct fix, no clean
+# infra lever) rather than crashing or silently granting a free full-resolution match.
+ROOT_CAUSE_CATEGORY = {
+    "Memory leak in connection pooling thread": "deploy_regression",
+    "OOM killer invoked by kernel": "capacity_saturation",
+    "Cascading deadlock under unindexed query storm": "dependency_fault",
+    "TLS certificate expiration across cluster pods": "acute_defect",
+    "Corrupted Redis cache serialization payload": "deploy_regression",
+    "Unbounded goroutine leak under retry storm": "dependency_fault",
+    "DNS resolver cache poisoning on service mesh sidecar": "dependency_fault",
+    "Disk I/O saturation from runaway log rotation": "capacity_saturation",
+}
+DEFAULT_ROOT_CAUSE_CATEGORY = "acute_defect"
+
+
+def cause_category_for_root_cause(root_cause: str) -> str:
+    """CLASSIFY A ROOT CAUSE NARRATIVE INTO ITS MITIGATION-COMPATIBILITY CATEGORY"""
+    return ROOT_CAUSE_CATEGORY.get(root_cause, DEFAULT_ROOT_CAUSE_CATEGORY)
+
 
 def generate_incident_id() -> str:
     """GENERATE A UNIQUE INCIDENT IDENTIFIER"""
