@@ -1,6 +1,8 @@
-import { Crosshair, X } from "lucide-react";
+import { Activity, Crosshair, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useGameStore } from "../../store/useGameStore";
+import LiveSparkline from "../common/LiveSparkline";
 
 const STATUS_STYLES: Record<string, string> = {
   healthy: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
@@ -18,6 +20,21 @@ export default function NodeInspector({ onFocusService }: NodeInspectorProps) {
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
   const service = useGameStore((s) => s.telemetry.services.find((svc) => svc.id === selectedServiceId));
   const selectService = useGameStore((s) => s.selectService);
+  const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (service) {
+      setLatencyHistory((prev) => {
+        if (prev.length === 0) {
+          const base = service.latency_ms || 20;
+          return [base * 0.9, base * 1.05, base * 0.95, base];
+        }
+        return [...prev.slice(-15), service.latency_ms];
+      });
+    } else {
+      setLatencyHistory([]);
+    }
+  }, [service?.latency_ms, service?.id]);
 
   // always mounted (rather than returning null) so the closing transition can play out smoothly
   const open = Boolean(service);
@@ -77,6 +94,27 @@ export default function NodeInspector({ onFocusService }: NodeInspectorProps) {
               </span>
               <span className="text-slate-200">{(service.error_rate * 100).toFixed(2)}%</span>
             </div>
+
+            <div className="pt-2 border-t border-slate-700/60">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-slate-400 uppercase tracking-wide flex items-center gap-1.5" style={{ fontSize: 10 }}>
+                  <Activity className="w-3 h-3 text-cyan-400 animate-pulse" />
+                  Telemetric Waveform
+                </span>
+                <span className="text-[10px] text-cyan-400 font-mono font-semibold">
+                  {service.latency_ms}ms
+                </span>
+              </div>
+              <div className="bg-slate-950/70 p-2 rounded-md border border-slate-800/80 shadow-inner">
+                <LiveSparkline
+                  data={latencyHistory.length > 0 ? latencyHistory : [20, 24, 22, 28, 25]}
+                  tone={service.status === "down" ? "rose" : service.status === "degraded" ? "amber" : "cyan"}
+                  height={42}
+                  showArea={true}
+                />
+              </div>
+            </div>
+
             {service.dependencies.length > 0 && (
               <div className="pt-2 border-t border-slate-700/60">
                 <span className="text-slate-500 uppercase tracking-wide" style={{ fontSize: 10 }}>

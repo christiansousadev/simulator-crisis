@@ -15,12 +15,26 @@ import BuildModeOverlay from "./BuildModeOverlay";
 import CableTray, { computeNetworkHealth } from "./CableTray";
 import { EmergencyBeacon, RedAlertOverlay } from "./EmergencyFx";
 import EngineeringFloor from "./EngineeringFloor";
-import { BoardroomRug, BreakroomTiles, EntranceMat, HazardBorder, ServerRoomTiles, WalkwayGuide } from "./FloorDecals";
+import {
+  BoardroomRug,
+  BreakroomTiles,
+  EntranceMat,
+  FloorLightPool,
+  FloorSignage,
+  HazardBorder,
+  ServerRoomTiles,
+  WalkwayGuide,
+} from "./FloorDecals";
 import GlassWall from "./GlassWall";
 import InfrastructureNodeSprite from "./InfrastructureNodeSprite";
 import IsoBox from "./IsoBox";
 import NodeInspector from "./NodeInspector";
 import OfficeTooltip from "./OfficeTooltip";
+import TacticalMiniMap from "../common/TacticalMiniMap";
+import IncidentAlertStack from "../common/IncidentAlertStack";
+import RackRadialMenu from "./RackRadialMenu";
+import ServiceDependencyLines from "./ServiceDependencyLines";
+import CascadeRipple from "./CascadeRipple";
 import { MeetingNook, OfficePlant, Sofa, WallClock, WasteBin } from "./OfficeProps";
 import PerimeterWalls from "./PerimeterWalls";
 import ReceptionLobby from "./ReceptionLobby";
@@ -185,6 +199,7 @@ export default function IsometricOffice() {
   const services = useGameStore((s) => s.telemetry.services);
   const activeIncidents = useGameStore((s) => s.telemetry.active_incidents);
   const infrastructureNodes = useGameStore((s) => s.telemetry.infrastructure_nodes);
+  const purchasedUpgrades = useGameStore((s) => s.telemetry.purchased_upgrades);
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
   const selectService = useGameStore((s) => s.selectService);
   const selectedIncident = useGameStore((s) => s.selectedIncident);
@@ -194,6 +209,7 @@ export default function IsometricOffice() {
   const toggleBuildMode = useGameStore((s) => s.toggleBuildMode);
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const sessionStatus = useGameStore((s) => s.telemetry.status);
+  const featureFreezeActive = useGameStore((s) => s.telemetry.feature_freeze_active);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
   const [armedNodeType, setArmedNodeType] = useState<InfrastructureNodeType | null>(null);
@@ -231,6 +247,15 @@ export default function IsometricOffice() {
   // service the incident-detail modal is currently focused on, if any -- drives both the camera
   // centering below and a visual dimming of every other rack while it's open
   const focusedServiceId = selectedIncident?.service_id ?? null;
+
+  const selectedService = useMemo(
+    () => (selectedServiceId ? services.find((s) => s.id === selectedServiceId) ?? null : null),
+    [selectedServiceId, services]
+  );
+  const selectedServicePos = useMemo(
+    () => (selectedServiceId ? rackGridPosition(selectedServiceId, services, SERVER_ROOM_ORIGIN.x, SERVER_ROOM_ORIGIN.y) : null),
+    [selectedServiceId, services]
+  );
 
   // mouse-wheel zoom, clamped to a sane range around the office's visual center. Attached below
   // as a native, explicitly non-passive listener rather than React's onWheel prop: modern
@@ -288,6 +313,14 @@ export default function IsometricOffice() {
     if (!pos) return;
     const target = project(pos.x, pos.y, 0.5);
     const scale = 1.7;
+    setCameraSmooth(true);
+    setCamera({ scale, x: -scale * (target.x - CAMERA_ORIGIN.x), y: -scale * (target.y - CAMERA_ORIGIN.y) });
+  };
+
+  // smooth-pans the camera to arbitrary world coordinates from tactical radar
+  const handlePanToWorld = (gx: number, gy: number) => {
+    const target = project(gx, gy, 0.5);
+    const scale = 1.45;
     setCameraSmooth(true);
     setCamera({ scale, x: -scale * (target.x - CAMERA_ORIGIN.x), y: -scale * (target.y - CAMERA_ORIGIN.y) });
   };
@@ -433,6 +466,32 @@ export default function IsometricOffice() {
         <BreakroomTiles originX={BREAKROOM_ORIGIN.x} originY={BREAKROOM_ORIGIN.y} width={BREAKROOM_SIZE.width} depth={BREAKROOM_SIZE.depth} />
         <EntranceMat originX={RECEPTION_MAT.originX} originY={RECEPTION_MAT.originY} width={RECEPTION_MAT.width} depth={RECEPTION_MAT.depth} />
 
+        {/* Dynamic floor lighting pools: server neon glow & warm desk lamps */}
+        <FloorLightPool
+          x={SERVER_ROOM_ORIGIN.x + SERVER_ROOM_SIZE.width / 2}
+          y={SERVER_ROOM_ORIGIN.y + SERVER_ROOM_SIZE.depth / 2}
+          color={hasP1 ? "#ef4444" : "#06b6d4"}
+          radiusX={115}
+          radiusY={58}
+          opacity={hasP1 ? 0.35 : 0.16}
+          pulse={hasP1}
+        />
+        {/* Warm lamp pools across engineering workstations */}
+        <FloorLightPool x={10.4} y={1.2} color="#fef3c7" radiusX={36} radiusY={18} opacity={0.15} />
+        <FloorLightPool x={12.9} y={1.2} color="#fef3c7" radiusX={36} radiusY={18} opacity={0.15} />
+        <FloorLightPool x={15.4} y={1.2} color="#fef3c7" radiusX={36} radiusY={18} opacity={0.15} />
+        <FloorLightPool x={11.6} y={3.8} color="#fef3c7" radiusX={36} radiusY={18} opacity={0.15} />
+        <FloorLightPool x={14.1} y={3.8} color="#fef3c7" radiusX={36} radiusY={18} opacity={0.15} />
+        {/* Boardroom screen glow */}
+        <FloorLightPool x={2.5} y={10.2} color="#60a5fa" radiusX={48} radiusY={24} opacity={0.14} />
+
+        {/* 3D Architectural Zone Signage */}
+        <FloorSignage x={0.8} y={3.8} text="// DATA CENTER · TIER-1 VAULT" color={hasP1 ? "#f87171" : "#38bdf8"} axis="x" />
+        <FloorSignage x={10.2} y={0.3} text="// SRE WAR ROOM · INCIDENT COMMAND" color="#94a3b8" axis="x" />
+        <FloorSignage x={0.8} y={9.3} text="// CAB BOARDROOM · EXECUTIVE SUITE" color="#fbbf24" axis="x" />
+        <FloorSignage x={8.6} y={9.3} text="// RECHARGE LOUNGE & BREAKROOM" color="#34d399" axis="x" />
+        <FloorSignage x={17.2} y={11.0} text="// RECEPTION & LOBBY" color="#94a3b8" axis="x" />
+
         {/* circulation guide lines through the two main hallways */}
         <WalkwayGuide axis="y" fixed={8.6} from={0.5} to={4.0} />
         <WalkwayGuide axis="x" fixed={8.4} from={0.5} to={13.5} />
@@ -466,6 +525,17 @@ export default function IsometricOffice() {
         {/* corporate entrance lobby filling the once-empty foreground corner */}
         <ReceptionLobby originX={RECEPTION_ORIGIN.x} originY={RECEPTION_ORIGIN.y} />
 
+        <ServiceDependencyLines
+          services={services}
+          originX={SERVER_ROOM_ORIGIN.x}
+          originY={SERVER_ROOM_ORIGIN.y}
+          purchasedUpgrades={purchasedUpgrades}
+        />
+        <CascadeRipple
+          services={services}
+          originX={SERVER_ROOM_ORIGIN.x}
+          originY={SERVER_ROOM_ORIGIN.y}
+        />
         <ServerRoom
           originX={SERVER_ROOM_ORIGIN.x}
           originY={SERVER_ROOM_ORIGIN.y}
@@ -487,6 +557,17 @@ export default function IsometricOffice() {
             serverRoomOriginY={SERVER_ROOM_ORIGIN.y}
           />
         ))}
+
+        {/* Tactical Radial Action Menu over the selected server rack */}
+        {selectedService && selectedServicePos && (
+          <RackRadialMenu
+            service={selectedService}
+            gridX={selectedServicePos.x}
+            gridY={selectedServicePos.y}
+            onFocusRack={() => handleFocusService(selectedService.id)}
+            onClose={() => selectService(null)}
+          />
+        )}
         <EngineeringFloor
           originX={ENGINEERING_ORIGIN.x}
           originY={ENGINEERING_ORIGIN.y}
@@ -519,6 +600,24 @@ export default function IsometricOffice() {
       <NodeInspector onFocusService={handleFocusService} />
       <ObjectiveHint />
       <ObjectiveTracker />
+      <TacticalMiniMap
+        onCenterCrisis={handleCenterOnCrisis}
+        onFocusService={handleFocusService}
+        onPanToWorld={handlePanToWorld}
+      />
+      <IncidentAlertStack onFocusService={handleFocusService} />
+
+      {/* Feature Freeze prominent banner — more visible than the tiny topbar indicator */}
+      {featureFreezeActive && (
+        <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-center gap-2 py-1.5 bg-amber-950/90 border-b border-amber-500/50 backdrop-blur-sm pointer-events-none">
+          <span className="text-amber-400 text-xs font-black uppercase tracking-widest animate-pulse">
+            ⚠ Feature Freeze Active
+          </span>
+          <span className="text-amber-500/70 text-[10px] font-mono">
+            — Deployments suspended until error budget recovers
+          </span>
+        </div>
+      )}
 
       {/* coherent camera-control panel: centralizar-na-crise, focar-rack and build-mode share one tactical dock */}
       <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 p-1 rounded-lg border border-slate-800/80 bg-slate-950/80 backdrop-blur-md shadow-lg">

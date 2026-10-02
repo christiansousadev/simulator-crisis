@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import OfficeWorker, { WorkerMood } from "./OfficeWorker";
+import OfficeWorker, { WorkerMood, WorkerRole } from "./OfficeWorker";
 import { findPath, GraphNode, OFFICE_GRAPH } from "./waypointGraph";
 
 interface PathfindingEmployeeProps {
@@ -8,6 +8,11 @@ interface PathfindingEmployeeProps {
   shirtColor: string;
   hairColor: string;
   hopDurationMs?: number;
+  mood?: WorkerMood;
+  holdsMug?: boolean;
+  role?: WorkerRole;
+  name?: string;
+  workerStatusText?: string;
   onArrived?: () => void;
 }
 
@@ -18,6 +23,11 @@ export default function PathfindingEmployee({
   shirtColor,
   hairColor,
   hopDurationMs = 900,
+  mood = "running",
+  holdsMug = false,
+  role = "engineer",
+  name,
+  workerStatusText,
   onArrived,
 }: PathfindingEmployeeProps) {
   const [path, setPath] = useState<GraphNode[]>([]);
@@ -42,9 +52,29 @@ export default function PathfindingEmployee({
   const node = path[hopIndex] ?? fallback;
   if (!node) return null;
 
-  const mood: WorkerMood = "running";
+  const nextNode = path[hopIndex + 1];
+  let facing: "left" | "right" | undefined;
+  if (nextNode) {
+    facing = (nextNode.x - nextNode.y) < (node.x - node.y) ? "left" : "right";
+  }
+
+  const isAtDestination = hopIndex >= path.length - 1;
+  const currentMood: WorkerMood = isAtDestination ? mood : "running";
 
   return (
-    <OfficeWorker x={node.x} y={node.y} shirtColor={shirtColor} hairColor={hairColor} mood={mood} transitionMs={hopDurationMs} />
+    <OfficeWorker
+      x={node.x}
+      y={node.y}
+      shirtColor={shirtColor}
+      hairColor={hairColor}
+      mood={currentMood}
+      holdsMug={holdsMug}
+      role={role}
+      name={name}
+      workerStatusText={workerStatusText}
+      facing={facing}
+      transitionMs={hopDurationMs}
+    />
   );
 }
+

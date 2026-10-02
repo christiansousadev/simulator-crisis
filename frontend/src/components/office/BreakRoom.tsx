@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useGameStore } from "../../store/useGameStore";
 import IsoBox from "./IsoBox";
 import {
   EspressoMachine,
@@ -10,6 +11,7 @@ import {
   Sofa,
   WaterCooler,
 } from "./OfficeProps";
+import OfficeWorker from "./OfficeWorker";
 import WanderingEmployee from "./WanderingEmployee";
 
 interface BreakRoomProps {
@@ -19,6 +21,7 @@ interface BreakRoomProps {
 
 // LOUNGE: PING PONG TABLE, KITCHENETTE, SECTIONAL SOFA AND TWO WANDERING STAFF
 export default function BreakRoom({ originX, originY }: BreakRoomProps) {
+  const restingEngineers = useGameStore((s) => s.telemetry.engineers.filter((e) => e.on_call_status === "resting"));
   // the ball animates only while employeeB has actually arrived at the pingpong waypoint --
   // previously it played on an infinite CSS loop keyed to a bare happiness threshold, so it kept
   // volleying by itself across the empty table for the two-thirds of the patrol loop employeeB
@@ -64,6 +67,28 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
         dwellMs={5200}
         onActionChange={setEmployeeBAction}
       />
+
+      {/* resting engineers on-call rotation: visibly taking a break */}
+      {restingEngineers.slice(0, 2).map((eng, idx) => {
+        const isSofa = idx % 2 === 1;
+        const posX = isSofa ? originX + 0.6 : originX + 2.2;
+        const posY = isSofa ? originY + 1.55 : originY + 0.75;
+        return (
+          <OfficeWorker
+            key={eng.id}
+            x={posX}
+            y={posY}
+            shirtColor={idx === 0 ? "#3b82f6" : "#8b5cf6"}
+            hairColor="#2b1a12"
+            mood={eng.stamina < 30 ? "tired" : "happy"}
+            holdsMug={!isSofa}
+            seated={isSofa}
+            role="engineer"
+            name={eng.name}
+            workerStatusText="RESTING · COFFEE BREAK"
+          />
+        );
+      })}
     </g>
   );
 }

@@ -10,6 +10,7 @@ import { playAcknowledgeBeep, playClickSound } from "../../utils/sound";
 import CooldownButton from "../common/CooldownButton";
 import SeverityBadge from "../common/SeverityBadge";
 import StatusPill from "../common/StatusPill";
+import LiveSparkline from "../common/LiveSparkline";
 import { deriveIncidentPipelineStatus } from "../../utils/incidentPipeline";
 
 // THREE-BLOCK INCIDENT BRIEFING: WHAT'S HAPPENING / WHAT'S THE IMPACT / WHAT CAN I DO NOW --
@@ -118,19 +119,39 @@ export default function IncidentDetailModal() {
             {service && (
               <div>
                 <span className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">{t.incidentDetail.symptoms}</span>
-                <div className="grid grid-cols-3 gap-2 text-xs mt-1">
-                <div className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1.5">
-                  <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">{t.nodeInspector.status}</span>
-                  <span className="font-bold text-slate-200">{t.status[service.status]}</span>
+                <div className="grid grid-cols-3 gap-2 text-xs mt-1 mb-2">
+                  <div className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1.5">
+                    <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">{t.nodeInspector.status}</span>
+                    <span className="font-bold text-slate-200">{t.status[service.status]}</span>
+                  </div>
+                  <div className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1.5">
+                    <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">{t.nodeInspector.latency}</span>
+                    <span className="font-bold text-slate-200 font-mono tabular-nums">{service.latency_ms}ms</span>
+                  </div>
+                  <div className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1.5">
+                    <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">{t.nodeInspector.errorRate}</span>
+                    <span className="font-bold text-slate-200 font-mono tabular-nums">{(service.error_rate * 100).toFixed(1)}%</span>
+                  </div>
                 </div>
-                <div className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1.5">
-                  <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">{t.nodeInspector.latency}</span>
-                  <span className="font-bold text-slate-200 font-mono tabular-nums">{service.latency_ms}ms</span>
-                </div>
-                <div className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1.5">
-                  <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">{t.nodeInspector.errorRate}</span>
-                  <span className="font-bold text-slate-200 font-mono tabular-nums">{(service.error_rate * 100).toFixed(1)}%</span>
-                </div>
+                <div className="p-2 rounded-md bg-slate-950/70 border border-slate-800/80">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+                    <span className="tracking-wider uppercase">Live Telemetry Oscilloscope</span>
+                    <span className="text-cyan-400 font-semibold font-mono">{service.latency_ms}ms · {(service.error_rate * 100).toFixed(1)}% err</span>
+                  </div>
+                  <LiveSparkline
+                    data={[
+                      Math.max(10, Math.round(service.latency_ms * 0.4)),
+                      Math.max(10, Math.round(service.latency_ms * 0.7)),
+                      Math.max(10, Math.round(service.latency_ms * 0.5)),
+                      Math.max(10, Math.round(service.latency_ms * 0.9)),
+                      Math.max(10, Math.round(service.latency_ms * 1.2)),
+                      Math.max(10, Math.round(service.latency_ms * 0.8)),
+                      service.latency_ms,
+                    ]}
+                    tone={incident.severity === "P1_CRITICAL" ? "rose" : incident.severity === "P2_HIGH" ? "amber" : "cyan"}
+                    height={38}
+                    showArea={true}
+                  />
                 </div>
               </div>
             )}

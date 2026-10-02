@@ -355,6 +355,15 @@ upgrades: {
 
 The `pt-BR` and `es` entries in the same `TRANSLATIONS` record MUST be populated with parallel, fully-translated values before merge (the existing three-locale pattern in `translations.ts` has no precedent for a partially-translated namespace shipping to production) — the English block above is the authoritative source text those two translations are derived from.
 
+### 6.1 Visual Tech Tree (`UpgradesTreePanel.tsx`) & In-Game Hardware FX
+
+1. **Interactive Node-Graph Tree View:** While the legacy `UpgradesPanel` displayed a flat grid, `UpgradesTreePanel.tsx` organizes the upgrade catalog into an authentic tech-tree diagram with SVG dependency connector lines. Direct visual branches link `apm_tracing` to its child prerequisite `predictive_anomaly_detection`.
+2. **Category Clustering & State Tones:** Nodes are grouped into categorized tracks (Observability, Resilience, Facilities) with distinct visual state styling:
+   - **Owned:** Emerald border (`border-emerald-500/60`), green badge, and glowing checkmark.
+   - **Available:** Cyan/amber border with interactive purchase button and cost counter.
+   - **Locked:** Dimmed slate border (`border-slate-800`), padlock icon, and prerequisite dependency hint.
+3. **In-Game Predictive Anomaly Aura (`ServerRack.tsx`):** When `predictive_anomaly_detection` is purchased, healthy servers experiencing simmering latency or error anomalies render a pulsing amber radar halo at the rack foundation (`animate-pulse`) and a warning badge overhead, giving operators intuitive early-warning feedback before an incident escalates.
+
 ---
 
 ## 7. Non-Breaking Compliance Checklist
@@ -366,3 +375,4 @@ The `pt-BR` and `es` entries in the same `TRANSLATIONS` record MUST be populated
 - [x] No existing i18n key removed; one new top-level namespace added, and all three locale blocks must be filled in together per the project's existing i18n completeness convention (Document 01, § Localization Layer).
 - [x] No existing `formulas.py` function signature changed; all four modifier hooks are applied at the call site in `simulator.py`, preserving `formulas.py`'s pure-function contract.
 - [x] The Audit Ledger Data Dictionary's enumerated event-type set grows from 8 to 9 via one additive row (`UPGRADE_PURCHASED`); no existing event type's trigger, actor, or payload schema changes.
+- [x] Interactive `UpgradesTreePanel.tsx` integrates directly into `BottomDock.tsx` tab navigation with hotkey `[U]`.

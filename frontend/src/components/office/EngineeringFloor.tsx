@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import { useGameStore } from "../../store/useGameStore";
 import { Service } from "../../types/game";
 import EngineerDesk from "./EngineerDesk";
 import { DeskLamp, GroundShadow, PcTower } from "./OfficeProps";
@@ -57,6 +58,7 @@ const FILLER_SLOTS = [
 
 // OPEN-SPACE ENGINEERING BAY WITH ONE DESK PER ON-CALL ENGINEER, PLUS FILLER WORKSTATIONS FOR DENSITY
 export default function EngineeringFloor({ originX, originY, services, selectedServiceId, onSelect, onHoverService, onLeaveService }: EngineeringFloorProps) {
+  const unassignedEngineers = useGameStore((s) => s.telemetry.engineers.filter((e) => !e.assigned_service_id));
   const byId = new Map(services.map((s) => [s.id, s]));
   const orderedIds = [...DESK_ORDER.filter((id) => byId.has(id)), ...services.map((s) => s.id).filter((id) => !DESK_ORDER.includes(id))];
 
@@ -86,6 +88,7 @@ export default function EngineeringFloor({ originX, originY, services, selectedS
       {FILLER_SLOTS.map((slot, i) => {
         const x = originX + slot.x;
         const y = originY + slot.y;
+        const unassigned = unassignedEngineers[i];
         return (
           <g key={i}>
             <GroundShadow x={x + 0.5} y={y + 0.45} rx={20} ry={10} />
@@ -96,7 +99,18 @@ export default function EngineeringFloor({ originX, originY, services, selectedS
             <DeskLamp x={x + 0.9} y={y + 0.1} />
             <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.08} h={0.4} color="#1e293b" />
             <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.32} h={0.22} color="#475569" />
-            <OfficeWorker x={x + 0.5} y={y + 0.72} z={0.24} shirtColor={slot.shirt} hairColor={slot.hair} role="engineer" seated mood="idle" />
+            <OfficeWorker
+              x={x + 0.5}
+              y={y + 0.72}
+              z={0.24}
+              shirtColor={slot.shirt}
+              hairColor={slot.hair}
+              role="engineer"
+              seated
+              mood={unassigned ? (unassigned.stamina < 30 ? "tired" : "idle") : "idle"}
+              name={unassigned?.name}
+              workerStatusText={unassigned ? `RESERVE ROSTER · ${unassigned.core_competency.toUpperCase()}` : "GUEST WORKSTATION"}
+            />
           </g>
         );
       })}

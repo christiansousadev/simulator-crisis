@@ -1,4 +1,4 @@
-import { Film, Pause, Play, X } from "lucide-react";
+import { Check, Film, Pause, Play, Share2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
@@ -12,10 +12,12 @@ export default function IncidentReplayModal() {
   const t = useTranslation();
   const incidentId = useGameStore((s) => s.replayIncidentId);
   const close = useGameStore((s) => s.closeIncidentReplay);
+  const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const [allAudits, setAllAudits] = useState<AuditLogEntry[]>([]);
   const [visibleCount, setVisibleCount] = useState(1);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<1 | 2>(1);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!incidentId) return;
@@ -49,6 +51,29 @@ export default function IncidentReplayModal() {
 
   const visibleEvents = events.slice(0, visibleCount);
 
+  const handleExportReplay = async () => {
+    try {
+      const payload = {
+        incidentId,
+        exportedAt: new Date().toISOString(),
+        totalEvents: events.length,
+        timeline: events.map((e) => ({
+          tick: e.tick,
+          event_type: e.event_type,
+          actor: e.actor,
+          details: e.details,
+          compliance_flag: e.compliance_flag,
+        })),
+      };
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setCopied(true);
+      pushFloatingText("Replay JSON copied to clipboard!", "success");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      pushFloatingText("Failed to copy replay", "danger");
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[86] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in" onClick={close}>
       <div
@@ -60,9 +85,20 @@ export default function IncidentReplayModal() {
             <Film className="w-4 h-4 text-sky-400" />
             {t.incidentReplay.title(incidentId)}
           </h2>
-          <button onClick={close} className="text-slate-400 hover:text-slate-100" title={t.common.close}>
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportReplay}
+              disabled={events.length === 0}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-sky-200 text-xs font-semibold border border-slate-700 disabled:opacity-40 transition-colors"
+              title="Export and copy replay JSON"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+              {copied ? "Copied" : "Share"}
+            </button>
+            <button onClick={close} className="text-slate-400 hover:text-slate-100" title={t.common.close}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1.5">

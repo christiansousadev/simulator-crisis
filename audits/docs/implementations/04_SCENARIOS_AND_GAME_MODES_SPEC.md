@@ -150,6 +150,47 @@ The simulation loop evaluates session state in `SimulationEngine._update_simulat
 - Dynamically schedules discrete failure injections at specific ticks and bounds baseline parameters.
 - Validates bounds before session reset using `CANONICAL_SERVICE_IDS`.
 
+### 3.5 "Global DDoS Flood" (`ddos_global`)
+
+- **Duration:** 48 ticks.
+- **Mechanics:**
+  - Multi-wave traffic flood model: ramp-up phase (ticks 1–12), peak volumetric flood (ticks 13–32, 2.5x flood multiplier), and long-tail saturation (ticks 33–48).
+  - API Gateway bears the initial brunt, inflating latency exponentially, with collateral latency creeping across healthy mesh services (+4ms/tick).
+  - Injected scenario hazard multiplier (+18% per flood point) increases spontaneous incident chances during peak waves.
+  - Active synergy: Having `predictive_anomaly_detection` purchased scrubs 40% of the flood volume automatically.
+- **Dynamic Objectives (`objectives()`):**
+  - Keep API Gateway uptime above 80% across the attack window.
+  - Mitigate any cascading payment incidents before they cross 6 ticks of downtime.
+- **Victory Condition:** Survived 48 ticks without bankruptcy, with API Gateway uptime $\ge 80\%$ and no sustained payment gateway outage.
+
+### 3.6 "Deployment Rollback Emergency" (`deployment_rollback`)
+
+- **Duration:** 42 ticks.
+- **Mechanics:**
+  - Defective canary deployment rolled out to `srv-auth` and `srv-search` introducing a progressive memory leak (+60ms latency per tick).
+  - Continuous tech debt bleeding (+1 point/tick) while root causes remain uninvestigated.
+  - Second-wave defect triggered at tick 20 if neither service has been diagnosed.
+  - Active synergy: Having `automated_cicd` halves the memory leak latency growth rate.
+- **Dynamic Objectives (`objectives()`):**
+  - Triage the root cause on both `srv-auth` and `srv-search` using the Log Triage Terminal.
+  - Restore both services to healthy status before tick 38.
+  - Keep error budget above 20% throughout the rollback window.
+- **Victory Condition:** Both services triaged and healthy before tick 38, with error budget remaining $> 20\%$.
+
+### 3.7 "Third-Party Outage" (`third_party_outage`)
+
+- **Duration:** 45 ticks.
+- **Mechanics:**
+  - External third-party dependency failure (`srv-payment` and `srv-notify` knocked down completely with 9999ms latency and 100% error rate).
+  - External outage cannot be directly resolved via internal code rollbacks; downstream services (`srv-api-gw`) suffer continuous error bleed (+1.5%/tick) and latency inflation (+12ms/tick).
+  - Simulates upstream vendor status page tracking: stochastic vendor recovery lottery opens after tick 15 (18% probability per tick).
+  - Once third-party recovers, services must be quickly stabilized and re-synchronized.
+  - Morale drain: staff stress accelerates under helpless waiting; break room and off-duty rotations are vital.
+- **Dynamic Objectives (`objectives()`):**
+  - Maintain SLA at or above 92.0% during the outage window.
+  - Survive the full 45-tick window without exhausting the corporate cash runway.
+- **Victory Condition:** Survived 45 ticks with SLA $\ge 92.0\%$ and positive budget runway.
+
 ---
 
 ## 4. REST Endpoints & Objective Architecture
@@ -158,7 +199,7 @@ The simulation loop evaluates session state in `SimulationEngine._update_simulat
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/scenarios/catalog` | `GET` | Returns catalog of registered scenarios, descriptions, unlock statuses, and conditions. |
+| `/api/scenarios/catalog` | `GET` | Returns catalog of registered scenarios (all 6 challenge scenarios + custom), descriptions, unlock statuses, and conditions. |
 | `/api/scenarios/active` | `GET` | Returns live scenario status: `scenario_id`, `elapsed_ticks`, `duration_ticks`, `completed`, `outcome`, and dynamic `objectives`. |
 | `/api/scenarios/custom` | `POST` | Validates and starts a custom-scripted scenario session. |
 
@@ -180,9 +221,11 @@ The simulation loop evaluates session state in `SimulationEngine._update_simulat
 ## 6. Implementation Reconciliation & Checklist
 
 - [x] Composition-based `ScenarioEngine` architecture integrated cleanly into `SimulationEngine`.
+- [x] Full catalog of 6 core scenarios implemented (`black_friday_rush`, `ransomware_infiltration`, `chaos_engineering_drill`, `ddos_global`, `deployment_rollback`, `third_party_outage`) plus `custom_scenario`.
 - [x] Operational failure cascade (downstream) and ransomware lateral movement (outbound dependencies) strictly separated.
 - [x] Dedicated `_lateral_movement_map` isolates security pivots from runtime operational changes.
 - [x] `_evaluate_session_status()` enforces correct precedence (Bankruptcy $\to$ Scenario $\to$ Sandbox 720-tick survival).
 - [x] Scenario state (`infected_service_ids`, `quarantined_service_ids`) persisted across restarts via `snapshot_extra()`/`restore_extra()`.
 - [x] Backend calculates real-time scenario objectives exposed via `/api/scenarios/active`.
 - [x] `PostMatchDebriefModal` established as the consolidated post-match experience.
+- [x] Comprehensive unit tests in `test_new_scenarios.py` and `test_engine_features.py` validating 100% scenario lifecycle and scoring passes.

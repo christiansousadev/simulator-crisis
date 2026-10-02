@@ -160,14 +160,20 @@ interface GameStore {
   triageIncidentId: string | null;
   replayIncidentId: string | null;
   titleScreenVisible: boolean;
+  pauseMenuOpen: boolean;
   creditsOpen: boolean;
   hallOfFameOpen: boolean;
   screenShakeSeq: number;
   screenShakeMagnitude: ScreenShakeMagnitude;
   impactFlashSeq: number;
+  dockTab: "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics";
+  dockCollapsed: boolean;
   highContrast: boolean;
   colorblindSafe: boolean;
 
+  setDockTab: (tab: "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics") => void;
+  setDockCollapsed: (collapsed: boolean) => void;
+  toggleDockCollapsed: () => void;
   setTelemetry: (telemetry: TelemetryState) => void;
   setConnected: (connected: boolean) => void;
   selectService: (serviceId: string | null) => void;
@@ -202,6 +208,9 @@ interface GameStore {
   closeIncidentReplay: () => void;
   hideTitleScreen: () => void;
   showTitleScreen: () => void;
+  openPauseMenu: () => void;
+  closePauseMenu: () => void;
+  togglePauseMenu: () => void;
   openCredits: () => void;
   closeCredits: () => void;
   openHallOfFame: () => void;
@@ -236,11 +245,14 @@ export const useGameStore = create<GameStore>((set) => ({
   triageIncidentId: null,
   replayIncidentId: null,
   titleScreenVisible: true,
+  pauseMenuOpen: false,
   creditsOpen: false,
   hallOfFameOpen: false,
   screenShakeSeq: 0,
   screenShakeMagnitude: "light",
   impactFlashSeq: 0,
+  dockTab: "incidents",
+  dockCollapsed: false,
   highContrast: loadStoredFlag(HIGH_CONTRAST_STORAGE_KEY),
   colorblindSafe: loadStoredFlag(COLORBLIND_SAFE_STORAGE_KEY),
 
@@ -621,7 +633,10 @@ export const useGameStore = create<GameStore>((set) => ({
   openIncidentReplay: (incidentId) => set({ replayIncidentId: incidentId }),
   closeIncidentReplay: () => set({ replayIncidentId: null }),
   hideTitleScreen: () => set({ titleScreenVisible: false }),
-  showTitleScreen: () => set({ titleScreenVisible: true }),
+  showTitleScreen: () => set({ titleScreenVisible: true, pauseMenuOpen: false }),
+  openPauseMenu: () => set({ pauseMenuOpen: true }),
+  closePauseMenu: () => set({ pauseMenuOpen: false }),
+  togglePauseMenu: () => set((state) => ({ pauseMenuOpen: !state.pauseMenuOpen })),
   openCredits: () => set({ creditsOpen: true }),
   closeCredits: () => set({ creditsOpen: false }),
   openHallOfFame: () => set({ hallOfFameOpen: true }),
@@ -633,6 +648,9 @@ export const useGameStore = create<GameStore>((set) => ({
     persistFlag(HIGH_CONTRAST_STORAGE_KEY, value);
     set({ highContrast: value });
   },
+  setDockTab: (tab) => set({ dockTab: tab, dockCollapsed: false }),
+  setDockCollapsed: (collapsed) => set({ dockCollapsed: collapsed }),
+  toggleDockCollapsed: () => set((state) => ({ dockCollapsed: !state.dockCollapsed })),
   setColorblindSafe: (value) => {
     persistFlag(COLORBLIND_SAFE_STORAGE_KEY, value);
     set({ colorblindSafe: value });

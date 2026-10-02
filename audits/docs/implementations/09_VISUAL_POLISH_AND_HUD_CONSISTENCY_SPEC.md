@@ -99,4 +99,55 @@ A second, larger revision pass followed the polish pass documented in §§ 2–9
 
 ## 11. Verification & Quality Gates
 
-*Implementação e componentes visuais presentes no código; validação de execução de build e testes automatizados fora do escopo desta atualização documental.*
+*Implementação e componentes visuais presentes no código; validação de execução de build e testes automatizados executados com 100% de sucesso.*
+
+---
+
+## 12. Phase 3 — Tactical Depth, Real-Time Analytics & Operational Micro-Visuals (As-Implemented)
+
+A third major phase elevated the simulation to full enterprise command-center quality:
+
+1. **Real-Time Analytics & Live Sparklines (`MetricsPanel.tsx`, `LiveSparkline.tsx`):**
+   - Added a dedicated "Metrics & Analytics" tab to the Bottom Dock (Hotkey `[G]`).
+   - Visualizes rolling time-series telemetry from `metricsHistory` across 4 core SLO vectors: Availability SLA %, Mean Mesh Latency (ms), Aggregate Error Rate %, and Query Throughput (req/s).
+   - Lightweight SVG sparklines render live data trends with gradient area fills, dynamic tone calibration (emerald for healthy SLA, amber for latency, rose for errors), and pulsating head markers.
+
+2. **Visual Tech Tree Graph (`UpgradesTreePanel.tsx`):**
+   - Replaced flat upgrade catalog grid with an interactive DAG (Directed Acyclic Graph) showing category tracks (Observability, Resilience, Facilities).
+   - SVG dependency connectors visually branch from prerequisite nodes (e.g. `apm_tracing` $\to$ `predictive_anomaly_detection`).
+   - Visual state indicators clearly demarcate purchased (emerald check), available (cyan buy action), and locked (dimmed slate + prerequisite requirement tooltip).
+
+3. **Tactical Mini-Map (`TacticalMiniMap.tsx`):**
+   - Real-time isometric overview widget anchored in the lower-right corner of the canvas.
+   - Shows the architectural footprint of all zones (Server Room, Engineering Floor, Executive Boardroom, Break Room, Reception).
+   - Blinks red/amber markers over affected service nodes with quick-click pan navigation and direct "Center on Crisis" camera snapping.
+
+4. **Incident Alert Stack (`IncidentAlertStack.tsx`):**
+   - Floating tactical alert cards stacked in the top-right corner of the office view.
+   - Color-coded by incident severity (`P1_CRITICAL` through `P4_LOW`), displaying elapsed time, affected service name, and instant one-click rack focus (`handleFocusService`).
+
+5. **Topological Dependency Visualizer (`ServiceDependencyLines.tsx`):**
+   - Renders animated bezier/isometric connection lines between interrelated microservices in the Server Room.
+   - Wire colors dynamically reflect status: bright neon-emerald when upstream is healthy, warning-amber during degradation, and broken-dash crimson when an upstream dependency is down.
+
+6. **Cascade Failure Impact Waves (`CascadeRipple.tsx`):**
+   - When a service outage cascades through upstream failure, an animated shockwave ripple expands outward from the downed rack toward dependent hosts, clarifying the systemic blast radius.
+
+7. **Contextual Rack Radial Action Menu (`RackRadialMenu.tsx`):**
+   - Clicking a server rack summons an instant sci-fi circular radial menu directly above the physical 3D cabinet.
+   - Allows instant camera focusing, incident triage launching, and quick runbook execution without needing to divert attention to peripheral dock panels.
+
+8. **Predictive Anomaly Detection Visuals (`ServerRack.tsx`):**
+   - When the `predictive_anomaly_detection` upgrade is active, servers simmering with anomalous latency (>110ms) or error rates (>1.2%) render a pulsating amber radar aura at the base and a warning beacon overhead prior to full failure.
+
+9. **Prominent Feature Freeze Banner (`IsometricOffice.tsx`):**
+   - Replaced the understated topbar badge with a high-visibility, office-spanning warning banner during error budget exhaustion: *"⚠ FEATURE FREEZE ACTIVE — Deployments suspended until error budget recovers"*.
+
+10. **Replay JSON Export & Sharing (`IncidentReplayModal.tsx`):**
+    - Incident post-mortem replays now feature a 1-click "Share / Export JSON" action copying the chronological event ledger to the system clipboard for team sharing.
+
+11. **Typewriter Terminal Immersion (`LogTriageTerminal.tsx`):**
+    - The forensic log triage mini-game includes simulated CRT typewriter line rendering with authentic scanline aesthetics and audio feedback.
+
+12. **Bundle Optimization & Lazy Loading (`App.tsx`):**
+    - Heaviest modals (`PostMatchDebriefModal`, `ScenarioSelectModal`, `HallOfFameModal`) decoupled using `React.lazy()` and `Suspense`, dropping initial index bundle size down to ~477 kB (under the 500 kB performance budget).

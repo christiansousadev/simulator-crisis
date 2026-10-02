@@ -70,6 +70,14 @@ export function setMuted(next: boolean) {
   }
 }
 
+export function isAudioMuted(): boolean {
+  return muted;
+}
+
+export function setAudioMuted(next: boolean) {
+  setMuted(next);
+}
+
 export type MusicTension = "calm" | "tense" | "critical";
 
 interface MusicEngineState {

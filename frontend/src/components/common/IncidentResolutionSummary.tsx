@@ -41,7 +41,7 @@ function ResolutionCard({
         <span>{t.resolutionSummary.mtta(summary.mttaSeconds)}</span>
         <span>{t.resolutionSummary.mttr(summary.mttrSeconds)}</span>
         <span className={summary.cost === null ? "text-slate-500" : "text-amber-400"}>
-          {summary.cost === null ? t.resolutionSummary.costUnknown : t.resolutionSummary.cost(summary.cost)}
+          {summary.cost === null ? t.resolutionSummary.costUnknown : t.resolutionSummary.cost(summary.cost.toLocaleString())}
         </span>
         {summary.techDebtDelta !== null && summary.techDebtDelta !== undefined && (
           <span className={summary.techDebtDelta > 0 ? "text-amber-400" : "text-emerald-400"}>

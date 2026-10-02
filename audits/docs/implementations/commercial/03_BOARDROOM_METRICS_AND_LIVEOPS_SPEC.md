@@ -24,3 +24,10 @@ Give the boardroom's existing `KpiDisplay` wall panel real, moving data instead 
 No routing library is introduced (the project has no `react-router-dom` dependency and none is added, keeping the bundle minimal). `main.tsx` performs one additive, dependency-free branch on `window.location.pathname` before mounting: `"/live-ops"` mounts a new `LiveOpsView` component instead of `App`; every other path mounts `App` exactly as before, so the existing single-page game entry point is completely unaffected.
 
 `components/live-ops/LiveOpsView.tsx` is a self-contained full-screen dashboard: it calls `useSimulationSocket()` itself (the hook is reusable — it only depends on the Zustand store, not on `App`'s component tree) to receive the same live telemetry, then renders large-format gauges (SLA, budget, tech debt, error budget — reusing the existing `ShieldGauge`/`CreditCounter`/`TechDebtMeter`/`ErrorBudgetMeter` components verbatim), an active-alert feed (reusing `IncidentsPanel`'s card layout), and a compliance "audit waterfall" — a vertical scrolling list of `recent_audits` entries color-coded by `compliance_flag`. Nothing in this route can mutate simulation state; it contains no buttons that call a mutating endpoint, making it safe to leave open indefinitely on a second monitor.
+
+## 5. In-Game HUD Telemetry Dock — `MetricsPanel.tsx` & `LiveSparkline.tsx`
+
+While `/live-ops` serves external monitor observers and `BoardroomMetricsDisplay` provides decorative in-world flavor, active operators require direct in-game analytics inside the cockpit HUD:
+- **Dedicated Bottom Dock Tab (`dockTab === "metrics"`, Hotkey `[G]`):** Added to `BottomDock.tsx` alongside incidents, directives, and upgrades.
+- **`MetricsPanel.tsx` Quad SLO View:** Displays four live Datadog/Grafana-style cards: (1) Availability SLA %, (2) Average Mesh Latency (ms), (3) Systemic Error Rate %, (4) Simulated Traffic Query Throughput (req/s).
+- **Interactive Rolling Window (`LiveSparkline.tsx`):** Lightweight SVG polyline charts featuring smooth gradient fills, head-marker pulses, minimum/maximum range calibration, and dynamic status-based coloration (emerald, amber, rose, cyan).

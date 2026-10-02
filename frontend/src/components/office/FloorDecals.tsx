@@ -1,4 +1,5 @@
 import IsoBox from "./IsoBox";
+import { project } from "./isoMath";
 
 interface ZoneBounds {
   originX: number;
@@ -153,3 +154,76 @@ export function WalkwayGuide({ axis, fixed, from, to }: HazardStripeProps) {
     axis === "x" ? { x: from, y: fixed, w: to - from, d: 0.05 } : { x: fixed, y: from, w: 0.05, d: to - from };
   return <IsoBox x={footprint.x} y={footprint.y} z={0.023} w={footprint.w} d={footprint.d} h={0.001} color="#94a3b8" stroke="none" opacity={0.35} />;
 }
+
+// 3D ARCHITECTURAL ISOMETRIC FLOOR SIGNAGE
+export function FloorSignage({
+  x,
+  y,
+  text,
+  color = "#64748b",
+  axis = "x",
+}: {
+  x: number;
+  y: number;
+  text: string;
+  color?: string;
+  axis?: "x" | "y";
+}) {
+  const p = project(x, y, 0.025);
+  const transform =
+    axis === "x"
+      ? `translate(${p.x}, ${p.y}) rotate(26.565) skewX(-30)`
+      : `translate(${p.x}, ${p.y}) rotate(-26.565) skewX(30)`;
+  return (
+    <text
+      transform={transform}
+      fill={color}
+      style={{
+        fontSize: "8.5px",
+        fontFamily: "'Rajdhani', monospace, sans-serif",
+        fontWeight: 800,
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
+        opacity: 0.65,
+        userSelect: "none",
+        pointerEvents: "none",
+      }}
+    >
+      {text}
+    </text>
+  );
+}
+
+// DYNAMIC FLOOR LIGHT POOL CAST BY SERVERS OR DESK LAMPS
+export function FloorLightPool({
+  x,
+  y,
+  color = "#38bdf8",
+  radiusX = 45,
+  radiusY = 22,
+  opacity = 0.2,
+  pulse = false,
+}: {
+  x: number;
+  y: number;
+  color?: string;
+  radiusX?: number;
+  radiusY?: number;
+  opacity?: number;
+  pulse?: boolean;
+}) {
+  const p = project(x, y, 0.023);
+  return (
+    <ellipse
+      cx={p.x}
+      cy={p.y}
+      rx={radiusX}
+      ry={radiusY}
+      fill={color}
+      opacity={opacity}
+      className={pulse ? "animate-pulse" : undefined}
+      style={{ filter: "blur(4px)", pointerEvents: "none" }}
+    />
+  );
+}
+

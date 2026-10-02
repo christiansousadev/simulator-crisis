@@ -32,6 +32,9 @@ interface OfficeWorkerProps {
   glasses?: boolean;
   badge?: boolean;
   glowColor?: string;
+  facing?: "left" | "right";
+  name?: string;
+  workerStatusText?: string;
 }
 
 interface HandPose {
@@ -130,6 +133,9 @@ export default function OfficeWorker({
   glasses = false,
   badge = false,
   glowColor,
+  facing,
+  name,
+  workerStatusText,
 }: OfficeWorkerProps) {
   const t = useTranslation();
   const anchor = project(x, y, z);
@@ -140,15 +146,27 @@ export default function OfficeWorker({
   // positions -- previously the legs were a single fixed mid-stride pose regardless of whether
   // the sprite was moving or standing still, so nothing ever visibly "walked"
   const [isWalking, setIsWalking] = useState(false);
+  const [autoFacing, setAutoFacing] = useState<"left" | "right">("right");
   const prevPos = useRef({ x, y });
+
   useEffect(() => {
     if (prevPos.current.x === x && prevPos.current.y === y) return;
+    const dx = x - prevPos.current.x;
+    const dy = y - prevPos.current.y;
+    // in isometric projection, x-increase moves bottom-right, y-increase moves bottom-left
+    if (dx - dy < 0) {
+      setAutoFacing("left");
+    } else if (dx - dy > 0) {
+      setAutoFacing("right");
+    }
     prevPos.current = { x, y };
     setIsWalking(true);
     if (!transitionMs) return;
     const timer = setTimeout(() => setIsWalking(false), transitionMs);
     return () => clearTimeout(timer);
   }, [x, y, transitionMs]);
+
+  const effectiveFacing = facing ?? autoFacing;
 
   // a stable per-instance blink delay so a whole room of sprites doesn't blink in lockstep
   const blinkDelay = useMemo(() => `${(Math.random() * 4).toFixed(2)}s`, []);
@@ -161,8 +179,6 @@ export default function OfficeWorker({
     return () => clearTimeout(timer);
   }, [quip]);
   const handleBanter = (evt: ReactMouseEvent<SVGGElement>) => {
-    // deliberately not stopping propagation: a click still selects the desk/rack this worker
-    // belongs to (that handler lives on an ancestor <g>) while also popping this quip bubble
     void evt;
     const pool = t.workerQuips[quipPoolKey(mood)];
     setQuip(pool[Math.floor(Math.random() * pool.length)]);
@@ -175,11 +191,15 @@ export default function OfficeWorker({
         transition: transitionMs ? `transform ${transitionMs}ms ease-in-out` : undefined,
       }}
       onClick={handleBanter}
-      className="cursor-pointer"
+      className="cursor-pointer group"
     >
+      <title>{name ? `${name} [${workerStatusText || mood}]` : `Worker [${mood}]`}</title>
       <g
         className={BODY_ANIMATION[mood]}
-        style={slumped ? { transform: "translateY(2px) scaleY(0.94)", transformOrigin: "0px 0px" } : undefined}
+        style={{
+          transform: `${slumped ? "translateY(2px) scaleY(0.94)" : ""} ${effectiveFacing === "left" ? "scaleX(-1)" : ""}`.trim() || undefined,
+          transformOrigin: "0px 0px",
+        }}
       >
         {/* legs and shoes, hidden when seated behind a desk or chair */}
         {!seated && (isWalking ? <WalkingLegs /> : <StandingLegs />)}
@@ -288,8 +308,22 @@ export default function OfficeWorker({
         </g>
       )}
 
+      {mood === "happy" && (
+        <g className="animate-pop-in">
+          <circle cx={7} cy={-42} r={4.5} fill="#10b981" stroke="#a7f3d0" strokeWidth={0.8} />
+          <text x={7} y={-39.5} textAnchor="middle" fill="white" style={{ fontSize: 6, fontWeight: 900 }}>
+            ★
+          </text>
+        </g>
+      )}
+
       {mood === "recovering" && (
-        <rect x={-8} y={-33} width={5} height={4} rx={1} fill="#7dd3fc" stroke="#0284c7" strokeWidth={0.4} />
+        <g className="animate-pop-in">
+          <circle cx={-6} cy={-40} r={4} fill="#0ea5e9" stroke="#bae6fd" strokeWidth={0.8} />
+          <text x={-6} y={-37.5} textAnchor="middle" fill="white" style={{ fontSize: 5.5, fontWeight: 900 }}>
+            ⚡
+          </text>
+        </g>
       )}
 
       {holdsMug && (

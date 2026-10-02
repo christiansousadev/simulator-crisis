@@ -111,7 +111,14 @@ export interface Engineer {
 }
 
 // scripted crisis scenarios, mirrors backend.app.engine.scenarios
-export type ScenarioId = "black_friday_rush" | "ransomware_infiltration" | "chaos_engineering_drill";
+export type ScenarioId =
+  | "black_friday_rush"
+  | "ransomware_infiltration"
+  | "chaos_engineering_drill"
+  | "ddos_global"
+  | "deployment_rollback"
+  | "third_party_outage";
+
 
 export interface ScenarioCatalogEntry {
   scenario_id: ScenarioId;

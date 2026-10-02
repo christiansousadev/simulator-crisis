@@ -70,6 +70,11 @@ export default function ServerRack({ service, x, y, selected, severity, investig
     return () => clearTimeout(timer);
   }, [raisedAnim, dismissRunAnimation]);
 
+  const purchasedUpgrades = useGameStore((s) => s.telemetry.purchased_upgrades);
+  const hasPredictiveDetection = purchasedUpgrades.includes("predictive_anomaly_detection");
+  // anomaly: elevated latency or error rate even while status is still classified as healthy
+  const isAnomalous = hasPredictiveDetection && service.status === "healthy" && (service.latency_ms > 110 || service.error_rate > 0.012);
+
   const tone = statusTone(service.status);
   const height = service.tier === "critical" ? RACK_HEIGHT_CRITICAL : RACK_HEIGHT_STANDARD;
 
@@ -270,6 +275,34 @@ export default function ServerRack({ service, x, y, selected, severity, investig
             />
           ))}
         </g>
+      )}
+
+      {/* predictive anomaly pulse: aura around base and warning radar badge above rack */}
+      {isAnomalous && (
+        <>
+          <ellipse
+            cx={project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, 0).x}
+            cy={project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, 0).y}
+            rx={20}
+            ry={12}
+            fill="none"
+            stroke="#f59e0b"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            className="animate-pulse"
+            opacity={0.75}
+          />
+          {!unhealthy && (
+            <foreignObject x={bubbleAnchor.x - 9} y={bubbleAnchor.y - 20} width={18} height={18} className="overflow-visible pointer-events-none">
+              <div
+                className="w-[18px] h-[18px] rounded-full bg-amber-950/80 border border-amber-400 text-amber-300 flex items-center justify-center text-[9px] font-mono font-bold animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                title="Predictive Anomaly Detected: Latency/Error rate anomaly"
+              >
+                ⚠
+              </div>
+            </foreignObject>
+          )}
+        </>
       )}
 
       {/* bouncy cartoon alert badge for any active incident, colored by its severity so a P1

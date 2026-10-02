@@ -31,6 +31,7 @@ export default function Topbar() {
   const openOnboarding = useGameStore((s) => s.openOnboarding);
   const openSettings = useGameStore((s) => s.openSettings);
   const openHallOfFame = useGameStore((s) => s.openHallOfFame);
+  const openPauseMenu = useGameStore((s) => s.openPauseMenu);
 
   const currentMultiplier = telemetry.is_running ? Math.round(1 / telemetry.tick_rate_seconds) : 0;
 
@@ -167,25 +168,36 @@ export default function Topbar() {
         )}
         <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
           <button
+            onClick={openPauseMenu}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-mono font-bold text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+            title="Open Tactical Pause Menu [ESC]"
+          >
+            <span>PAUSE</span>
+            <span className="text-[9px] text-slate-500 font-normal">[ESC]</span>
+          </button>
+          <div className="h-5 w-px bg-slate-700 my-auto" />
+          <button
             onClick={() => handleSpeedChange(telemetry.is_running ? 0 : 1)}
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`flex items-center gap-1 p-1.5 rounded-md transition-colors ${
               !telemetry.is_running ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-400/50" : "text-slate-300 hover:bg-slate-700"
             }`}
-            title={telemetry.is_running ? t.topbar.pause : t.topbar.resume}
+            title={telemetry.is_running ? "Pause [SPACE]" : "Resume [SPACE]"}
           >
             {telemetry.is_running ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            <span className="hidden xl:inline text-[9px] font-mono text-slate-500">[SPACE]</span>
           </button>
           {SPEED_OPTIONS.map((opt) => (
             <button
               key={opt.multiplier}
               onClick={() => handleSpeedChange(opt.multiplier)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors flex items-center gap-0.5 ${
                 telemetry.is_running && currentMultiplier === opt.multiplier
                   ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/60 scale-105"
                   : "text-slate-300 hover:bg-slate-700"
               }`}
             >
-              {opt.label}
+              <span>{opt.label}</span>
+              <span className="text-[8px] font-mono opacity-60">[{opt.multiplier}]</span>
             </button>
           ))}
         </div>

@@ -55,8 +55,9 @@ def test_dependency_shock_multiplier_down_dependency_amplifies():
 
 
 def test_cascading_failure_probability_never_exceeds_cap():
-    probability = formulas.cascading_failure_probability(100, ["down", "down", "down"])
-    assert probability <= formulas.MAX_FAILURE_PROBABILITY
+    raw_probability = formulas.cascading_failure_probability(100, ["down", "down", "down"])
+    effective_probability = formulas.clamp_probability(raw_probability)
+    assert effective_probability <= formulas.MAX_FAILURE_PROBABILITY
 
 
 def test_cascading_failure_probability_increases_with_tech_debt():

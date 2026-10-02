@@ -1,5 +1,5 @@
 import { ArrowLeft, Terminal, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { translateLogLine } from "../../i18n/dynamicContent";
 import { api } from "../../services/api";
@@ -15,6 +15,35 @@ const LEVEL_COLOR: Record<LogLevel, string> = {
   FATAL: "text-rose-300 font-bold",
 };
 
+// TYPEWRITER REVEAL: streams characters of a target string into displayedText over time
+function useTypewriter(target: string, charRateMs = 18) {
+  const [displayed, setDisplayed] = useState("");
+  const frameRef = useRef<number | null>(null);
+  const idxRef = useRef(0);
+  const lastTimeRef = useRef(0);
+
+  useEffect(() => {
+    setDisplayed("");
+    idxRef.current = 0;
+    const tick = (now: number) => {
+      if (now - lastTimeRef.current >= charRateMs) {
+        lastTimeRef.current = now;
+        idxRef.current = Math.min(idxRef.current + 1, target.length);
+        setDisplayed(target.slice(0, idxRef.current));
+      }
+      if (idxRef.current < target.length) {
+        frameRef.current = requestAnimationFrame(tick);
+      }
+    };
+    frameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    };
+  }, [target, charRateMs]);
+
+  return displayed;
+}
+
 // DARK CRT-STYLE TERMINAL DRAWER FOR THE ROOT-CAUSE LOG TRIAGE MINI-GAME
 export default function LogTriageTerminal() {
   const t = useTranslation();
@@ -24,20 +53,36 @@ export default function LogTriageTerminal() {
   const close = useGameStore((s) => s.closeTriageTerminal);
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const [lines, setLines] = useState<LogLine[]>([]);
+  const [revealedCount, setRevealedCount] = useState(0);
   const [activeFilters, setActiveFilters] = useState<Set<LogLevel>>(new Set(LEVELS));
   const [solvedLineId, setSolvedLineId] = useState<string | null>(null);
   const [wrongLineId, setWrongLineId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!incidentId) return;
     setLines([]);
+    setRevealedCount(0);
     setSolvedLineId(null);
     setWrongLineId(null);
     api
       .getIncidentLogs(incidentId)
-      .then((res) => setLines(res.lines))
+      .then((res) => {
+        setLines(res.lines);
+        // stream lines in with a staggered delay per line
+        res.lines.forEach((_, i) => {
+          setTimeout(() => setRevealedCount(i + 1), i * 60);
+        });
+      })
       .catch(() => setLines([]));
   }, [incidentId]);
+
+  // auto-scroll to bottom as lines reveal
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [revealedCount]);
 
   if (!incidentId) return null;
 
@@ -70,7 +115,10 @@ export default function LogTriageTerminal() {
     }
   };
 
-  const visibleLines = lines.filter((l) => activeFilters.has(l.level));
+  // apply filter then typewriter reveal (only show the first revealedCount lines)
+  const allVisible = lines.filter((l) => activeFilters.has(l.level));
+  const visibleLines = allVisible.slice(0, revealedCount);
+  const isStreaming = revealedCount < allVisible.length;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-backdrop-in" onClick={close}>
@@ -118,24 +166,30 @@ export default function LogTriageTerminal() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-2 text-[11px] leading-relaxed">
-          {visibleLines.map((line) => (
-            <div
-              key={line.id}
-              onClick={() => handleLineClick(line)}
-              className={`cursor-pointer px-1 py-0.5 rounded transition-colors ${
-                line.id === solvedLineId
-                  ? "bg-emerald-500/20 border border-emerald-400"
-                  : line.id === wrongLineId
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2 text-[11px] leading-relaxed">
+          {visibleLines.map((line, idx) => {
+            const isLast = idx === visibleLines.length - 1;
+            return (
+              <div
+                key={line.id}
+                onClick={() => handleLineClick(line)}
+                className={`cursor-pointer px-1 py-0.5 rounded transition-colors ${
+                  line.id === solvedLineId
+                    ? "bg-emerald-500/20 border border-emerald-400"
+                    : line.id === wrongLineId
                     ? "bg-rose-500/20"
                     : "hover:bg-emerald-500/10"
-              }`}
-            >
-              <span className="text-slate-600 mr-2">T+{line.tick_offset}</span>
-              <span className={`mr-2 ${LEVEL_COLOR[line.level]}`}>[{line.level}]</span>
-              <span className="text-slate-300">{translateLogLine(line.message, language)}</span>
-            </div>
-          ))}
+                }`}
+              >
+                <span className="text-slate-600 mr-2">T+{line.tick_offset}</span>
+                <span className={`mr-2 ${LEVEL_COLOR[line.level]}`}>[{line.level}]</span>
+                <span className="text-slate-300">{translateLogLine(line.message, language)}</span>
+                {isLast && isStreaming && (
+                  <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-0.5 align-middle animate-pulse" />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

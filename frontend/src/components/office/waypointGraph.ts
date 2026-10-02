@@ -46,24 +46,43 @@ export function buildGraph(nodes: GraphNode[], edges: Array<[string, string]>): 
 export const OFFICE_WAYPOINT_NODES: GraphNode[] = [
   { id: "engineering-hall-1", x: 10.5, y: 8.4 },
   { id: "engineering-hall-2", x: 13.0, y: 8.4 },
+  { id: "engineering-bay-aisle-1", x: 10.5, y: 3.5 },
+  { id: "engineering-bay-aisle-2", x: 13.0, y: 3.5 },
+  { id: "desk-srv-auth", x: 10.4, y: 1.2 },
+  { id: "desk-srv-payment", x: 12.9, y: 1.2 },
+  { id: "desk-srv-api-gw", x: 15.4, y: 1.2 },
+  { id: "desk-srv-search", x: 11.6, y: 3.8 },
+  { id: "desk-srv-notify", x: 14.1, y: 3.8 },
   { id: "central-junction", x: 8.6, y: 8.4 },
   { id: "server-room-door", x: 2.3, y: 8.6 },
   { id: "server-room-interior", x: 3.0, y: 2.0 },
   { id: "breakroom-junction", x: 8.6, y: 9.5 },
   { id: "breakroom-coffee-machine", x: 9.5, y: 10.2 },
+  { id: "breakroom-sofa", x: 10.8, y: 10.5 },
   { id: "boardroom-door", x: 8.6, y: 10.95 },
   { id: "reception-junction", x: 13.5, y: 8.4 },
+  { id: "reception-mat", x: 17.5, y: 11.5 },
 ];
 
 const OFFICE_WAYPOINT_EDGES: Array<[string, string]> = [
   ["engineering-hall-1", "engineering-hall-2"],
   ["engineering-hall-1", "central-junction"],
+  ["engineering-hall-1", "engineering-bay-aisle-1"],
+  ["engineering-hall-2", "engineering-bay-aisle-2"],
+  ["engineering-bay-aisle-1", "engineering-bay-aisle-2"],
+  ["engineering-bay-aisle-1", "desk-srv-auth"],
+  ["engineering-bay-aisle-1", "desk-srv-search"],
+  ["engineering-bay-aisle-2", "desk-srv-payment"],
+  ["engineering-bay-aisle-2", "desk-srv-api-gw"],
+  ["engineering-bay-aisle-2", "desk-srv-notify"],
   ["central-junction", "server-room-door"],
   ["server-room-door", "server-room-interior"],
   ["central-junction", "breakroom-junction"],
   ["breakroom-junction", "breakroom-coffee-machine"],
+  ["breakroom-coffee-machine", "breakroom-sofa"],
   ["breakroom-junction", "boardroom-door"],
   ["central-junction", "reception-junction"],
+  ["reception-junction", "reception-mat"],
 ];
 
 export const OFFICE_GRAPH = buildGraph(OFFICE_WAYPOINT_NODES, OFFICE_WAYPOINT_EDGES);

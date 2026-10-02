@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import AchievementToast from "./components/common/AchievementToast";
 import FloatingCombatText from "./components/common/FloatingCombatText";
 import IncidentResolutionSummary from "./components/common/IncidentResolutionSummary";
@@ -8,31 +8,36 @@ import CorporateNewsTicker from "./components/layout/CorporateNewsTicker";
 import Topbar from "./components/layout/Topbar";
 import CABDilemmaModal from "./components/modals/CABDilemmaModal";
 import CreditsModal from "./components/modals/CreditsModal";
-import HallOfFameModal from "./components/modals/HallOfFameModal";
 import IncidentDetailModal from "./components/modals/IncidentDetailModal";
 import IncidentReplayModal from "./components/modals/IncidentReplayModal";
 import LogTriageTerminal from "./components/modals/LogTriageTerminal";
 import OnboardingModal from "./components/modals/OnboardingModal";
-import PostMatchDebriefModal from "./components/modals/PostMatchDebriefModal";
+import PauseMenuModal from "./components/modals/PauseMenuModal";
 import PostMortemModal from "./components/modals/PostMortemModal";
 import ScenarioBriefingModal from "./components/modals/ScenarioBriefingModal";
 import ScenarioBuilderModal from "./components/modals/ScenarioBuilderModal";
-import ScenarioSelectModal from "./components/modals/ScenarioSelectModal";
 import SettingsModal from "./components/modals/SettingsModal";
 import TitleScreen from "./components/modals/TitleScreen";
 import IsometricOffice from "./components/office/IsometricOffice";
 import { useBackgroundMusic } from "./hooks/useBackgroundMusic";
 import { useGameAudio } from "./hooks/useGameAudio";
+import { useGameShortcuts } from "./hooks/useGameShortcuts";
 import { useScenarioObjectives } from "./hooks/useScenarioObjectives";
 import { useSimulationSocket } from "./hooks/useSimulationSocket";
 import { useGameStore } from "./store/useGameStore";
 import { computeDefconLevel } from "./utils/defcon";
+
+// code-split the three heaviest modals (~60KB total) — only fetched when actually triggered
+const HallOfFameModal = lazy(() => import("./components/modals/HallOfFameModal"));
+const PostMatchDebriefModal = lazy(() => import("./components/modals/PostMatchDebriefModal"));
+const ScenarioSelectModal = lazy(() => import("./components/modals/ScenarioSelectModal"));
 
 export default function App() {
   useSimulationSocket();
   useGameAudio();
   useBackgroundMusic();
   useScenarioObjectives();
+  useGameShortcuts();
 
   const status = useGameStore((s) => s.telemetry.status);
   const telemetry = useGameStore((s) => s.telemetry);
@@ -60,26 +65,18 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [screenShakeSeq, screenShakeMagnitude]);
 
-  // modals reachable from the title screen must render even while it is up
+  // modals reachable from the title screen or gameplay
   const alwaysMountedModals = (
     <>
       <SettingsModal />
       <CreditsModal />
-      <HallOfFameModal />
-      <ScenarioSelectModal />
+      <Suspense fallback={null}><HallOfFameModal /></Suspense>
+      <Suspense fallback={null}><ScenarioSelectModal /></Suspense>
       <ScenarioBuilderModal />
       <ScenarioBriefingModal />
+      <PauseMenuModal />
     </>
   );
-
-  if (titleScreenVisible) {
-    return (
-      <>
-        <TitleScreen />
-        {alwaysMountedModals}
-      </>
-    );
-  }
 
   return (
     <div
@@ -98,6 +95,9 @@ export default function App() {
       <IsometricOffice />
       <BottomDock />
 
+      {/* Living Main Menu Overlay */}
+      {titleScreenVisible && <TitleScreen />}
+
       <IncidentDetailModal />
       <PostMortemModal />
       <IncidentReplayModal />
@@ -107,7 +107,9 @@ export default function App() {
       <AchievementToast />
       {alwaysMountedModals}
 
-      {(status === "bankrupted" || status === "victory") && <PostMatchDebriefModal />}
+      {(status === "bankrupted" || status === "victory") && (
+        <Suspense fallback={null}><PostMatchDebriefModal /></Suspense>
+      )}
     </div>
   );
 }

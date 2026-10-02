@@ -123,19 +123,36 @@ export default function EngineerDesk({ service, x, y, shirtColor, hairColor, gla
       <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.08} h={0.4} color="#1e293b" />
       <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.32} h={0.22} color="#475569" />
 
-      <OfficeWorker
-        x={x + 0.5}
-        y={y + 0.72}
-        z={0.24}
-        shirtColor={shirtColor}
-        hairColor={hairColor}
-        mood={ackAnim ? "running" : mood}
-        role="engineer"
-        seated={!ackAnim}
-        glasses={glasses}
-        badge
-        glowColor={screenLit ? monitorColor : undefined}
-      />
+      {engineer?.on_call_status === "resting" ? (
+        <g>
+          <text
+            x={project(x + 0.5, y + 0.72, 0.35).x}
+            y={project(x + 0.5, y + 0.72, 0.35).y}
+            textAnchor="middle"
+            fill="#38bdf8"
+            className="animate-pulse"
+            style={{ fontSize: 6.5, fontWeight: 800, fontFamily: "monospace" }}
+          >
+            ☕ ON BREAK
+          </text>
+        </g>
+      ) : (
+        <OfficeWorker
+          x={x + 0.5}
+          y={y + 0.72}
+          z={0.24}
+          shirtColor={shirtColor}
+          hairColor={hairColor}
+          mood={ackAnim ? "running" : mood}
+          role="engineer"
+          seated={!ackAnim}
+          glasses={glasses}
+          badge
+          glowColor={screenLit ? monitorColor : undefined}
+          name={engineer?.name}
+          workerStatusText={engineer ? `${engineer.core_competency.toUpperCase()} · ${engineer.on_call_status}` : undefined}
+        />
+      )}
     </g>
   );
 }
