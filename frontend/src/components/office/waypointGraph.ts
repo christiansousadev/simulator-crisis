@@ -1,20 +1,36 @@
-// corridor waypoint graph and a* pathfinding for sprites moving across the isometric office
-// nodes are authored along the office's existing walkway guides and doorway gaps so every
-// edge follows a path the architecture already declares as walkable
+// corridor waypoint graph and a* pathfinding for sprites moving across the isometric office.
+// nodes are authored along the aisles, hallways and doorways the scene really has, so a sprite that
+// follows an edge never clips through a desk, a rack or a sofa (waypointGraph.test.ts samples every
+// edge against the furniture footprints in officeLayout.ts to keep that true).
 //
-// NOTE: as of the frontend hardening pass that added this note, this module (and its consumer,
-// PathfindingEmployee.tsx) is not imported anywhere else in frontend/src -- hired engineers
-// (EngineerRosterPanel.tsx / telemetry.engineers) have no visible representation in the office
-// scene; EngineeringFloor.tsx renders a fixed desk per service_id plus decorative filler sprites
-// regardless of roster state. This is a deliberately unwired, complete building block, not
-// abandoned/forgotten code -- wiring a hired engineer's walk-to-desk animation, or removing this
-// module if the feature is intentionally descoped, is a scoped product decision left open on
-// purpose (see audits/docs/implementations/09_VISUAL_POLISH_AND_HUD_CONSISTENCY_SPEC.md).
+// the graph is the movement layer for the hired-engineer roster (rosterStage.ts): engineers enter at
+// the reception door, walk to their desk, to the vault when their service has an incident being
+// worked, and to the lounge when resting.
+
+import {
+  BREAKROOM_ORIGIN,
+  DESK_ORDER,
+  DESK_SLOTS,
+  GridPoint,
+  RACK_ORDER,
+  RESERVE_SLOTS,
+  SEAT_OFFSET,
+  SEAT_Z,
+  SERVER_ROOM_DOOR,
+  deskOrigin,
+  rackOrigin,
+} from "./officeLayout";
 
 export interface GraphNode {
   id: string;
   x: number;
   y: number;
+  // elevation of a seated sprite above the floor (chair / sofa seat height)
+  z?: number;
+  // true for nodes a sprite sits down on instead of standing at
+  seat?: boolean;
+  // which way a sprite faces once it stops here (toward its monitor / the rack / the counter)
+  face?: "left" | "right";
 }
 
 interface GraphEdge {
@@ -43,55 +59,146 @@ export function buildGraph(nodes: GraphNode[], edges: Array<[string, string]>): 
   return { nodes: nodeMap, adjacency };
 }
 
-export const OFFICE_WAYPOINT_NODES: GraphNode[] = [
-  { id: "engineering-hall-1", x: 10.5, y: 8.4 },
-  { id: "engineering-hall-2", x: 13.0, y: 8.4 },
-  { id: "engineering-bay-aisle-1", x: 10.5, y: 3.5 },
-  { id: "engineering-bay-aisle-2", x: 13.0, y: 3.5 },
-  { id: "desk-srv-auth", x: 10.4, y: 1.2 },
-  { id: "desk-srv-payment", x: 12.9, y: 1.2 },
-  { id: "desk-srv-api-gw", x: 15.4, y: 1.2 },
-  { id: "desk-srv-search", x: 11.6, y: 3.8 },
-  { id: "desk-srv-notify", x: 14.1, y: 3.8 },
-  { id: "central-junction", x: 8.6, y: 8.4 },
-  { id: "server-room-door", x: 2.3, y: 8.6 },
-  { id: "server-room-interior", x: 3.0, y: 2.0 },
-  { id: "breakroom-junction", x: 8.6, y: 9.5 },
-  { id: "breakroom-coffee-machine", x: 9.5, y: 10.2 },
-  { id: "breakroom-sofa", x: 10.8, y: 10.5 },
-  { id: "boardroom-door", x: 8.6, y: 10.95 },
-  { id: "reception-junction", x: 13.5, y: 8.4 },
-  { id: "reception-mat", x: 17.5, y: 11.5 },
-];
+// node ids other modules refer to by name
+export const NODE = {
+  entrance: "entrance",
+  receptionFront: "reception-front",
+  receptionWest: "reception-west",
+  hallEast: "hall-east",
+  hallBay: "hall-bay",
+  serverRoomDoor: "server-room-door",
+  serverRoomFront: "server-room-front",
+  loungeDoor: "lounge-door",
+  loungeMid: "lounge-mid",
+  loungeCoffee: "lounge-coffee",
+  loungeTable: "lounge-table",
+  loungeSofaA: "lounge-sofa-a",
+  loungeSofaB: "lounge-sofa-b",
+} as const;
 
-const OFFICE_WAYPOINT_EDGES: Array<[string, string]> = [
-  ["engineering-hall-1", "engineering-hall-2"],
-  ["engineering-hall-1", "central-junction"],
-  ["engineering-hall-1", "engineering-bay-aisle-1"],
-  ["engineering-hall-2", "engineering-bay-aisle-2"],
-  ["engineering-bay-aisle-1", "engineering-bay-aisle-2"],
-  ["engineering-bay-aisle-1", "desk-srv-auth"],
-  ["engineering-bay-aisle-1", "desk-srv-search"],
-  ["engineering-bay-aisle-2", "desk-srv-payment"],
-  ["engineering-bay-aisle-2", "desk-srv-api-gw"],
-  ["engineering-bay-aisle-2", "desk-srv-notify"],
-  ["central-junction", "server-room-door"],
-  ["server-room-door", "server-room-interior"],
-  ["central-junction", "breakroom-junction"],
-  ["breakroom-junction", "breakroom-coffee-machine"],
-  ["breakroom-coffee-machine", "breakroom-sofa"],
-  ["breakroom-junction", "boardroom-door"],
-  ["central-junction", "reception-junction"],
-  ["reception-junction", "reception-mat"],
-];
+export const seatNodeId = (serviceId: string) => `seat-${serviceId}`;
+export const reserveSeatNodeId = (index: number) => `seat-reserve-${index}`;
+export const rackStandNodeId = (serviceId: string) => `rack-front-${serviceId}`;
+
+// aisles running across the engineering bay (world y), the vertical spine west of the desks (world x)
+const AISLE_ROW_1_Y = 2.4;
+const AISLE_ROW_2_Y = 4.9;
+const AISLE_RESERVE_Y = 6.95;
+const SPINE_X = 9.75;
+const HALL_Y = 8.4;
+const MID_ROAD_Y = 5.55;
+const RACK_AISLE_Y = 3.5;
+
+function buildOfficeLayoutGraph(): { nodes: GraphNode[]; edges: Array<[string, string]> } {
+  const nodes: GraphNode[] = [];
+  const edges: Array<[string, string]> = [];
+  const add = (node: GraphNode) => nodes.push(node);
+  const link = (a: string, b: string) => edges.push([a, b]);
+
+  // vertical spine just west of the desks, joining every aisle to the main hall
+  add({ id: "a1-spine", x: SPINE_X, y: AISLE_ROW_1_Y });
+  add({ id: "a2-spine", x: SPINE_X, y: AISLE_ROW_2_Y });
+  add({ id: "mid-spine", x: SPINE_X, y: MID_ROAD_Y });
+  add({ id: "a3-spine", x: SPINE_X, y: AISLE_RESERVE_Y });
+  add({ id: NODE.hallBay, x: SPINE_X, y: HALL_Y });
+  link("a1-spine", "a2-spine");
+  link("a2-spine", "mid-spine");
+  link("mid-spine", "a3-spine");
+  link("a3-spine", NODE.hallBay);
+
+  // assigned desks: row 1 (first three slots) is reached from aisle 1, row 2 from aisle 2
+  let prevAisle1 = "a1-spine";
+  let prevAisle2 = "a2-spine";
+  DESK_ORDER.forEach((serviceId, i) => {
+    const o = deskOrigin(DESK_SLOTS[i]);
+    const cx = o.x + SEAT_OFFSET.x;
+    const seatY = o.y + SEAT_OFFSET.y;
+    const rowOne = i < 3;
+    const aisleId = `aisle-${serviceId}`;
+    const approachId = `approach-${serviceId}`;
+    add({ id: aisleId, x: cx, y: rowOne ? AISLE_ROW_1_Y : AISLE_ROW_2_Y });
+    add({ id: approachId, x: cx, y: seatY + 0.6 });
+    add({ id: seatNodeId(serviceId), x: cx, y: seatY, z: SEAT_Z, seat: true, face: "right" });
+    link(rowOne ? prevAisle1 : prevAisle2, aisleId);
+    link(aisleId, approachId);
+    link(approachId, seatNodeId(serviceId));
+    if (rowOne) prevAisle1 = aisleId;
+    else prevAisle2 = aisleId;
+  });
+
+  // reserve desks along the south of the bay, entered straight from the aisle in front of them
+  let prevReserve = "a3-spine";
+  RESERVE_SLOTS.forEach((slot, i) => {
+    const o = deskOrigin(slot);
+    const cx = o.x + SEAT_OFFSET.x;
+    const aisleId = `aisle-reserve-${i}`;
+    add({ id: aisleId, x: cx, y: AISLE_RESERVE_Y });
+    add({ id: reserveSeatNodeId(i), x: cx, y: o.y + SEAT_OFFSET.y, z: SEAT_Z, seat: true, face: "right" });
+    link(prevReserve, aisleId);
+    link(aisleId, reserveSeatNodeId(i));
+    prevReserve = aisleId;
+  });
+
+  // main hall to reception: a hall running east, then south along the open lane west of the turnstile
+  add({ id: NODE.hallEast, x: 14.6, y: HALL_Y });
+  add({ id: NODE.receptionWest, x: 14.6, y: 12.5 });
+  add({ id: NODE.receptionFront, x: 17.8, y: 12.5 });
+  add({ id: NODE.entrance, x: 18.2, y: 14.0 });
+  link(NODE.hallBay, NODE.hallEast);
+  link(NODE.hallEast, NODE.receptionWest);
+  link(NODE.receptionWest, NODE.receptionFront);
+  link(NODE.receptionFront, NODE.entrance);
+
+  // lounge: in from the hall through the gap between the ping-pong table and the water cooler
+  const b = BREAKROOM_ORIGIN;
+  add({ id: NODE.loungeDoor, x: SPINE_X, y: b.y });
+  add({ id: NODE.loungeMid, x: SPINE_X, y: b.y + 1.05 });
+  add({ id: NODE.loungeCoffee, x: b.x + 2.45, y: b.y + 1.05, face: "right" });
+  add({ id: NODE.loungeTable, x: b.x + 0.8, y: b.y + 1.05, face: "right" });
+  add({ id: NODE.loungeSofaA, x: 9.6, y: b.y + 1.78, z: 0.2, seat: true, face: "left" });
+  add({ id: NODE.loungeSofaB, x: 10.0, y: b.y + 1.78, z: 0.2, seat: true, face: "left" });
+  link(NODE.hallBay, NODE.loungeDoor);
+  link(NODE.loungeDoor, NODE.loungeMid);
+  link(NODE.loungeMid, NODE.loungeCoffee);
+  link(NODE.loungeMid, NODE.loungeTable);
+  link(NODE.loungeMid, NODE.loungeSofaA);
+  link(NODE.loungeMid, NODE.loungeSofaB);
+
+  // the vault: down the mid-floor road to the real sliding door, then along the aisle in front of the racks
+  add({ id: "mid-door", x: SERVER_ROOM_DOOR.x, y: MID_ROAD_Y });
+  add({ id: NODE.serverRoomDoor, x: SERVER_ROOM_DOOR.x, y: SERVER_ROOM_DOOR.y });
+  add({ id: NODE.serverRoomFront, x: SERVER_ROOM_DOOR.x, y: RACK_AISLE_Y });
+  link("mid-spine", "mid-door");
+  link("mid-door", NODE.serverRoomDoor);
+  link(NODE.serverRoomDoor, NODE.serverRoomFront);
+  // stands sorted by x so the aisle chain never doubles back over itself
+  const stands = RACK_ORDER.map((serviceId, i) => ({ serviceId, x: rackOrigin(i).x + 0.275 })).sort((a, c) => a.x - c.x);
+  const left = stands.filter((s) => s.x < SERVER_ROOM_DOOR.x);
+  const right = stands.filter((s) => s.x >= SERVER_ROOM_DOOR.x);
+  for (const group of [[...left].reverse(), right]) {
+    let prevRack: string = NODE.serverRoomFront;
+    for (const stand of group) {
+      add({ id: rackStandNodeId(stand.serviceId), x: stand.x, y: RACK_AISLE_Y, face: "right" });
+      link(prevRack, rackStandNodeId(stand.serviceId));
+      prevRack = rackStandNodeId(stand.serviceId);
+    }
+  }
+
+  return { nodes, edges };
+}
+
+const LAYOUT = buildOfficeLayoutGraph();
+export const OFFICE_WAYPOINT_NODES: GraphNode[] = LAYOUT.nodes;
+export const OFFICE_WAYPOINT_EDGES: Array<[string, string]> = LAYOUT.edges;
 
 export const OFFICE_GRAPH = buildGraph(OFFICE_WAYPOINT_NODES, OFFICE_WAYPOINT_EDGES);
 
-// FIND THE FIXED HALL JUNCTION NODE NEAREST A GIVEN WORLD POINT, USED TO PLUG DESKS INTO THE GRAPH
-export function nearestHallNode(x: number, y: number): string {
-  let bestId = OFFICE_WAYPOINT_NODES[0].id;
+// FIND THE WAYPOINT NEAREST A GIVEN WORLD POINT, USED TO PLUG ARBITRARY POSITIONS INTO THE GRAPH
+export function nearestHallNode(x: number, y: number, candidates: GraphNode[] = OFFICE_WAYPOINT_NODES): string {
+  let bestId = candidates[0].id;
   let bestDist = Infinity;
-  for (const node of OFFICE_WAYPOINT_NODES) {
+  for (const node of candidates) {
+    if (node.seat) continue;
     const dist = Math.hypot(node.x - x, node.y - y);
     if (dist < bestDist) {
       bestDist = dist;
@@ -148,4 +255,21 @@ export function findPath(graph: WaypointGraph, startId: string, goalId: string):
   }
   // no path found: caller falls back to rendering at the start node rather than teleporting blindly
   return [];
+}
+
+// walking speed in grid tiles per second, and the shortest hop worth animating
+export const WALK_SPEED_TILES_PER_S = 1.5;
+const MIN_HOP_MS = 220;
+
+// HOW LONG A SPRITE TAKES TO WALK ONE EDGE AT A CONSTANT SPEED (A CONSTANT SPEED READS AS WALKING, NOT HOPPING)
+export function hopDurationMs(from: GridPoint, to: GridPoint, speed = WALK_SPEED_TILES_PER_S): number {
+  return Math.max(MIN_HOP_MS, Math.round((Math.hypot(to.x - from.x, to.y - from.y) / speed) * 1000));
+}
+
+// WHICH WAY A SPRITE FACES WHEN IT MOVES FROM ONE WORLD POINT TO ANOTHER. in the isometric
+// projection screen-x grows with (x - y); a move with no screen-x change keeps the previous facing
+export function facingForMove(from: GridPoint, to: GridPoint, fallback: "left" | "right" = "right"): "left" | "right" {
+  const screenDx = to.x - to.y - (from.x - from.y);
+  if (Math.abs(screenDx) < 1e-6) return fallback;
+  return screenDx < 0 ? "left" : "right";
 }

@@ -31,6 +31,22 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // stable, readable chunk names: react itself rarely changes between deploys, so keeping it in
+        // its own file lets browsers (and the PWA precache) reuse it, and each lazy locale gets a
+        // name instead of another confusing `index-*.js`
+        manualChunks(id) {
+          const norm = id.split("\\").join("/");
+          if (/\/node_modules\/(react|react-dom|scheduler)\//.test(norm)) return "vendor-react";
+          const locale = /\/src\/i18n\/locales\/([^/]+)\//.exec(norm);
+          if (locale) return `locale-${locale[1]}`;
+          return undefined;
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     host: true

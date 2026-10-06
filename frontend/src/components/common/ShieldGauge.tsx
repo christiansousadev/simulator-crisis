@@ -1,55 +1,44 @@
 import { ShieldCheck } from "lucide-react";
+import { memo } from "react";
+import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
 import { useTranslation } from "../../i18n/useTranslation";
+import { slaBand, toneFor } from "../../utils/kpiBands";
 import DeltaTag from "./DeltaTag";
+import MeterShell from "./MeterShell";
 
 interface ShieldGaugeProps {
   slaPercentage: number;
 }
 
-const SEGMENT_COUNT = 16;
+const SEGMENT_COUNT = 12;
 // zoom the visible band into the range that actually matters for gameplay
 const GAUGE_FLOOR = 95.0;
 const GAUGE_CEIL = 100.0;
-
-// maps sla percentage to a color tone matching the three breach tiers
-function toneFor(sla: number) {
-  if (sla >= 99.9) return { text: "text-emerald-600", bar: "bg-emerald-500" };
-  if (sla >= 99.5) return { text: "text-amber-600", bar: "bg-amber-500" };
-  return { text: "text-rose-600", bar: "bg-rose-500" };
-}
+const SEGMENTS = Array.from({ length: SEGMENT_COUNT }, (_, i) => i);
 
 // segmented sla shield meter, zoomed into the 95-100% band where breaches actually happen
-export default function ShieldGauge({ slaPercentage }: ShieldGaugeProps) {
+export default memo(function ShieldGauge({ slaPercentage }: ShieldGaugeProps) {
   const t = useTranslation();
-  const ratio = Math.min(1, Math.max(0, (slaPercentage - GAUGE_FLOOR) / (GAUGE_CEIL - GAUGE_FLOOR)));
+  const shown = useAnimatedNumber(slaPercentage);
+  const ratio = Math.min(1, Math.max(0, (shown - GAUGE_FLOOR) / (GAUGE_CEIL - GAUGE_FLOOR)));
   const litSegments = Math.round(ratio * SEGMENT_COUNT);
-  const tone = toneFor(slaPercentage);
+  const band = slaBand(slaPercentage);
+  const tone = toneFor("sla", band);
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5">
-        <ShieldCheck className={`w-3.5 h-3.5 ${tone.text}`} />
-        <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.topbar.slaShield}</span>
+    <MeterShell kpi="sla" icon={ShieldCheck} iconClass={tone.text} label={t.topbar.slaShield} band={band}>
+      <div className="flex gap-[2px]" aria-hidden>
+        {SEGMENTS.map((i) => (
+          <span
+            key={i}
+            className={`h-3.5 w-1.5 rounded-[1px] transition-colors duration-slow ${i < litSegments ? tone.bar : "bg-slate-700"}`}
+          />
+        ))}
       </div>
-      <div className="relative flex items-center gap-2">
-        <div className="flex gap-[2px]">
-          {Array.from({ length: SEGMENT_COUNT }).map((_, i) => (
-            <span
-              key={i}
-              className={`w-1.5 h-3.5 rounded-[1px] transition-colors duration-300 ${
-                i < litSegments ? tone.bar : "bg-slate-700"
-              }`}
-            />
-          ))}
-        </div>
-        <span className={`font-bold text-sm tabular-nums ${tone.text}`}>{slaPercentage.toFixed(2)}%</span>
-        <DeltaTag
-          value={Math.round(slaPercentage * 10) / 10}
-          format={(d) => `${d > 0 ? "+" : ""}${d.toFixed(1)}%`}
-          threshold={0.05}
-          className="top-0 left-full ml-1"
-        />
-      </div>
-    </div>
+      <span className={`min-w-[3.4rem] text-sm font-bold tabular-nums transition-colors duration-slow ${tone.text}`}>
+        {shown.toFixed(2)}%
+      </span>
+      <DeltaTag value={slaPercentage} threshold={0.01} format={(r) => `${r > 0 ? "+" : ""}${r.toFixed(2)}% / tick`} />
+    </MeterShell>
   );
-}
+});

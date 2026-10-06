@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Service } from "../../types/game";
 import { project } from "./isoMath";
 import { rackGridPosition } from "./ServerRoom";
+import "./officeLife.css";
 
 interface ServiceDependencyLinesProps {
   services: Service[];
@@ -14,7 +15,7 @@ interface ServiceDependencyLinesProps {
 // Animated data-flow lines connecting racks that have a declared dependency relationship.
 // Color encodes the downstream service's live status; the animation direction flows FROM
 // the dependency (upstream) TOWARD the dependent (downstream), modeling data-flow direction.
-export default function ServiceDependencyLines({
+function ServiceDependencyLines({
   services,
   originX,
   originY,
@@ -108,18 +109,15 @@ export default function ServiceDependencyLines({
               strokeOpacity={line.opacity}
               strokeDasharray="8 10"
               markerEnd={apmActive ? `url(#${markerId})` : undefined}
-            >
-              <animate
-                attributeName="stroke-dashoffset"
-                from="0"
-                to="-36"
-                dur={line.status === "down" ? "0.7s" : line.status === "degraded" ? "1.2s" : "2s"}
-                repeatCount="indefinite"
-              />
-            </line>
+              // the pattern period is 18, which is exactly how far one css loop travels, so it never jumps
+              className="ol-dash-18"
+              style={{ animationDuration: line.status === "down" ? "0.35s" : line.status === "degraded" ? "0.6s" : "1s" }}
+            />
           </g>
         );
       })}
     </g>
   );
 }
+
+export default memo(ServiceDependencyLines);

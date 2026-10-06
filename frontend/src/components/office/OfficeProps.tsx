@@ -1,5 +1,10 @@
+import { useRef } from "react";
+import { useGameStore } from "../../store/useGameStore";
+import { getHourOfDay } from "../../utils/officeClock";
 import IsoBox from "./IsoBox";
 import { project, shade } from "./isoMath";
+import { clockHandAngles } from "./officeLifeUtils";
+import "./officeLife.css";
 
 interface PropPosition {
   x: number;
@@ -25,14 +30,46 @@ export function WasteBin({ x, y, z = 0 }: PropPosition) {
   return <IsoBox x={x} y={y} z={z} w={0.2} d={0.2} h={0.28} color="#57534e" topFactor={1.1} />;
 }
 
-// WALL CLOCK, DRAWN IN SCREEN SPACE AT THE GIVEN ANCHOR
+// WALL CLOCK, DRAWN IN SCREEN SPACE AT THE GIVEN ANCHOR. the hands follow the game hour (one tick is
+// one game hour), so the clock on the wall agrees with the clock in the top bar
 export function WallClock({ x, y, z = 0.6 }: PropPosition) {
   const p = project(x, y, z);
+  const hour = useGameStore((s) => getHourOfDay(s.telemetry.tick));
+  const angles = clockHandAngles(hour);
+  // keep the angle growing across 12 o'clock so the hand never whips backwards through a full turn
+  const turns = useRef({ last: angles.hour, extra: 0 });
+  if (angles.hour < turns.current.last) turns.current.extra += 360;
+  turns.current.last = angles.hour;
+  const origin = `${p.x}px ${p.y}px`;
   return (
     <g>
       <circle cx={p.x} cy={p.y} r={7} fill="#f8fafc" stroke="#334155" strokeWidth={1.4} />
-      <line x1={p.x} y1={p.y} x2={p.x} y2={p.y - 3.8} stroke="#334155" strokeWidth={1} strokeLinecap="round" />
-      <line x1={p.x} y1={p.y} x2={p.x + 2.6} y2={p.y} stroke="#334155" strokeWidth={1} strokeLinecap="round" />
+      {[0, 90, 180, 270].map((deg) => (
+        <line key={deg} x1={p.x} y1={p.y - 5.6} x2={p.x} y2={p.y - 4.6} stroke="#64748b" strokeWidth={0.6} transform={`rotate(${deg} ${p.x} ${p.y})`} />
+      ))}
+      <line
+        x1={p.x}
+        y1={p.y}
+        x2={p.x}
+        y2={p.y - 3.2}
+        stroke="#334155"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        className="ol-clock-hand"
+        style={{ transform: `rotate(${angles.hour + turns.current.extra}deg)`, transformOrigin: origin }}
+      />
+      <line
+        x1={p.x}
+        y1={p.y}
+        x2={p.x}
+        y2={p.y - 4.9}
+        stroke="#475569"
+        strokeWidth={0.8}
+        strokeLinecap="round"
+        className="ol-clock-hand"
+        style={{ transform: `rotate(${angles.minute}deg)`, transformOrigin: origin }}
+      />
+      <circle cx={p.x} cy={p.y} r={0.9} fill="#334155" />
     </g>
   );
 }
@@ -118,26 +155,45 @@ export function Fridge({ x, y, z = 0 }: PropPosition) {
   );
 }
 
-// ESPRESSO MACHINE ON THE KITCHENETTE COUNTER
-export function EspressoMachine({ x, y, z = 0 }: PropPosition) {
+// ESPRESSO MACHINE ON THE KITCHENETTE COUNTER. `steam` sets how lively it is: a single faint wisp when idle,
+// a full plume once the espresso upgrade is bought
+export function EspressoMachine({ x, y, z = 0, steam = "light" }: PropPosition & { steam?: "off" | "light" | "full" }) {
+  const spout = project(x + 0.07, y + 0.07, z + 0.34);
+  const puffs = steam === "full" ? 3 : steam === "light" ? 1 : 0;
   return (
     <g>
       <IsoBox x={x} y={y} z={z} w={0.26} d={0.22} h={0.24} color="#3f3f46" topFactor={1.2} />
       <IsoBox x={x + 0.04} y={y + 0.04} z={z + 0.24} w={0.06} d={0.06} h={0.08} color="#a1a1aa" />
+      {Array.from({ length: puffs }).map((_, i) => (
+        <ellipse
+          key={i}
+          cx={spout.x + (i - 1) * 1.6}
+          cy={spout.y}
+          rx={1.2}
+          ry={2}
+          fill="#e2e8f0"
+          opacity={0.6}
+          className="animate-steam-rise motion-only"
+          style={{ animationDelay: `${i * 0.55}s` }}
+        />
+      ))}
     </g>
   );
 }
 
-// HEAVY GLASS SLIDING DOOR WITH AN ACCESS KEYPAD, MARKING THE SERVER VAULT ENTRANCE
-export function SlidingGlassDoor({ x, y, z = 0, height = 0.95 }: PropPosition & { height?: number }) {
+// HEAVY GLASS SLIDING DOOR WITH AN ACCESS KEYPAD, MARKING THE SERVER VAULT ENTRANCE. the glass slides
+// aside while somebody is inside the vault
+export function SlidingGlassDoor({ x, y, z = 0, height = 0.95, open = false }: PropPosition & { height?: number; open?: boolean }) {
   const keypad = project(x + 0.28, y - 0.03, z + height * 0.5);
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.05} d={0.5} h={height} color="#cbd5e1" opacity={0.5} topFactor={1.3} rightFactor={1.1} leftFactor={0.9} />
+      <g className="ol-door-slide" style={{ transform: open ? "translate(-10px, 5px)" : "translate(0, 0)" }}>
+        <IsoBox x={x} y={y} z={z} w={0.05} d={0.5} h={height} color="#cbd5e1" opacity={0.5} topFactor={1.3} rightFactor={1.1} leftFactor={0.9} />
+      </g>
       <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={0.02} d={0.02} h={height} color="#475569" />
       <IsoBox x={x - 0.02} y={y + 0.5} z={z} w={0.02} d={0.02} h={height} color="#475569" />
       <rect x={keypad.x - 2} y={keypad.y - 3} width={4} height={6} rx={0.8} fill="#1e293b" />
-      <circle cx={keypad.x} cy={keypad.y - 0.5} r={0.7} fill="#22c55e" />
+      <circle cx={keypad.x} cy={keypad.y - 0.5} r={0.7} fill={open ? "#38bdf8" : "#22c55e"} />
     </g>
   );
 }

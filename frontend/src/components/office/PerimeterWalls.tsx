@@ -1,3 +1,4 @@
+import { memo } from "react";
 import IsoBox from "./IsoBox";
 import { project } from "./isoMath";
 
@@ -7,7 +8,6 @@ interface PerimeterWallsProps {
   maxX: number;
   maxY: number;
   height?: number;
-  dimmed?: boolean;
 }
 
 const WALL_COLOR = "#334155";
@@ -35,17 +35,16 @@ interface WindowMullionsProps {
   to: number;
   z0: number;
   z1: number;
-  dimmed: boolean;
 }
 
 // VERTICAL MULLIONS AND A HORIZONTAL TRANSOM OVERLAID ON THE GLAZING, READING AS REAL WINDOW PANES
-function WindowMullions({ axis, fixed, from, to, z0, z1, dimmed }: WindowMullionsProps) {
+function WindowMullions({ axis, fixed, from, to, z0, z1 }: WindowMullionsProps) {
   const centerOffset = THICKNESS / 2;
   const paneAt = (along: number, z: number) =>
     axis === "x" ? project(along, fixed + centerOffset, z) : project(fixed + centerOffset, along, z);
 
   const paneCount = Math.max(3, Math.round((to - from) / 1.15));
-  const stroke = dimmed ? "rgba(15,23,42,0.35)" : "rgba(15,23,42,0.55)";
+  const stroke = "rgba(15,23,42,0.55)";
 
   const verticals = [];
   for (let i = 0; i <= paneCount; i++) {
@@ -74,11 +73,10 @@ interface WallRunProps {
   from: number;
   to: number;
   height: number;
-  dimmed?: boolean;
 }
 
 // ONE TALL BACK WALL WITH A PANORAMIC RIBBON WINDOW, A BASEBOARD AND A DISTANT SKYLINE
-function WallRun({ axis, fixed, from, to, height, dimmed = false }: WallRunProps) {
+function WallRun({ axis, fixed, from, to, height }: WallRunProps) {
   const fp = footprint(axis, fixed, from, to);
   // panoramic ribbon glazing spans nearly the full height, leaving only a thin sill and header
   const windowZ0 = height * 0.06;
@@ -109,17 +107,17 @@ function WallRun({ axis, fixed, from, to, height, dimmed = false }: WallRunProps
         d={fp.d}
         h={windowZ1 - windowZ0}
         color={WINDOW_COLOR}
-        topFactor={dimmed ? 0.7 : 1.4}
+        topFactor={1.4}
         rightFactor={1.1}
         leftFactor={0.85}
-        opacity={dimmed ? 0.55 : 0.94}
+        opacity={0.94}
       />
       {buildings.map((b, i) => (
         <rect key={i} x={b.x - b.w / 2} y={b.y - b.h} width={b.w} height={b.h} fill={b.color} opacity={0.8} />
       ))}
 
       {/* window frame: mullions and a transom so the glazing reads as panes, not an empty void */}
-      <WindowMullions axis={axis} fixed={fixed} from={from} to={to} z0={windowZ0} z1={windowZ1} dimmed={dimmed} />
+      <WindowMullions axis={axis} fixed={fixed} from={from} to={to} z0={windowZ0} z1={windowZ1} />
 
       {/* baseboard trim along the floor line */}
       <IsoBox x={fp.x} y={fp.y} z={0} w={fp.w} d={fp.d} h={0.1} color={BASEBOARD_COLOR} topFactor={1.05} />
@@ -131,11 +129,14 @@ function WallRun({ axis, fixed, from, to, height, dimmed = false }: WallRunProps
 }
 
 // L-SHAPED PERIMETER BACK WALLS WITH PANORAMIC DAYLIGHT WINDOWS, FRAMING THE OFFICE FLOOR
-export default function PerimeterWalls({ minX, minY, maxX, maxY, height = 2.8, dimmed = false }: PerimeterWallsProps) {
+// night is handled by the ambient light overlay, not by re-tinting the glazing here
+function PerimeterWalls({ minX, minY, maxX, maxY, height = 2.8 }: PerimeterWallsProps) {
   return (
     <g>
-      <WallRun axis="x" fixed={minY} from={minX} to={maxX} height={height} dimmed={dimmed} />
-      <WallRun axis="y" fixed={minX} from={minY} to={maxY} height={height} dimmed={dimmed} />
+      <WallRun axis="x" fixed={minY} from={minX} to={maxX} height={height} />
+      <WallRun axis="y" fixed={minX} from={minY} to={maxY} height={height} />
     </g>
   );
 }
+
+export default memo(PerimeterWalls);

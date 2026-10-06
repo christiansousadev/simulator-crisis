@@ -1,216 +1,124 @@
 import { useEffect } from "react";
 import { api } from "../services/api";
 import { useGameStore } from "../store/useGameStore";
+import { closeTopModal, hasOpenModal } from "../utils/modalStack";
+import { LegacyModal, nextIncidentService, routeShortcut, ShortcutAction } from "./shortcutRouting";
 
-// GLOBAL TACTICAL KEYBOARD SHORTCUTS FOR CRISIS SIMULATION
+// IS THE EVENT TARGET SOMETHING THE USER TYPES INTO
+function isTypingTarget(target: HTMLElement | null): boolean {
+  if (!target) return false;
+  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
+}
+
+// A CONTROL REACHED WITH THE KEYBOARD OWNS SPACE. A button the mouse just clicked also keeps focus,
+// but there Space must still pause the game, so only :focus-visible counts.
+function isKeyboardFocusedControl(target: HTMLElement | null): boolean {
+  if (!target) return false;
+  const control = target.closest('button, a[href], summary, [role="button"], [role="tab"], [role="menuitem"]');
+  if (!control) return false;
+  try {
+    return control.matches(":focus-visible");
+  } catch {
+    return true;
+  }
+}
+
+function openLegacyModals(): LegacyModal[] {
+  const s = useGameStore.getState();
+  const open: LegacyModal[] = [];
+  if (s.triageIncidentId) open.push("triage");
+  if (s.replayIncidentId) open.push("replay");
+  if (s.postMortem) open.push("postMortem");
+  if (s.selectedIncident) open.push("incident");
+  if (s.onboardingOpen) open.push("onboarding");
+  return open;
+}
+
+async function setSpeed(speed: number) {
+  try {
+    if (!useGameStore.getState().telemetry.is_running) await api.startSimulation();
+    await api.setSpeed(speed);
+  } catch {
+    // best-effort; the next telemetry frame reconciles the real engine state
+  }
+}
+
+async function toggleRun() {
+  try {
+    if (useGameStore.getState().telemetry.is_running) await api.pauseSimulation();
+    else await api.startSimulation();
+  } catch {
+    // best-effort
+  }
+}
+
+function runAction(action: ShortcutAction) {
+  const store = useGameStore.getState();
+  switch (action.type) {
+    case "none":
+      return;
+    case "close-top-modal":
+      closeTopModal();
+      return;
+    case "close-legacy":
+      if (action.modal === "triage") store.closeTriageTerminal();
+      else if (action.modal === "replay") store.closeIncidentReplay();
+      else if (action.modal === "postMortem") store.closePostMortem();
+      else if (action.modal === "incident") store.closeIncidentDetail();
+      else store.closeOnboarding();
+      return;
+    case "toggle-pause-menu":
+      store.togglePauseMenu();
+      return;
+    case "toggle-run":
+      void toggleRun();
+      return;
+    case "set-speed":
+      void setSpeed(action.speed);
+      return;
+    case "cycle-incident": {
+      const ids = store.telemetry.active_incidents.map((i) => i.service_id);
+      const next = nextIncidentService(ids, store.selectedServiceId, action.direction);
+      if (next) store.selectService(next);
+      return;
+    }
+    case "toggle-build-mode":
+      store.toggleBuildMode();
+      return;
+    case "dock-tab":
+      store.setDockTab(action.tab);
+      return;
+    case "toggle-dock":
+      store.toggleDockCollapsed();
+      return;
+  }
+}
+
+// GLOBAL TACTICAL KEYBOARD SHORTCUTS. One listener for the app's whole life: everything it needs is
+// read from the stores at key time, so a telemetry frame never re-binds it. While a dialog is open
+// only Escape works (it closes the top-most one); Tab is left alone so focus moves normally.
 export function useGameShortcuts() {
-  const telemetry = useGameStore((s) => s.telemetry);
-  const toggleBuildMode = useGameStore((s) => s.toggleBuildMode);
-  const togglePauseMenu = useGameStore((s) => s.togglePauseMenu);
-  const pauseMenuOpen = useGameStore((s) => s.pauseMenuOpen);
-  const closePauseMenu = useGameStore((s) => s.closePauseMenu);
-  const selectService = useGameStore((s) => s.selectService);
-  const titleScreenVisible = useGameStore((s) => s.titleScreenVisible);
-  const selectedIncident = useGameStore((s) => s.selectedIncident);
-  const closeIncidentDetail = useGameStore((s) => s.closeIncidentDetail);
-  const triageIncidentId = useGameStore((s) => s.triageIncidentId);
-  const closeTriageTerminal = useGameStore((s) => s.closeTriageTerminal);
-  const postMortem = useGameStore((s) => s.postMortem);
-  const closePostMortem = useGameStore((s) => s.closePostMortem);
-  const settingsOpen = useGameStore((s) => s.settingsOpen);
-  const closeSettings = useGameStore((s) => s.closeSettings);
-  const scenarioSelectOpen = useGameStore((s) => s.scenarioSelectOpen);
-  const closeScenarioSelect = useGameStore((s) => s.closeScenarioSelect);
-  const onboardingOpen = useGameStore((s) => s.onboardingOpen);
-  const closeOnboarding = useGameStore((s) => s.closeOnboarding);
-  const setDockTab = useGameStore((s) => s.setDockTab);
-  const toggleDockCollapsed = useGameStore((s) => s.toggleDockCollapsed);
-
   useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // ignore hotkeys when typing in form inputs, textareas, etc.
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // a held key must not machine-gun pause toggles or tab switches
+      if (e.repeat) return;
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
-        return;
-      }
-
-      // Do not hijack browser shortcuts (Ctrl+R, Ctrl+C, Alt+Tab, etc.)
-      if (e.ctrlKey || e.altKey || e.metaKey) {
-        return;
-      }
-
-      if (titleScreenVisible) {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          useGameStore.getState().hideTitleScreen();
-        }
-        return;
-      }
-
-      // Escape: hierarchy of dismissing modals, or toggling tactical pause
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (selectedIncident) {
-          closeIncidentDetail();
-          return;
-        }
-        if (triageIncidentId) {
-          closeTriageTerminal();
-          return;
-        }
-        if (postMortem) {
-          closePostMortem();
-          return;
-        }
-        if (settingsOpen) {
-          closeSettings();
-          return;
-        }
-        if (scenarioSelectOpen) {
-          closeScenarioSelect();
-          return;
-        }
-        if (onboardingOpen) {
-          closeOnboarding();
-          return;
-        }
-        if (pauseMenuOpen) {
-          closePauseMenu();
-          return;
-        }
-        togglePauseMenu();
-        return;
-      }
-
-      // Space: Toggle Pause / Resume
-      if (e.key === " ") {
-        e.preventDefault();
-        if (pauseMenuOpen) {
-          closePauseMenu();
-          if (!telemetry.is_running) {
-            await api.startSimulation().catch(() => {});
-          }
-          return;
-        }
-        try {
-          if (telemetry.is_running) {
-            await api.pauseSimulation();
-          } else {
-            await api.startSimulation();
-          }
-        } catch {
-          // best-effort
-        }
-        return;
-      }
-
-      // Speeds: 1, 2, 5
-      if (e.key === "1") {
-        e.preventDefault();
-        if (!telemetry.is_running) await api.startSimulation().catch(() => {});
-        await api.setSpeed(1).catch(() => {});
-        return;
-      }
-      if (e.key === "2") {
-        e.preventDefault();
-        if (!telemetry.is_running) await api.startSimulation().catch(() => {});
-        await api.setSpeed(2).catch(() => {});
-        return;
-      }
-      if (e.key === "5") {
-        e.preventDefault();
-        if (!telemetry.is_running) await api.startSimulation().catch(() => {});
-        await api.setSpeed(5).catch(() => {});
-        return;
-      }
-
-      // Tab: Cycle through active incidents
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const active = telemetry.active_incidents;
-        if (active.length === 0) return;
-        const currentId = useGameStore.getState().selectedServiceId;
-        const currentIndex = active.findIndex((i) => i.service_id === currentId);
-        const nextIndex = (currentIndex + 1) % active.length;
-        const nextServiceId = active[nextIndex].service_id;
-        selectService(nextServiceId);
-        return;
-      }
-
-      // B: Toggle Build Mode
-      if (e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        toggleBuildMode();
-        return;
-      }
-
-      // Dock tab shortcuts: I, M, C, U, R, A, D
-      const k = e.key.toLowerCase();
-      if (k === "i") {
-        e.preventDefault();
-        setDockTab("incidents");
-        return;
-      }
-      if (k === "m") {
-        e.preventDefault();
-        setDockTab("directives");
-        return;
-      }
-      if (k === "c") {
-        e.preventDefault();
-        setDockTab("compliance");
-        return;
-      }
-      if (k === "u") {
-        e.preventDefault();
-        setDockTab("upgrades");
-        return;
-      }
-      if (k === "r") {
-        e.preventDefault();
-        setDockTab("roster");
-        return;
-      }
-      if (k === "a") {
-        e.preventDefault();
-        setDockTab("achievements");
-        return;
-      }
-      if (k === "g") {
-        e.preventDefault();
-        setDockTab("metrics");
-        return;
-      }
-      if (k === "d") {
-        e.preventDefault();
-        toggleDockCollapsed();
-        return;
-      }
+      const action = routeShortcut({
+        key: e.key,
+        shiftKey: e.shiftKey,
+        hasModifier: e.ctrlKey || e.altKey || e.metaKey,
+        typing: isTypingTarget(target),
+        keyboardFocusedControl: isKeyboardFocusedControl(target),
+        titleVisible: useGameStore.getState().titleScreenVisible,
+        modalOpen: hasOpenModal(),
+        legacyOpen: openLegacyModals(),
+      });
+      if (action.type === "none") return;
+      e.preventDefault();
+      runAction(action);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    titleScreenVisible,
-    telemetry,
-    toggleBuildMode,
-    togglePauseMenu,
-    pauseMenuOpen,
-    closePauseMenu,
-    selectService,
-    selectedIncident,
-    closeIncidentDetail,
-    triageIncidentId,
-    closeTriageTerminal,
-    postMortem,
-    closePostMortem,
-    settingsOpen,
-    closeSettings,
-    scenarioSelectOpen,
-    closeScenarioSelect,
-    onboardingOpen,
-    closeOnboarding,
-    setDockTab,
-    toggleDockCollapsed,
-  ]);
+  }, []);
 }

@@ -1,42 +1,111 @@
-import { AlertOctagon, Check, ChevronRight, Clock, ShieldAlert, Terminal } from "lucide-react";
-import { api } from "../../services/api";
+import { AlertOctagon, ChevronRight, Clock } from "lucide-react";
+import { memo, useMemo } from "react";
+import { useChangeSeq } from "../../hooks/useChangeSeq";
+import { useTranslation } from "../../i18n/useTranslation";
+import { translateIncidentTitle } from "../../i18n/dynamicContent";
+import { Language } from "../../i18n/language";
 import { useGameStore } from "../../store/useGameStore";
 import { Incident } from "../../types/game";
+import { REGULATORY_BREACH_TICK } from "../../utils/incidentImpact";
+import { sortIncidentsByPriority } from "../../utils/severity";
+import IncidentActionButton from "./IncidentActionButton";
 import SeverityBadge from "./SeverityBadge";
+import TransitionList from "./TransitionList";
 
 interface IncidentAlertStackProps {
   onFocusService?: (serviceId: string) => void;
 }
 
+interface AlertCardProps {
+  incident: Incident;
+  language: Language;
+  onOpen: (incident: Incident) => void;
+  onFocusService?: (serviceId: string) => void;
+}
+
+const AlertCard = memo(function AlertCard({ incident: inc, language, onOpen, onFocusService }: AlertCardProps) {
+  const t = useTranslation();
+  const isCritical = inc.severity === "P1_CRITICAL";
+  const unattended = inc.status === "active"; // active means unacknowledged
+  const mtta = inc.mtta_seconds;
+  const urgencyPct = Math.min(100, (mtta / REGULATORY_BREACH_TICK) * 100);
+  const title = translateIncidentTitle(inc.title, language);
+
+  return (
+    <div
+      className={`relative rounded-xl border p-2.5 shadow-xl backdrop-blur-xl transition-[filter,transform] duration-base hover:-translate-x-0.5 hover:brightness-125 ${
+        isCritical
+          ? "border-rose-500/70 bg-slate-950/90 shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+          : "border-amber-500/50 bg-slate-950/85 shadow-[0_0_10px_rgba(245,158,11,0.15)]"
+      }`}
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <SeverityBadge severity={inc.severity} />
+        <span className="rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 font-mono text-micro font-bold uppercase text-sky-300">
+          {inc.service_id}
+        </span>
+      </div>
+
+      {/* stretched button: the whole card focuses the service and opens the briefing */}
+      <button
+        type="button"
+        onClick={() => onOpen(inc)}
+        aria-label={t.hud.incidents.openCard(inc.service_id, title)}
+        data-stretched="true"
+        className="mb-2 block w-full truncate text-left text-xs font-semibold text-slate-100 outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-sky-400"
+      >
+        {title}
+      </button>
+
+      {unattended && (
+        <div className="mb-2">
+          <div className="mb-0.5 flex items-center justify-between font-mono text-micro">
+            <span className="flex items-center gap-1 text-slate-300">
+              <Clock className="h-2.5 w-2.5 text-amber-300" aria-hidden /> {t.hud.incidents.alerts.mttaRisk}
+            </span>
+            <span className={`tabular-nums ${mtta >= 10 ? "font-bold text-rose-300" : "text-amber-300"}`}>
+              {t.hud.incidents.alerts.ticks(mtta, REGULATORY_BREACH_TICK)}
+            </span>
+          </div>
+          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-800">
+            <div
+              className={`h-full transition-[width,background-color] duration-slow ${mtta >= 10 ? "bg-rose-500" : mtta >= 6 ? "bg-amber-400" : "bg-sky-400"}`}
+              style={{ width: `${urgencyPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 flex items-center gap-1.5 border-t border-slate-800/80 pt-1.5">
+        {!unattended && inc.status === "acknowledged" && (
+          <span className="flex-1 font-mono text-micro font-bold text-emerald-300">{t.hud.incidents.alerts.mttaFrozen}</span>
+        )}
+        {unattended && <span className="flex-1" />}
+        <IncidentActionButton incident={inc} onFocusService={onFocusService} compact />
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
+      </div>
+    </div>
+  );
+});
+
+// OFFICE-OVERLAY STACK OF THE ACTIVE THREATS, worst first. Same card contract as the dock: the card
+// opens the briefing, the single action button is always the next step, and acknowledging gives the
+// same beep, toast and pending state everywhere. Sits below the objective tracker (which publishes
+// its height as --objective-tracker-h) so the two never overlap.
 export default function IncidentAlertStack({ onFocusService }: IncidentAlertStackProps) {
+  const t = useTranslation();
+  const language = useGameStore((s) => s.language);
   const activeIncidents = useGameStore((s) => s.telemetry.active_incidents);
-  const openTriageTerminal = useGameStore((s) => s.openTriageTerminal);
   const openIncidentDetail = useGameStore((s) => s.openIncidentDetail);
   const selectService = useGameStore((s) => s.selectService);
-  const triggerRunAnimation = useGameStore((s) => s.triggerRunAnimation);
-  const pushFloatingText = useGameStore((s) => s.pushFloatingText);
+  const count = activeIncidents.length;
+  const countSeq = useChangeSeq(count);
 
-  if (activeIncidents.length === 0) return null;
+  const sorted = useMemo(() => sortIncidentsByPriority(activeIncidents), [activeIncidents]);
 
-  const handleAcknowledge = async (inc: Incident, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await api.acknowledgeIncident(inc.id);
-      triggerRunAnimation(inc.service_id, "acknowledge");
-      pushFloatingText(`ACKNOWLEDGED: ${inc.service_id.toUpperCase()}`, "success");
-    } catch {
-      // best-effort
-    }
-  };
+  if (count === 0) return null;
 
-  const handleTriage = (inc: Incident, e: React.MouseEvent) => {
-    e.stopPropagation();
-    selectService(inc.service_id);
-    onFocusService?.(inc.service_id);
-    openTriageTerminal(inc.id);
-  };
-
-  const handleCardClick = (inc: Incident) => {
+  const handleOpen = (inc: Incident) => {
     selectService(inc.service_id);
     onFocusService?.(inc.service_id);
     openIncidentDetail(inc);
@@ -44,102 +113,26 @@ export default function IncidentAlertStack({ onFocusService }: IncidentAlertStac
 
   return (
     <aside
-      aria-label="Active Incident Alerts"
-      className="absolute top-20 right-3 z-30 flex flex-col gap-2 max-w-xs w-full pointer-events-auto select-none"
+      aria-label={t.hud.incidents.alerts.label}
+      style={{ top: "calc(0.75rem + var(--objective-tracker-h, 0px))" }}
+      className="pointer-events-auto absolute right-3 z-hud flex w-full max-w-xs select-none flex-col gap-2"
     >
-      <div className="flex items-center justify-between px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider uppercase text-rose-300 bg-rose-950/80 border border-rose-500/40 rounded backdrop-blur-md">
-        <span className="flex items-center gap-1.5 animate-pulse">
-          <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
-          ACTIVE THREATS ({activeIncidents.length})
+      <div className="flex items-center justify-between rounded border border-rose-500/40 bg-rose-950/80 px-2 py-0.5 font-mono text-micro font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md">
+        <span key={countSeq} className={`flex items-center gap-1.5 ${countSeq > 0 ? "animate-badge-bump" : ""}`}>
+          <AlertOctagon className="h-3.5 w-3.5 text-rose-300" aria-hidden />
+          {t.hud.incidents.alerts.header(count)}
         </span>
-        <span className="text-slate-400 text-[9px]">TAB TO CYCLE</span>
+        <span className="text-slate-300">{t.hud.incidents.alerts.tabHint}</span>
       </div>
 
-      <div className="flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto no-scrollbar">
-        {activeIncidents.map((inc) => {
-          const isCritical = inc.severity === "P1_CRITICAL";
-          const isUnattended = inc.status === "active"; // active means unacknowledged
-          const mttaTicks = inc.mtta_seconds;
-          const breachThreshold = 12;
-          const urgencyPct = Math.min(100, (mttaTicks / breachThreshold) * 100);
-
-          return (
-            <div
-              key={inc.id}
-              onClick={() => handleCardClick(inc)}
-              className={`p-2.5 rounded-xl border backdrop-blur-xl shadow-xl transition-all cursor-pointer hover:translate-x-[-2px] ${
-                isCritical
-                  ? "bg-slate-950/90 border-rose-500/70 shadow-[0_0_15px_rgba(244,63,94,0.2)]"
-                  : "bg-slate-950/85 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.15)]"
-              }`}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <SeverityBadge severity={inc.severity} />
-                <span className="text-[10px] font-mono font-bold text-sky-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                  {inc.service_id.toUpperCase()}
-                </span>
-              </div>
-
-              {/* Title */}
-              <p className="text-xs font-semibold text-slate-100 truncate mb-2">{inc.title}</p>
-
-              {/* MTTA Urgency countdown bar (12-tick breach indicator) */}
-              {isUnattended && (
-                <div className="mb-2">
-                  <div className="flex items-center justify-between text-[9px] font-mono mb-0.5">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <Clock className="w-2.5 h-2.5 text-amber-400" /> MTTA Risk
-                    </span>
-                    <span className={mttaTicks >= 10 ? "text-rose-400 font-bold animate-pulse" : "text-amber-400"}>
-                      {mttaTicks} / {breachThreshold} Ticks
-                    </span>
-                  </div>
-                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        mttaTicks >= 10 ? "bg-rose-500" : mttaTicks >= 6 ? "bg-amber-400" : "bg-sky-400"
-                      }`}
-                      style={{ width: `${urgencyPct}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Quick Actions on the card */}
-              <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/80">
-                {isUnattended ? (
-                  <button
-                    onClick={(e) => handleAcknowledge(inc, e)}
-                    className="flex-1 flex items-center justify-center gap-1 py-1 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold transition-colors active:scale-95"
-                    title="Freeze MTTA clock and prevent regulatory fines"
-                  >
-                    <Check className="w-3 h-3 text-emerald-400" />
-                    ACKNOWLEDGE
-                  </button>
-                ) : (
-                  <span className="flex-1 text-[9px] font-mono text-emerald-400 font-bold flex items-center gap-1">
-                    <Check className="w-3 h-3" /> MTTA FROZEN
-                  </span>
-                )}
-
-                <button
-                  onClick={(e) => handleTriage(inc, e)}
-                  className="flex items-center gap-1 py-1 px-2 rounded-lg bg-sky-950/60 hover:bg-sky-900/80 border border-sky-500/40 text-sky-300 text-[10px] font-bold transition-colors active:scale-95"
-                  title="Open Log Triage Terminal"
-                >
-                  <Terminal className="w-3 h-3 text-sky-400" />
-                  TRIAGE
-                </button>
-
-                <div className="text-slate-500 hover:text-slate-300">
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <TransitionList
+        items={sorted}
+        getKey={(i) => i.id}
+        exitMs={200}
+        className="no-scrollbar flex max-h-[60vh] flex-col gap-1.5 overflow-y-auto"
+      >
+        {(inc) => <AlertCard incident={inc} language={language} onOpen={handleOpen} onFocusService={onFocusService} />}
+      </TransitionList>
     </aside>
   );
 }

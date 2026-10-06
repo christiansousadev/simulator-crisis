@@ -60,3 +60,20 @@ export function highestSeverity(severities: IncidentSeverity[]): IncidentSeverit
   if (severities.length === 0) return null;
   return severities.reduce((worst, s) => (SEVERITY_RANK[s] > SEVERITY_RANK[worst] ? s : worst));
 }
+
+export function severityRank(severity: IncidentSeverity): number {
+  return SEVERITY_RANK[severity] ?? 0;
+}
+
+// triage order for incident lists: worst severity first, then the one that has waited longest,
+// then id so equal rows never swap places between ticks
+export function sortIncidentsByPriority<T extends { severity: IncidentSeverity; created_tick: number; id: string }>(
+  incidents: T[]
+): T[] {
+  return [...incidents].sort(
+    (a, b) =>
+      severityRank(b.severity) - severityRank(a.severity) ||
+      a.created_tick - b.created_tick ||
+      a.id.localeCompare(b.id)
+  );
+}

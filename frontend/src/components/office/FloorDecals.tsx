@@ -1,5 +1,6 @@
+import { memo } from "react";
 import IsoBox from "./IsoBox";
-import { project } from "./isoMath";
+import { project, shade } from "./isoMath";
 
 interface ZoneBounds {
   originX: number;
@@ -8,32 +9,49 @@ interface ZoneBounds {
   depth: number;
 }
 
-// RAISED ANTI-STATIC TECHNICAL TILE GRID FOR THE SERVER ROOM FLOOR
-export function ServerRoomTiles({ originX, originY, width, depth }: ZoneBounds) {
-  const tileSize = 0.5;
+// flat quad on the floor as an svg path segment (the raised tiles are only 0.02 tall, so drawing
+// just the top face loses nothing visible but turns hundreds of boxes into a couple of paths)
+function quad(x: number, y: number, z: number, w: number, d: number): string {
+  const a = project(x, y, z);
+  const b = project(x + w, y, z);
+  const c = project(x + w, y + d, z);
+  const e = project(x, y + d, z);
+  return `M${a.x},${a.y}L${b.x},${b.y}L${c.x},${c.y}L${e.x},${e.y}Z`;
+}
+
+interface TileFieldProps extends ZoneBounds {
+  tileSize: number;
+  z: number;
+  colorA: string;
+  colorB: string;
+  stroke: string;
+}
+
+// CHECKERBOARD OF FLAT TILES DRAWN AS TWO PATHS, ONE PER COLOR
+function TileField({ originX, originY, width, depth, tileSize, z, colorA, colorB, stroke }: TileFieldProps) {
   const cols = Math.ceil(width / tileSize);
   const rows = Math.ceil(depth / tileSize);
-  const tiles = [];
+  let dA = "";
+  let dB = "";
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const alt = (r + c) % 2 === 0;
-      tiles.push(
-        <IsoBox
-          key={`${r}-${c}`}
-          x={originX + c * tileSize}
-          y={originY + r * tileSize}
-          z={0.022}
-          w={tileSize}
-          d={tileSize}
-          h={0.02}
-          color={alt ? "#cbd5e1" : "#b6c2d1"}
-          stroke="rgba(71,85,105,0.25)"
-        />
-      );
+      const q = quad(originX + c * tileSize, originY + r * tileSize, z, tileSize, tileSize);
+      if ((r + c) % 2 === 0) dA += q;
+      else dB += q;
     }
   }
-  return <g>{tiles}</g>;
+  return (
+    <g>
+      <path d={dA} fill={shade(colorA, 1.18)} stroke={stroke} strokeWidth={0.6} />
+      <path d={dB} fill={shade(colorB, 1.18)} stroke={stroke} strokeWidth={0.6} />
+    </g>
+  );
 }
+
+// RAISED ANTI-STATIC TECHNICAL TILE GRID FOR THE SERVER ROOM FLOOR
+export const ServerRoomTiles = memo(function ServerRoomTiles(props: ZoneBounds) {
+  return <TileField {...props} tileSize={0.5} z={0.042} colorA="#cbd5e1" colorB="#b6c2d1" stroke="rgba(71,85,105,0.25)" />;
+});
 
 interface HazardStripeProps {
   axis: "x" | "y";
@@ -42,35 +60,28 @@ interface HazardStripeProps {
   to: number;
 }
 
-// ONE YELLOW/BLACK HAZARD STRIPE RUN
+// ONE YELLOW/BLACK HAZARD STRIPE RUN, DRAWN AS TWO FLAT PATHS
 export function HazardStripe({ axis, fixed, from, to }: HazardStripeProps) {
   const stripeSize = 0.14;
   const count = Math.ceil((to - from) / stripeSize);
-  const stripes = Array.from({ length: count }).map((_, i) => {
+  let yellow = "";
+  let black = "";
+  for (let i = 0; i < count; i++) {
     const along = from + i * stripeSize;
-    const footprint =
-      axis === "x"
-        ? { x: along, y: fixed, w: stripeSize, d: 0.12 }
-        : { x: fixed, y: along, w: 0.12, d: stripeSize };
-    return (
-      <IsoBox
-        key={i}
-        x={footprint.x}
-        y={footprint.y}
-        z={0.024}
-        w={footprint.w}
-        d={footprint.d}
-        h={0.002}
-        color={i % 2 === 0 ? "#facc15" : "#18181b"}
-        topFactor={1}
-      />
-    );
-  });
-  return <g>{stripes}</g>;
+    const q = axis === "x" ? quad(along, fixed, 0.026, stripeSize, 0.12) : quad(fixed, along, 0.026, 0.12, stripeSize);
+    if (i % 2 === 0) yellow += q;
+    else black += q;
+  }
+  return (
+    <g>
+      <path d={yellow} fill={shade("#facc15", 1)} />
+      <path d={black} fill={shade("#18181b", 1)} />
+    </g>
+  );
 }
 
 // FULL YELLOW/BLACK HAZARD BORDER RUNNING AROUND THE SERVER ROOM SECURITY PERIMETER
-export function HazardBorder({ originX, originY, width, depth }: ZoneBounds) {
+export const HazardBorder = memo(function HazardBorder({ originX, originY, width, depth }: ZoneBounds) {
   return (
     <g>
       <HazardStripe axis="x" fixed={originY} from={originX} to={originX + width} />
@@ -79,10 +90,10 @@ export function HazardBorder({ originX, originY, width, depth }: ZoneBounds) {
       <HazardStripe axis="y" fixed={originX + width} from={originY} to={originY + depth} />
     </g>
   );
-}
+});
 
 // DEEP NAVY EXECUTIVE CARPET WITH A WOVEN LIGHTER BORDER BAND
-export function BoardroomRug({ originX, originY, width, depth }: ZoneBounds) {
+export const BoardroomRug = memo(function BoardroomRug({ originX, originY, width, depth }: ZoneBounds) {
   const border = 0.16;
   return (
     <g>
@@ -100,37 +111,15 @@ export function BoardroomRug({ originX, originY, width, depth }: ZoneBounds) {
       />
     </g>
   );
-}
+});
 
 // CHECKERED TERRAZZO-STYLE TILE FLOOR FOR THE BREAKROOM LOUNGE
-export function BreakroomTiles({ originX, originY, width, depth }: ZoneBounds) {
-  const tileSize = 0.55;
-  const cols = Math.ceil(width / tileSize);
-  const rows = Math.ceil(depth / tileSize);
-  const tiles = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const alt = (r + c) % 2 === 0;
-      tiles.push(
-        <IsoBox
-          key={`${r}-${c}`}
-          x={originX + c * tileSize}
-          y={originY + r * tileSize}
-          z={0.022}
-          w={tileSize}
-          d={tileSize}
-          h={0.015}
-          color={alt ? "#fdf6e8" : "#c9ad84"}
-          stroke="rgba(120,90,50,0.25)"
-        />
-      );
-    }
-  }
-  return <g>{tiles}</g>;
-}
+export const BreakroomTiles = memo(function BreakroomTiles(props: ZoneBounds) {
+  return <TileField {...props} tileSize={0.55} z={0.037} colorA="#fdf6e8" colorB="#c9ad84" stroke="rgba(120,90,50,0.25)" />;
+});
 
 // WOVEN ENTRANCE MAT MARKING THE RECEPTION LOUNGE THRESHOLD
-export function EntranceMat({ originX, originY, width, depth }: ZoneBounds) {
+export const EntranceMat = memo(function EntranceMat({ originX, originY, width, depth }: ZoneBounds) {
   return (
     <g>
       <IsoBox x={originX} y={originY} z={0.021} w={width} d={depth} h={0.012} color="#334155" topFactor={1.1} />
@@ -146,17 +135,17 @@ export function EntranceMat({ originX, originY, width, depth }: ZoneBounds) {
       />
     </g>
   );
-}
+});
 
 // SUBTLE DIRECTIONAL GUIDE LINE MARKING A WALKWAY BETWEEN TWO ZONES
-export function WalkwayGuide({ axis, fixed, from, to }: HazardStripeProps) {
+export const WalkwayGuide = memo(function WalkwayGuide({ axis, fixed, from, to }: HazardStripeProps) {
   const footprint =
     axis === "x" ? { x: from, y: fixed, w: to - from, d: 0.05 } : { x: fixed, y: from, w: 0.05, d: to - from };
   return <IsoBox x={footprint.x} y={footprint.y} z={0.023} w={footprint.w} d={footprint.d} h={0.001} color="#94a3b8" stroke="none" opacity={0.35} />;
-}
+});
 
 // 3D ARCHITECTURAL ISOMETRIC FLOOR SIGNAGE
-export function FloorSignage({
+export const FloorSignage = memo(function FloorSignage({
   x,
   y,
   text,
@@ -192,13 +181,42 @@ export function FloorSignage({
       {text}
     </text>
   );
-}
+});
 
-// DYNAMIC FLOOR LIGHT POOL CAST BY SERVERS OR DESK LAMPS
-export function FloorLightPool({
+export type PoolTone = "cyan" | "red" | "amber" | "warm" | "blue";
+
+const POOL_COLORS: Record<PoolTone, string> = {
+  cyan: "#06b6d4",
+  red: "#ef4444",
+  amber: "#f59e0b",
+  warm: "#fef3c7",
+  blue: "#60a5fa",
+};
+
+// one radial gradient per tone, shared by every light pool and glow; replaces the old per-pool
+// blur() filter, which forced an offscreen blur pass for each ellipse on every repaint
+export const LightGradients = memo(function LightGradients() {
+  return (
+    <>
+      {(Object.keys(POOL_COLORS) as PoolTone[]).map((tone) => (
+        <radialGradient key={tone} id={`lightPool-${tone}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={POOL_COLORS[tone]} stopOpacity={0.95} />
+          <stop offset="55%" stopColor={POOL_COLORS[tone]} stopOpacity={0.45} />
+          <stop offset="100%" stopColor={POOL_COLORS[tone]} stopOpacity={0} />
+        </radialGradient>
+      ))}
+    </>
+  );
+});
+
+// DYNAMIC FLOOR LIGHT POOL CAST BY SERVERS OR DESK LAMPS. `opacity` is any css opacity value, so
+// callers can pass a calc() over the lighting variables and the pool follows day/night and DEFCON
+// with no React render (the nearest light scope supplies --night, --alert-dark and friends).
+export const FloorLightPool = memo(function FloorLightPool({
   x,
   y,
-  color = "#38bdf8",
+  z = 0.023,
+  tone = "cyan",
   radiusX = 45,
   radiusY = 22,
   opacity = 0.2,
@@ -206,24 +224,24 @@ export function FloorLightPool({
 }: {
   x: number;
   y: number;
-  color?: string;
+  z?: number;
+  tone?: PoolTone;
   radiusX?: number;
   radiusY?: number;
-  opacity?: number;
+  opacity?: number | string;
   pulse?: boolean;
 }) {
-  const p = project(x, y, 0.023);
+  const p = project(x, y, z);
   return (
-    <ellipse
-      cx={p.x}
-      cy={p.y}
-      rx={radiusX}
-      ry={radiusY}
-      fill={color}
-      opacity={opacity}
-      className={pulse ? "animate-pulse" : undefined}
-      style={{ filter: "blur(4px)", pointerEvents: "none" }}
-    />
+    <g style={{ opacity, pointerEvents: "none" }}>
+      <ellipse
+        cx={p.x}
+        cy={p.y}
+        rx={radiusX}
+        ry={radiusY}
+        fill={`url(#lightPool-${tone})`}
+        className={pulse ? "animate-glow-pulse" : undefined}
+      />
+    </g>
   );
-}
-
+});

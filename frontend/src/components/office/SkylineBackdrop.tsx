@@ -1,7 +1,9 @@
-import { DayPhase } from "../../utils/officeClock";
+import { memo, useCallback } from "react";
+import { useLightScope } from "./lightingBus";
 
 interface SkylineBackdropProps {
-  dayPhase: DayPhase;
+  // receives the wrapper element so the camera can slide it for parallax (translate only)
+  onElement?: (el: HTMLDivElement | null) => void;
 }
 
 interface Building {
@@ -48,7 +50,6 @@ function BuildingWindows({
   height,
   rows,
   cols,
-  lit,
 }: {
   x: number;
   top: number;
@@ -56,7 +57,6 @@ function BuildingWindows({
   height: number;
   rows: number;
   cols: number;
-  lit: boolean;
 }) {
   const cellW = width / (cols + 1);
   const cellH = height / (rows + 1);
@@ -70,18 +70,19 @@ function BuildingWindows({
       const color = (row + col) % 3 === 0 ? "#7dd3fc" : "#fef08a";
       const intensity = 0.55 + ((row * 3 + col * 5) % 4) * 0.12;
       windows.push(
-        <g key={`${row}-${col}`} style={{ transition: "opacity 4s linear" }} opacity={lit ? 1 : 0}>
-          <circle cx={wx} cy={wy} r={3.2} fill={color} opacity={0.2 + intensity * 0.15} filter="url(#skylineWindowGlow)" />
+        <g key={`${row}-${col}`}>
+          <circle cx={wx} cy={wy} r={4} fill={color === "#7dd3fc" ? "url(#skylineGlowCool)" : "url(#skylineGlowWarm)"} opacity={0.35 + intensity * 0.2} />
           <rect x={wx - 1.4} y={wy - 1.8} width={2.8} height={3.6} rx={0.4} fill={color} opacity={intensity} />
         </g>
       );
     }
   }
-  return <>{windows}</>;
+  // one group per slab, faded as a unit by the night intensity (windows come on as the sun goes)
+  return <g style={{ opacity: "clamp(0, calc((var(--night) - 0.3) * 2.2), 1)" }}>{windows}</g>;
 }
 
 // ONE BUILDING SILHOUETTE: A MAIN SLAB PLUS AN OPTIONAL NARROWER SETBACK TOWER ON TOP
-function BuildingSilhouette({ building, lit }: { building: Building; lit: boolean }) {
+function BuildingSilhouette({ building }: { building: Building }) {
   const tone = DEPTH_TONES[building.depth];
   const baseTop = VIEW_HEIGHT - building.height;
   const setbackTop = baseTop - building.setbackHeight;
@@ -115,7 +116,6 @@ function BuildingSilhouette({ building, lit }: { building: Building; lit: boolea
         height={building.height}
         rows={building.windowRows}
         cols={building.windowCols}
-        lit={lit}
       />
       {building.setbackWidth > 0 && (
         <BuildingWindows
@@ -125,7 +125,6 @@ function BuildingSilhouette({ building, lit }: { building: Building; lit: boolea
           height={building.setbackHeight}
           rows={Math.max(2, Math.round(building.windowRows * 0.4))}
           cols={Math.max(2, Math.round(building.windowCols * 0.6))}
-          lit={lit}
         />
       )}
       {/* aerial-perspective haze veil, thicker over farther/shorter buildings to push them back visually */}
@@ -134,15 +133,22 @@ function BuildingSilhouette({ building, lit }: { building: Building; lit: boolea
   );
 }
 
-// atmospheric parallax skyline sitting behind the isometric svg canvas, seen through the office windows
-export default function SkylineBackdrop({ dayPhase }: SkylineBackdropProps) {
-  const lit = dayPhase === "night" || dayPhase === "dusk";
-  // the deep navy/black backdrop reads fully at night and dusk; during the day it stays a faint
-  // vignette so the CSS daylight gradient behind this layer still shows through
-  const deepSkyOpacity = lit ? 1 : 0.22;
+// atmospheric parallax skyline sitting behind the isometric svg canvas, seen through the office
+// windows. Fully static: the sky darkness and the lit windows follow --night from the light scope
+// on the wrapper, so nothing here re-renders as the hours pass.
+function SkylineBackdrop({ onElement }: SkylineBackdropProps) {
+  const scope = useLightScope();
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      scope(el);
+      onElement?.(el);
+    },
+    [scope, onElement]
+  );
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+    // inset by a few percent so the parallax slide never reveals an edge
+    <div ref={setRef} className="absolute pointer-events-none overflow-hidden" style={{ zIndex: 0, inset: "-4%" }} aria-hidden="true">
       <svg viewBox="0 0 340 200" preserveAspectRatio="xMidYMax slice" className="w-full h-full">
         <defs>
           <linearGradient id="skylineAirGradient" x1="0" y1="0" x2="0" y2="1">
@@ -162,24 +168,22 @@ export default function SkylineBackdrop({ dayPhase }: SkylineBackdropProps) {
             <stop offset="0%" stopColor="rgba(15,23,42,0.85)" />
             <stop offset="100%" stopColor="rgba(15,23,42,0)" />
           </linearGradient>
-          <filter id="skylineWindowGlow" x="-200%" y="-200%" width="500%" height="500%">
-            <feGaussianBlur stdDeviation="1.6" />
-          </filter>
+          {/* window glow as radial gradients: a blur filter on ~200 panes was the costliest thing here */}
+          <radialGradient id="skylineGlowWarm">
+            <stop offset="0%" stopColor="#fef08a" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="#fef08a" stopOpacity={0} />
+          </radialGradient>
+          <radialGradient id="skylineGlowCool">
+            <stop offset="0%" stopColor="#7dd3fc" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="#7dd3fc" stopOpacity={0} />
+          </radialGradient>
         </defs>
 
-        <rect
-          x={0}
-          y={0}
-          width={340}
-          height={200}
-          fill="url(#skylineDeepGradient)"
-          opacity={deepSkyOpacity}
-          style={{ transition: "opacity 4s linear" }}
-        />
+        <rect x={0} y={0} width={340} height={200} fill="url(#skylineDeepGradient)" style={{ opacity: "calc(0.22 + 0.78 * var(--night))" }} />
 
         {/* far-to-near paint order for correct overlap between depth bands */}
         {BUILDINGS.map((b, i) => (
-          <BuildingSilhouette key={i} building={b} lit={lit} />
+          <BuildingSilhouette key={i} building={b} />
         ))}
 
         {/* soft aerial haze wash over the whole skyline, strongest near the rooftops fading to the horizon */}
@@ -191,3 +195,5 @@ export default function SkylineBackdrop({ dayPhase }: SkylineBackdropProps) {
     </div>
   );
 }
+
+export default memo(SkylineBackdrop);

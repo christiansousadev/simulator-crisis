@@ -1,22 +1,36 @@
 import { useEffect, useRef, useState } from "react";
+import { useGameStore } from "../store/useGameStore";
+import { useReducedMotion } from "./useReducedMotion";
 
-// smoothly tweens a displayed numeric readout toward `target` over `durationMs` instead of
-// snapping instantly on every backend tick -- used for high-visibility hud numbers (budget)
-// where an instant jump reads as a glitch rather than a value change
-export function useAnimatedNumber(target: number, durationMs = 450): number {
+// smoothly tweens a displayed numeric readout toward `target` instead of snapping on every
+// backend tick. When `durationMs` is omitted the tween lasts about one tick of game time (so at 1x
+// the number is always gliding toward the next value rather than stair-stepping, and at 5x it
+// still finishes before the following frame). Reduced motion shows the value immediately.
+export function useAnimatedNumber(target: number, durationMs?: number): number {
+  const reduced = useReducedMotion();
+  const tickSeconds = useGameStore((s) => s.telemetry.tick_rate_seconds);
+  const duration = durationMs ?? Math.max(120, Math.min(1000, (tickSeconds || 1) * 1000 * 0.95));
   const [display, setDisplay] = useState(target);
+  const displayRef = useRef(target);
   const frameRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const from = display;
+    if (reduced) {
+      displayRef.current = target;
+      setDisplay(target);
+      return;
+    }
+    const from = displayRef.current;
     const delta = target - from;
     if (delta === 0) return;
 
     const start = performance.now();
     function tick(now: number) {
-      const progress = Math.min(1, (now - start) / durationMs);
+      const progress = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic, decelerates into the final value
-      setDisplay(from + delta * eased);
+      const value = from + delta * eased;
+      displayRef.current = value;
+      setDisplay(value);
       if (progress < 1) frameRef.current = requestAnimationFrame(tick);
     }
     frameRef.current = requestAnimationFrame(tick);
@@ -24,9 +38,7 @@ export function useAnimatedNumber(target: number, durationMs = 450): number {
     return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
-    // intentionally re-runs only when the target changes, tweening from whatever is currently displayed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, durationMs]);
+  }, [target, duration, reduced]);
 
   return display;
 }

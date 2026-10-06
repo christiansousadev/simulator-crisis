@@ -1,5 +1,6 @@
 import { Service } from "../../types/game";
 import { project } from "./isoMath";
+import "./officeLife.css";
 
 export type NetworkHealth = "healthy" | "degraded" | "down";
 
@@ -34,10 +35,11 @@ const CABLE_PATHS: CablePoint[][] = [
 ];
 
 // per-health tier visual tuning: pulse color, dash speed, and whether the line stutters/sparks
+// the dash pattern is "6 6" (period 12) and the css keyframes travel exactly one period per loop, so a loop never jumps
 const HEALTH_STYLE: Record<NetworkHealth, { color: string; durationS: number; className: string; sparking: boolean }> = {
-  healthy: { color: "#22c55e", durationS: 0.7, className: "animate-dash-flow", sparking: false },
-  degraded: { color: "#f59e0b", durationS: 1.9, className: "animate-dash-flow", sparking: false },
-  down: { color: "#ef4444", durationS: 0.5, className: "animate-dash-flow-stutter", sparking: true },
+  healthy: { color: "#22c55e", durationS: 0.7, className: "ol-dash-12", sparking: false },
+  degraded: { color: "#f59e0b", durationS: 1.2, className: "ol-dash-12", sparking: false },
+  down: { color: "#ef4444", durationS: 0.5, className: "ol-dash-12-stutter", sparking: true },
 };
 
 function toPath(points: CablePoint[]): string {

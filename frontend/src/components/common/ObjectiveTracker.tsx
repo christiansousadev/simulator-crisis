@@ -1,37 +1,67 @@
-import { CheckCircle2, Circle, Target } from "lucide-react";
+import { CheckCircle2, Circle, Target, XCircle } from "lucide-react";
+import { memo, useEffect, useRef } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { translateObjective } from "../../i18n/dynamicContent";
 import { useGameStore } from "../../store/useGameStore";
 
 // compact, always-visible tracker for the active scenario's backend-computed objectives -- the
-// opposite corner from ObjectiveHint so the two never collide. renders only `done`, exactly as
-// computed by ScenarioEngine.objectives() server-side; never decides completion itself.
-export default function ObjectiveTracker() {
+// opposite corner from ObjectiveHint so the two never collide. renders only `done` / `failed`,
+// exactly as computed by ScenarioEngine.objectives() server-side; never decides completion itself.
+export default memo(function ObjectiveTracker() {
   const t = useTranslation();
   const language = useGameStore((s) => s.language);
   const hasActiveScenario = useGameStore((s) => s.telemetry.active_scenario !== null);
   const objectives = useGameStore((s) => s.scenarioObjectives);
 
-  if (!hasActiveScenario || objectives.length === 0) return null;
+  const ref = useRef<HTMLDivElement>(null);
+  const visible = hasActiveScenario && objectives.length > 0;
+
+  // publish our height so the incident alert stack (same corner) can sit below us, never on top
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = ref.current;
+    if (!visible || !el) {
+      root.style.setProperty("--objective-tracker-h", "0px");
+      return;
+    }
+    const publish = () => root.style.setProperty("--objective-tracker-h", `${Math.ceil(el.offsetHeight) + 8}px`);
+    publish();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.setProperty("--objective-tracker-h", "0px");
+    };
+  }, [visible]);
+
+  if (!visible) return null;
 
   return (
-    <div className="absolute top-3 right-3 z-30 flex flex-col gap-1 p-2.5 rounded-lg border border-slate-800/80 bg-slate-950/80 backdrop-blur-md shadow-lg max-w-[13rem]">
-      <div className="flex items-center gap-1.5 text-slate-300 text-[10px] font-bold uppercase tracking-wide mb-0.5">
-        <Target className="w-3 h-3 text-sky-400" />
+    <div
+      ref={ref}
+      role="status"
+      aria-label={t.objectiveTracker.header}
+      className="absolute right-3 top-3 z-hud flex max-w-[13rem] flex-col gap-1 rounded-lg border border-slate-800/80 bg-slate-950/80 p-2.5 shadow-lg backdrop-blur-md"
+    >
+      <div className="mb-0.5 flex items-center gap-1.5 font-heading text-xs font-bold uppercase tracking-wider text-slate-300">
+        <Target className="h-3 w-3 text-sky-400" aria-hidden />
         {t.objectiveTracker.header}
       </div>
       {objectives.map((o) => (
-        <div key={o.id} className="flex items-start gap-1.5 text-[11px] leading-tight">
+        <div key={o.id} className="flex items-start gap-1.5 text-caption leading-tight">
           {o.done ? (
-            <CheckCircle2 className="w-3 h-3 mt-0.5 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" aria-label={t.objectiveTracker.done} />
+          ) : o.failed ? (
+            <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-rose-400" aria-hidden />
           ) : (
-            <Circle className="w-3 h-3 mt-0.5 text-slate-500 shrink-0" />
+            <Circle className="mt-0.5 h-3 w-3 shrink-0 text-slate-500" aria-label={t.objectiveTracker.pending} />
           )}
-          <span className={o.done ? "text-slate-500 line-through" : "text-slate-300"}>
+          <span className={o.done ? "text-slate-400 line-through" : o.failed ? "text-rose-300" : "text-slate-200"}>
             {translateObjective(o.id, o.description, language)}
           </span>
         </div>
       ))}
     </div>
   );
-}
+});

@@ -1,40 +1,39 @@
 import { Landmark, ShieldAlert, ShieldCheck } from "lucide-react";
+import { memo } from "react";
+import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
 import { useTranslation } from "../../i18n/useTranslation";
+import { reputationBand, toneFor } from "../../utils/kpiBands";
 import DeltaTag from "./DeltaTag";
+import MeterShell from "./MeterShell";
 
 interface ReputationMeterProps {
   reputation: number;
 }
 
-// pick an icon and tone matching the current governance-reputation band
-function reputationTone(reputation: number) {
-  if (reputation >= 75) return { icon: ShieldCheck, text: "text-emerald-400", bar: "bg-emerald-500" };
-  if (reputation >= 25) return { icon: Landmark, text: "text-sky-400", bar: "bg-sky-500" };
-  return { icon: ShieldAlert, text: "text-rose-400", bar: "bg-rose-500" };
-}
+const ICONS = [ShieldAlert, Landmark, ShieldCheck] as const;
 
 // board-of-directors trust meter, shaped by cumulative CAB dilemma choices across the run
-export default function ReputationMeter({ reputation }: ReputationMeterProps) {
+export default memo(function ReputationMeter({ reputation }: ReputationMeterProps) {
   const t = useTranslation();
-  const tone = reputationTone(reputation);
-  const Icon = tone.icon;
+  const band = reputationBand(reputation);
+  const tone = toneFor("reputation", band);
   const ratio = Math.min(1, Math.max(0, reputation / 100));
+  const shown = useAnimatedNumber(reputation);
 
   return (
-    <div className="flex flex-col gap-1" title={t.governance.reputationTooltip}>
-      <div className="flex items-center gap-1.5">
-        <Icon className={`w-3.5 h-3.5 ${tone.text}`} />
-        <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">
-          {t.governance.reputationLabel}
-        </span>
+    <MeterShell
+      kpi="reputation"
+      icon={ICONS[band]}
+      iconClass={tone.text}
+      label={t.governance.reputationLabel}
+      band={band}
+      title={t.governance.reputationTooltip}
+    >
+      <div className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-slate-700">
+        <div className={`h-full rounded-full transition-[width] duration-slow ease-out-expo ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
       </div>
-      <div className="relative flex items-center gap-2">
-        <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
-        </div>
-        <span className={`font-bold text-sm tabular-nums ${tone.text}`}>{reputation.toFixed(0)}</span>
-        <DeltaTag value={Math.round(reputation)} threshold={1} className="top-0 left-full ml-1" />
-      </div>
-    </div>
+      <span className={`min-w-[1.6rem] text-sm font-bold tabular-nums transition-colors duration-slow ${tone.text}`}>{shown.toFixed(0)}</span>
+      <DeltaTag value={reputation} threshold={0.05} format={(r) => `${r > 0 ? "+" : ""}${r.toFixed(1)} / tick`} />
+    </MeterShell>
   );
-}
+});

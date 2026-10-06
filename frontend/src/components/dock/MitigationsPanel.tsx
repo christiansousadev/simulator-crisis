@@ -1,10 +1,98 @@
 import { Target } from "lucide-react";
+import { memo, useMemo } from "react";
+import { Translations } from "../../i18n/translations";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useGameStore } from "../../store/useGameStore";
-import { useMitigations } from "../../hooks/useMitigations";
+import { RunbookState, useMitigations } from "../../hooks/useMitigations";
 import CooldownButton from "../common/CooldownButton";
+import EmptyState from "../common/EmptyState";
 
-// MANAGEMENT ACTION DECK: RUNBOOK DIRECTIVES TARGETING THE SELECTED SERVICE
+const money = (n: number) => `−$${n.toLocaleString()}`;
+
+// WHY A RUNBOOK CANNOT BE FIRED, IN WORDS THE PLAYER CAN ACT ON ("Need $2,300 more")
+function blockedText(rb: RunbookState, t: Translations): string | null {
+  switch (rb.blockedReason) {
+    case "budget":
+      return t.hud.mitigations.shortBy(`$${rb.missingCash.toLocaleString()}`);
+    case "featureFreeze":
+      return t.mitigations.blocked.featureFreeze;
+    case "noIncident":
+      return t.mitigations.blocked.noIncident;
+    case "providerOutage":
+      return t.mitigations.blocked.providerOutage;
+    default:
+      return null;
+  }
+}
+
+const RunbookCard = memo(function RunbookCard({ rb, onRun }: { rb: RunbookState; onRun: (rb: RunbookState) => void }) {
+  const t = useTranslation();
+  const Icon = rb.icon;
+  const copy = t.mitigations.actions[rb.actionId];
+  const blocked = blockedText(rb, t);
+  const discountNames = rb.discountSources.map((s) => (s === "cicd" ? t.hud.mitigations.discountCicd : t.hud.mitigations.discountTriage));
+  const title = [
+    copy.description,
+    rb.discounted ? t.hud.mitigations.discountTitle(discountNames.join(", ")) : null,
+    blocked && !rb.onCooldown ? blocked : null,
+  ]
+    .filter(Boolean)
+    .join(" — ");
+
+  return (
+    <CooldownButton
+      data-tour={rb.actionId === "rollback" ? "runbook-rollback" : undefined}
+      announceReady
+      progress={rb.cooldownProgress}
+      onClick={() => onRun(rb)}
+      disabled={!!rb.blockedReason}
+      title={title}
+      className={`flex flex-col rounded-lg border p-2 text-left transition-colors duration-base disabled:cursor-not-allowed ${
+        rb.blockedReason
+          ? "border-slate-800 bg-slate-900/50"
+          : rb.danger
+          ? "border-rose-500/50 bg-rose-950/30 hover:bg-rose-950/50"
+          : "border-slate-700 bg-slate-900/80 hover:bg-slate-800/80"
+      }`}
+    >
+      <span className="flex items-center justify-between">
+        <span className="font-heading text-micro font-bold uppercase tracking-wider text-slate-300">{t.mitigations.categories[rb.category]}</span>
+        <Icon className={`h-3.5 w-3.5 ${rb.danger ? "text-rose-400" : "text-slate-300"}`} aria-hidden />
+      </span>
+      <span className={`block text-xs font-bold ${rb.danger ? "text-rose-200" : "text-slate-100"}`}>{copy.name}</span>
+      <span className="block text-caption leading-tight text-slate-300">{t.mitigations.impact[rb.actionId]}</span>
+      <span className="mt-1 flex items-center justify-between gap-2 text-caption font-bold tabular-nums">
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-slate-100">{money(rb.cost)}</span>
+          {rb.discounted && (
+            <s className="font-medium text-slate-400" title={t.hud.mitigations.listPrice(money(rb.listCost))}>
+              {money(rb.listCost)}
+            </s>
+          )}
+        </span>
+        <span className={rb.techDebtDelta < 0 ? "text-emerald-300" : "text-amber-300"} title={t.hud.mitigations.tdiTitle(rb.techDebtDelta)}>
+          {rb.techDebtDelta > 0 ? "+" : ""}
+          {rb.techDebtDelta} {t.mitigations.tdiSuffix}
+        </span>
+      </span>
+      <span className="mt-0.5 flex min-h-[1rem] items-center justify-between gap-2 text-micro font-bold tabular-nums">
+        <span className={rb.danger ? "text-rose-300" : "text-transparent select-none"} aria-hidden={!rb.danger}>
+          {t.mitigations.highRisk}
+        </span>
+        {rb.onCooldown ? (
+          <span className="text-slate-200">{t.mitigations.readyIn(rb.readyInTicks)}</span>
+        ) : blocked ? (
+          <span className="truncate text-amber-300">{blocked}</span>
+        ) : (
+          <span className="text-emerald-300">{t.hud.mitigations.ready}</span>
+        )}
+      </span>
+    </CooldownButton>
+  );
+});
+
+// MANAGEMENT ACTION DECK: RUNBOOK DIRECTIVES TARGETING THE SELECTED SERVICE. Prices are the ones the
+// server will really charge (CI/CD and root-cause discounts applied, list price struck through).
 export default function MitigationsPanel() {
   const t = useTranslation();
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
@@ -14,84 +102,39 @@ export default function MitigationsPanel() {
   const { runbooks, execute } = useMitigations(selectedServiceId);
 
   // unique service ids with an open incident, offered as one-click targets in the empty state
-  const affectedServiceIds = Array.from(new Set(activeIncidents.map((i) => i.service_id)));
+  const affectedServiceIds = useMemo(() => Array.from(new Set(activeIncidents.map((i) => i.service_id))), [activeIncidents]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-slate-400">
+    <div className="flex h-full flex-col">
+      <div className="px-3 pb-1 pt-2 text-caption font-semibold text-slate-300">
         {t.mitigations.targetLabel(
           selectedServiceId ? (services.find((s) => s.id === selectedServiceId)?.name ?? selectedServiceId) : t.common.none
         )}
       </div>
 
       {!selectedServiceId ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-4 py-2">
-          <Target className="w-5 h-5 text-slate-500" />
-          <p className="text-[11px] text-slate-400 max-w-xs">{t.mitigations.selectServiceHint}</p>
+        <EmptyState icon={Target} title={t.mitigations.selectServiceHint}>
           {affectedServiceIds.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                {t.mitigations.affectedServicesLabel}
-              </span>
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+              <span className="font-heading text-micro font-bold uppercase tracking-wider text-slate-400">{t.mitigations.affectedServicesLabel}</span>
               {affectedServiceIds.map((id) => (
                 <button
+                  type="button"
                   key={id}
                   onClick={() => selectService(id)}
-                  className="px-2 py-1 rounded-md border border-sky-500/40 bg-sky-950/40 text-sky-300 text-[10px] font-bold hover:bg-sky-900/50 transition-colors"
+                  className="rounded-md border border-sky-500/40 bg-sky-950/40 px-2 py-1 text-caption font-bold text-sky-200 transition-colors hover:bg-sky-900/50"
                 >
                   {services.find((s) => s.id === id)?.name ?? id}
                 </button>
               ))}
             </div>
           )}
-        </div>
+        </EmptyState>
       ) : (
-        <div className="flex-1 overflow-y-auto p-2 pt-1 grid grid-cols-4 gap-1.5">
-          {runbooks.map((rb) => {
-            const Icon = rb.icon;
-            const copy = t.mitigations.actions[rb.actionId];
-
-            return (
-              <CooldownButton
-                key={rb.actionId}
-                progress={rb.cooldownProgress}
-                onClick={() => execute(rb)}
-                disabled={!!rb.blockedReason}
-                title={rb.blockedReason ? t.mitigations.blocked[rb.blockedReason] : undefined}
-                className={`rounded-lg border p-2 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                  rb.danger
-                    ? "border-rose-500/50 bg-rose-950/30 hover:bg-rose-950/50"
-                    : "border-slate-800 bg-slate-900/80 hover:bg-slate-800/80"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                    {t.mitigations.categories[rb.category]}
-                  </span>
-                  <Icon className={`w-3.5 h-3.5 ${rb.danger ? "text-rose-400" : "text-slate-400"}`} />
-                </div>
-                <div className={`text-xs font-bold ${rb.danger ? "text-rose-300" : "text-slate-200"}`}>{copy.name}</div>
-                <p className="text-[10px] text-slate-400 leading-tight">{t.mitigations.impact[rb.actionId]}</p>
-                <div className="flex items-center justify-between mt-1 text-[10px] font-bold tabular-nums">
-                  <span className="text-rose-400">-${rb.cost.toLocaleString()}</span>
-                  <span className={rb.techDebtDelta < 0 ? "text-emerald-400" : "text-amber-400"}>
-                    {rb.techDebtDelta > 0 ? "+" : ""}
-                    {rb.techDebtDelta} {t.mitigations.tdiSuffix}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between mt-0.5 text-[9px] font-bold tabular-nums min-h-[12px]">
-                  <span className={rb.danger ? "text-rose-400" : "text-transparent select-none"}>{t.mitigations.highRisk}</span>
-                  {rb.onCooldown ? (
-                    <span className="text-slate-500">{t.mitigations.readyIn(rb.readyInTicks)}</span>
-                  ) : rb.blockedReason === "budget" ? (
-                    <span className="text-amber-500 truncate">{t.mitigations.blocked.budget}</span>
-                  ) : rb.blockedReason === "featureFreeze" ? (
-                    <span className="text-amber-500 truncate">{t.mitigations.blocked.featureFreeze}</span>
-                  ) : null}
-                </div>
-              </CooldownButton>
-            );
-          })}
+        <div data-tour="runbook-grid" className="grid flex-1 grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] content-start gap-1.5 overflow-y-auto p-2 pt-1">
+          {runbooks.map((rb) => (
+            <RunbookCard key={rb.actionId} rb={rb} onRun={execute} />
+          ))}
         </div>
       )}
     </div>

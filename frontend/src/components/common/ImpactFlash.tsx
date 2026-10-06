@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useGameStore } from "../../store/useGameStore";
 
 // FULL-SCREEN RED VIGNETTE FLASH FIRED ON A FRESH P1 ALARM OR A BANKRUPTCY TRANSITION
 export default function ImpactFlash() {
   const impactFlashSeq = useGameStore((s) => s.impactFlashSeq);
   const [visible, setVisible] = useState(false);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
-    if (impactFlashSeq === 0) return;
+    if (impactFlashSeq === 0 || reduced) return;
     setVisible(true);
     const timer = setTimeout(() => setVisible(false), 500);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [impactFlashSeq]);
 
   if (!visible) return null;

@@ -1,9 +1,12 @@
 import { AlertTriangle, LucideIcon, RotateCcw, ShieldHalf, Zap } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslation } from "../i18n/useTranslation";
 import { MitigationActionId, MitigationCategoryKey } from "../i18n/translations";
 import { api } from "../services/api";
 import { useGameStore } from "../store/useGameStore";
-import { playCashSound, playClickSound, playKeyboardClatter } from "../utils/sound";
+import { claimLocalSpend } from "../utils/localSpendClaims";
+import { effectiveRunbookPrice, isProviderOutageBlocked, openIncidentFor, runbookBlockedReason, RunbookBlockReason, serviceNeedsRunbook } from "../utils/runbooks";
+import { playCashSound, playClickSound, playErrorSound, playKeyboardClatter } from "../utils/sound";
 
 export interface RunbookDef {
   actionId: MitigationActionId;
@@ -24,13 +27,21 @@ export const RUNBOOKS: RunbookDef[] = [
   { actionId: "emergency_patch", cost: 500, techDebtDelta: 8, cooldownTicks: 6, category: "emergency", icon: AlertTriangle, danger: true },
 ];
 
-export type MitigationBlockReason = "cooldown" | "featureFreeze" | "budget" | null;
+export type MitigationBlockReason = RunbookBlockReason;
 
 export interface RunbookState extends RunbookDef {
+  // `cost` and `techDebtDelta` are the EFFECTIVE values the server will charge; the catalog
+  // price is kept in `listCost`/`listTechDebtDelta` so the ui can strike it through
+  listCost: number;
+  listTechDebtDelta: number;
+  discounted: boolean;
+  discountSources: ("cicd" | "triage")[];
   cooldownProgress: number; // 0 (ready) .. 1 (just fired)
   onCooldown: boolean;
   readyInTicks: number;
   blockedReason: MitigationBlockReason;
+  // cash still missing when the budget is the blocker
+  missingCash: number;
 }
 
 // shared runbook catalog + live cooldown/afford state + execution, reused by the dock's
@@ -43,8 +54,16 @@ export function useMitigations(targetServiceId: string | null) {
   const currentTick = useGameStore((s) => s.telemetry.tick);
   const mitigationCooldowns = useGameStore((s) => s.telemetry.mitigation_cooldowns);
   const featureFreezeActive = useGameStore((s) => s.telemetry.feature_freeze_active);
+  const purchasedUpgrades = useGameStore((s) => s.telemetry.purchased_upgrades);
+  const activeIncidents = useGameStore((s) => s.telemetry.active_incidents);
+  const scenarioId = useGameStore((s) => s.telemetry.active_scenario?.scenario_id ?? null);
+  const targetService = useGameStore((s) => (targetServiceId ? s.telemetry.services.find((x) => x.id === targetServiceId) : undefined));
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const triggerRunAnimation = useGameStore((s) => s.triggerRunAnimation);
+  const pushKpiEvent = useGameStore((s) => s.pushKpiEvent);
+
+  // the incident the server will price and gate this runbook against (first open one on the service)
+  const targetIncident = useMemo(() => openIncidentFor(targetServiceId, activeIncidents), [targetServiceId, activeIncidents]);
 
   const runbooks: RunbookState[] = RUNBOOKS.map((rb) => {
     const lastFired = mitigationCooldowns[rb.actionId];
@@ -53,12 +72,39 @@ export function useMitigations(targetServiceId: string | null) {
     const onCooldown = cooldownProgress > 0;
     const readyInTicks = onCooldown ? Math.max(1, rb.cooldownTicks - elapsed) : 0;
 
-    let blockedReason: MitigationBlockReason = null;
-    if (onCooldown) blockedReason = "cooldown";
-    else if (featureFreezeActive && rb.danger) blockedReason = "featureFreeze";
-    else if (budget < rb.cost) blockedReason = "budget";
+    const price = effectiveRunbookPrice({
+      actionId: rb.actionId,
+      listCost: rb.cost,
+      listTechDebtDelta: rb.techDebtDelta,
+      purchasedUpgrades,
+      incident: targetIncident,
+    });
 
-    return { ...rb, cooldownProgress, onCooldown, readyInTicks, blockedReason };
+    const blockedReason = runbookBlockedReason({
+      onCooldown,
+      danger: !!rb.danger,
+      featureFreezeActive,
+      targetHasOpenIncident: !!targetIncident,
+      providerOutage: isProviderOutageBlocked(scenarioId, targetServiceId),
+      serviceNeedsRunbook: serviceNeedsRunbook(targetService, !!targetIncident),
+      budget,
+      effectiveCost: price.cost,
+    });
+
+    return {
+      ...rb,
+      cost: Math.round(price.cost),
+      techDebtDelta: price.techDebtDelta,
+      listCost: rb.cost,
+      listTechDebtDelta: rb.techDebtDelta,
+      discounted: price.discounted,
+      discountSources: price.sources,
+      cooldownProgress,
+      onCooldown,
+      readyInTicks,
+      blockedReason,
+      missingCash: blockedReason === "budget" ? Math.max(1, Math.ceil(price.cost - budget)) : 0,
+    };
   });
 
   const execute = async (rb: RunbookState) => {
@@ -70,10 +116,14 @@ export function useMitigations(targetServiceId: string | null) {
       await api.executeMitigation(rb.actionId, targetServiceId);
       triggerRunAnimation(targetServiceId, "mitigate");
       pushFloatingText(`-$${rb.cost.toLocaleString()} :: ${copy.name}`, "info");
+      // chip now; the matching audit entry arrives a tick later and must not draw it twice
+      claimLocalSpend("RUNBOOK_EXECUTED");
+      pushKpiEvent("budget", -rb.cost, copy.name);
       playCashSound();
     } catch (err) {
       // surface the backend's actual reason (e.g. a cooldown-remaining message, a feature-freeze
       // or scenario restriction) instead of always claiming insufficient budget
+      playErrorSound();
       pushFloatingText(err instanceof Error && err.message ? err.message : t.mitigations.rejected, "danger");
     }
   };

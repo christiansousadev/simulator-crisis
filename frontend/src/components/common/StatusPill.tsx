@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { IncidentPipelineStatus } from "../../utils/incidentPipeline";
 
@@ -15,13 +16,13 @@ interface StatusPillProps {
 }
 
 // shared incident pipeline-state pill: new -> acknowledged -> investigating -> mitigating -> resolved
-export default function StatusPill({ status, className = "" }: StatusPillProps) {
+export default memo(function StatusPill({ status, className = "" }: StatusPillProps) {
   const t = useTranslation();
   return (
     <span
-      className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 uppercase tracking-wide ${TONE[status]} ${className}`}
+      className={`shrink-0 rounded border px-1.5 py-0.5 text-micro font-bold uppercase leading-none tracking-wide transition-colors duration-base ${TONE[status]} ${className}`}
     >
       {t.incidents.statusPill[status]}
     </span>
   );
-}
+});

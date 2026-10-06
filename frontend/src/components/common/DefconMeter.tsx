@@ -1,11 +1,9 @@
+import { memo } from "react";
+import { useChangeSeq } from "../../hooks/useChangeSeq";
 import { useTranslation } from "../../i18n/useTranslation";
 import { Translations } from "../../i18n/translations";
-import { TelemetryState } from "../../types/game";
-import { computeDefconLevel, DefconLevel } from "../../utils/defcon";
-
-interface DefconMeterProps {
-  telemetry: TelemetryState;
-}
+import { useGameStore } from "../../store/useGameStore";
+import { DefconLevel, selectDefconLevel } from "../../utils/defcon";
 
 const LEVEL_STYLE: Record<DefconLevel, { text: string; ring: string; pulse: boolean; glitch: boolean }> = {
   5: { text: "text-emerald-400", ring: "border-emerald-500/50 bg-emerald-500/10", pulse: false, glitch: false },
@@ -31,30 +29,35 @@ function levelLabel(t: Translations, level: DefconLevel): string {
 }
 
 // MILITARY-STYLE TACTICAL THREAT BADGE: DEFCON 5 (NOMINAL, NEON GREEN) DOWN TO DEFCON 1
-// (IMMINENT COLLAPSE, PULSING RED WITH A GLITCH JITTER), DERIVED PURELY FROM LIVE TELEMETRY
-export default function DefconMeter({ telemetry }: DefconMeterProps) {
+// (IMMINENT COLLAPSE, PULSING RED WITH A GLITCH JITTER), DERIVED PURELY FROM LIVE TELEMETRY.
+// Fixed width (the long level names truncate) so a level change never re-centers the kpi cluster;
+// a change slides the digit in and flashes the badge once.
+export default memo(function DefconMeter() {
   const t = useTranslation();
-  const level = computeDefconLevel(telemetry);
+  const level = useGameStore(selectDefconLevel);
   const style = LEVEL_STYLE[level];
+  const changeSeq = useChangeSeq(level);
 
   return (
     <div
+      role="status"
       title={`${t.defcon.label} ${level} :: ${levelLabel(t, level)}`}
-      className={`flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-md border shrink-0 ${style.ring} ${
+      className={`flex w-[5.75rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-1.5 py-1 transition-colors duration-slow ${style.ring} ${style.text} ${
         style.pulse ? "animate-pulse" : ""
       }`}
     >
-      <span className={`text-[9px] font-bold uppercase tracking-widest opacity-70 ${style.text}`}>{t.defcon.label}</span>
+      <span className="font-heading text-micro font-bold uppercase leading-none tracking-widest opacity-80">{t.defcon.label}</span>
       <span
-        className={`font-heading font-extrabold text-lg leading-none tabular-nums ${style.text} ${
-          style.glitch ? "animate-defcon-glitch" : ""
-        }`}
+        key={changeSeq}
+        className={`rounded font-heading text-lg font-extrabold leading-none tabular-nums ${
+          changeSeq > 0 ? "animate-slide-down-in" : ""
+        } ${style.glitch ? "animate-defcon-glitch" : ""}`}
       >
         {level}
       </span>
-      <span className={`hidden hd:inline text-[8px] font-semibold uppercase tracking-wide opacity-80 ${style.text}`}>
+      <span className="hidden w-full truncate text-center text-micro font-semibold uppercase leading-none tracking-wide opacity-90 hd:block">
         {levelLabel(t, level)}
       </span>
     </div>
   );
-}
+});

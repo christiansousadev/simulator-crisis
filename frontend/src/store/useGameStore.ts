@@ -1,8 +1,16 @@
 import { create } from "zustand";
 import { detectBrowserLanguage, Language, loadStoredLanguage, persistLanguage } from "../i18n/language";
-import { TRANSLATIONS } from "../i18n/translations";
+import { loadLanguage } from "../i18n/loadLanguage";
+import { isLanguageReady, TRANSLATIONS } from "../i18n/translations";
 import { ActiveScenario, DilemmaOffer, Incident, ScenarioObjective, TelemetryState } from "../types/game";
+import { auditKpiInputs } from "../utils/auditKpi";
 import { countDependents } from "../utils/incidentImpact";
+import { KpiId } from "../utils/kpiBands";
+import { KpiEvent, KpiEventInput, mergeKpiEvent } from "../utils/kpiEvents";
+import { consumeLocalSpend } from "../utils/localSpendClaims";
+
+// the most recent language the user asked for (guards async dictionary loads against out-of-order resolves)
+let languageRequest: Language | null = null;
 
 // pre-connection placeholder state, replaced by the first ws telemetry frame
 const INITIAL_TELEMETRY: TelemetryState = {
@@ -40,6 +48,70 @@ const NOMINAL_RPS_PER_HEALTHY_SERVICE = 220;
 const ONBOARDING_STORAGE_KEY = "incidentzero.onboarding_seen";
 const HIGH_CONTRAST_STORAGE_KEY = "incidentzero.high_contrast";
 const COLORBLIND_SAFE_STORAGE_KEY = "incidentzero.colorblind_safe";
+const REDUCED_MOTION_STORAGE_KEY = "incidentzero.reduced_motion";
+
+export type ReducedMotionPref = "system" | "on" | "off";
+
+function loadReducedMotionPref(): ReducedMotionPref {
+  if (typeof window === "undefined") return "system";
+  try {
+    const stored = localStorage.getItem(REDUCED_MOTION_STORAGE_KEY);
+    return stored === "on" || stored === "off" ? stored : "system";
+  } catch {
+    return "system";
+  }
+}
+
+// STRUCTURAL SHARING FOR TELEMETRY FRAMES. every frame arrives as freshly parsed JSON, so every
+// array and object is a new reference even when nothing in it changed -- which re-rendered every
+// subscriber on every tick. Here each unchanged value keeps its previous reference (compared by
+// serialized form), so selectors, memo() and effect dependencies only fire on a real change.
+function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+function shareList<T>(prev: T[] | undefined, next: T[] | undefined): T[] | undefined {
+  if (!prev || !next) return next;
+  const shared = next.map((item, idx) => {
+    const old = prev[idx];
+    // match by id when the items carry one, so a reorder or a removal still reuses the old object
+    const byId =
+      item && typeof item === "object" && "id" in (item as object)
+        ? prev.find((p) => (p as { id?: unknown }).id === (item as { id?: unknown }).id)
+        : old;
+    return byId !== undefined && sameJson(byId, item) ? byId : item;
+  });
+  const unchanged = shared.length === prev.length && shared.every((item, idx) => item === prev[idx]);
+  return unchanged ? prev : shared;
+}
+
+function shareTelemetry(prev: TelemetryState, next: TelemetryState): TelemetryState {
+  const out: TelemetryState = { ...next };
+  const listKeys = [
+    "services",
+    "active_incidents",
+    "recent_audits",
+    "engineers",
+    "infrastructure_nodes",
+    "purchased_upgrades",
+    "achievements_unlocked",
+    "unlocked_cosmetics",
+  ] as const;
+  for (const key of listKeys) {
+    (out as unknown as Record<string, unknown>)[key] = shareList(
+      prev[key] as unknown[],
+      next[key] as unknown[]
+    );
+  }
+  if (sameJson(prev.mitigation_cooldowns, next.mitigation_cooldowns)) out.mitigation_cooldowns = prev.mitigation_cooldowns;
+  if (sameJson(prev.active_scenario, next.active_scenario)) out.active_scenario = prev.active_scenario;
+  return out;
+}
 
 // READ A PERSISTED BOOLEAN ACCESSIBILITY PREFERENCE, DEFAULTING TO FALSE
 function loadStoredFlag(key: string): boolean {
@@ -67,6 +139,8 @@ export interface MetricsSample {
   avgLatencyMs: number;
   errorRatePct: number;
   throughputProxy: number;
+  // sla_percentage at this tick (the dock plots this, not the throughput proxy)
+  sla: number;
 }
 
 export interface AchievementToastData {
@@ -97,6 +171,7 @@ export interface FloatingText {
 }
 
 let floatingTextSeq = 0;
+let kpiEventSeq = 0;
 let runAnimationSeq = 0;
 
 // audit ledger ids already reflected as a floating callout; module-scoped so it survives
@@ -107,7 +182,9 @@ let seenAuditIds: Set<string> | null = null;
 // brief entrance flash on the rack the instant a new incident spawns there, distinct from the
 // severity glow (which is continuous for as long as the incident stays open) -- same
 // trigger/dismiss mechanism as "acknowledge"/"mitigate", just consumed by ServerRack itself.
-export type RunAnimationKind = "acknowledge" | "mitigate" | "raised";
+// "degrade" / "fail" / "recover" are the staged service-status transitions emitted by the office's
+// useServiceTransitions hook (the previous-status diff); each is dismissed by that hook after its ttl.
+export type RunAnimationKind = "acknowledge" | "mitigate" | "raised" | "degrade" | "fail" | "recover";
 
 export interface RunAnimation {
   id: string;
@@ -132,6 +209,37 @@ export interface IncidentResolutionSummary {
 
 let resolutionSummarySeq = 0;
 
+// PROGRESS OF THE GUIDED TUTORIAL (steps themselves are declarative data in components/tutorial).
+// `completed` holds step ids that already finished or were skipped, so going Back never re-fires them.
+export type TutorialIncidentPhase = "idle" | "creating" | "ready" | "failed";
+
+export interface TutorialProgress {
+  stepIndex: number;
+  completed: string[];
+  incidentId: string | null;
+  serviceId: string | null;
+  // "tutorial" = the deterministic practice incident; "natural" = a real one adopted as a fallback
+  incidentSource: "tutorial" | "natural" | null;
+  incidentPhase: TutorialIncidentPhase;
+  // whether the practice incident was ever seen in telemetry (so "gone" can only mean resolved)
+  incidentSeen: boolean;
+  startBudget: number | null;
+  // mitigation cooldown ticks when the runbook step began; a changed entry means a runbook was fired
+  cooldownBaseline: Record<string, number> | null;
+}
+
+export const INITIAL_TUTORIAL_PROGRESS: TutorialProgress = {
+  stepIndex: 0,
+  completed: [],
+  incidentId: null,
+  serviceId: null,
+  incidentSource: null,
+  incidentPhase: "idle",
+  incidentSeen: false,
+  startBudget: null,
+  cooldownBaseline: null,
+};
+
 interface GameStore {
   telemetry: TelemetryState;
   connected: boolean;
@@ -151,11 +259,18 @@ interface GameStore {
   language: Language;
   activeDilemma: DilemmaOffer | null;
   onboardingOpen: boolean;
+  // first run: offer the tutorial (once the title is gone) instead of forcing it
+  tutorialOfferPending: boolean;
+  tutorial: TutorialProgress;
   settingsOpen: boolean;
   scenarioSelectOpen: boolean;
   scenarioBuilderOpen: boolean;
   buildModeActive: boolean;
   metricsHistory: MetricsSample[];
+  // labelled chips that fly off a kpi meter (kept apart from floatingTexts on purpose)
+  kpiEvents: KpiEvent[];
+  // net cash change per tick between audited events (the calm "passive burn" indicator)
+  budgetTrend: number;
   achievementToast: AchievementToastData | null;
   triageIncidentId: string | null;
   replayIncidentId: string | null;
@@ -170,7 +285,9 @@ interface GameStore {
   dockCollapsed: boolean;
   highContrast: boolean;
   colorblindSafe: boolean;
+  reducedMotionPref: ReducedMotionPref;
 
+  setReducedMotionPref: (pref: ReducedMotionPref) => void;
   setDockTab: (tab: "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics") => void;
   setDockCollapsed: (collapsed: boolean) => void;
   toggleDockCollapsed: () => void;
@@ -183,9 +300,11 @@ interface GameStore {
   closePostMortem: () => void;
   pushFloatingText: (text: string, tone: FloatingTextTone) => void;
   dismissFloatingText: (id: string) => void;
-  triggerRunAnimation: (serviceId: string, kind: RunAnimationKind) => void;
+  triggerRunAnimation: (serviceId: string, kind: RunAnimationKind) => string;
   dismissRunAnimation: (id: string) => void;
   dismissResolutionSummary: (id: string) => void;
+  pushKpiEvent: (kpi: KpiId, amount: number, label?: string) => void;
+  dismissKpiEvent: (id: string) => void;
   setScenarioObjectives: (objectives: ScenarioObjective[]) => void;
   openScenarioBriefing: (scenario: ActiveScenario) => void;
   closeScenarioBriefing: () => void;
@@ -193,6 +312,9 @@ interface GameStore {
   setActiveDilemma: (dilemma: DilemmaOffer | null) => void;
   openOnboarding: () => void;
   closeOnboarding: () => void;
+  patchTutorial: (patch: Partial<TutorialProgress>) => void;
+  completeTutorialStep: (stepId: string) => void;
+  resetTutorial: () => void;
   openSettings: () => void;
   closeSettings: () => void;
   openScenarioSelect: () => void;
@@ -235,12 +357,16 @@ export const useGameStore = create<GameStore>((set) => ({
   scenarioBriefing: null,
   language: typeof window === "undefined" ? detectBrowserLanguage() : loadStoredLanguage(),
   activeDilemma: null,
-  onboardingOpen: shouldShowOnboardingOnBoot(),
+  onboardingOpen: false,
+  tutorialOfferPending: shouldShowOnboardingOnBoot(),
+  tutorial: INITIAL_TUTORIAL_PROGRESS,
   settingsOpen: false,
   scenarioSelectOpen: false,
   scenarioBuilderOpen: false,
   buildModeActive: false,
   metricsHistory: [],
+  kpiEvents: [],
+  budgetTrend: 0,
   achievementToast: null,
   triageIncidentId: null,
   replayIncidentId: null,
@@ -255,12 +381,23 @@ export const useGameStore = create<GameStore>((set) => ({
   dockCollapsed: false,
   highContrast: loadStoredFlag(HIGH_CONTRAST_STORAGE_KEY),
   colorblindSafe: loadStoredFlag(COLORBLIND_SAFE_STORAGE_KEY),
+  reducedMotionPref: loadReducedMotionPref(),
 
+  setReducedMotionPref: (pref) => {
+    try {
+      localStorage.setItem(REDUCED_MOTION_STORAGE_KEY, pref);
+    } catch {
+      // best-effort only
+    }
+    set({ reducedMotionPref: pref });
+  },
   setTelemetry: (telemetry) =>
     set((state) => {
       // defend against a stale/older backend process (or a truncated frame) omitting a newer
       // field: fall back to the safe initial defaults instead of crashing on undefined.length
       telemetry = { ...INITIAL_TELEMETRY, ...telemetry };
+      // keep references of everything that did not change since the previous frame
+      telemetry = shareTelemetry(state.telemetry, telemetry);
 
       // a reset is signaled either by tick regression or by a new session_id from the backend
       const wasReset =
@@ -344,6 +481,10 @@ export const useGameStore = create<GameStore>((set) => ({
         spawnedTexts.push({ id: `ft-${floatingTextSeq++}`, text: dict.floatingTexts.slaWarning, tone: "warning" });
       }
 
+      // kpi chips collected from this frame's new ledger entries (see the merge below)
+      const kpiInputs: KpiEventInput[] = [];
+      let auditedCash = false;
+      const hadAuditBaseline = seenAuditIds !== null && !wasReset;
       // ledger diff: turn newly-appended audit entries into RPG-style impact callouts. the very
       // first frame just seeds the seen-ids baseline so a resumed session doesn't replay its
       // entire history as a burst of toasts.
@@ -353,6 +494,8 @@ export const useGameStore = create<GameStore>((set) => ({
         for (const audit of telemetry.recent_audits) {
           if (seenAuditIds.has(audit.id)) continue;
           seenAuditIds.add(audit.id);
+          kpiInputs.push(...auditKpiInputs(audit, dict, consumeLocalSpend));
+          if (typeof audit.details?.amount === "number") auditedCash = true;
 
           if (audit.event_type === "UNATTENDED_ALERT_VIOLATION") {
             const fine = Number(audit.details.fine_amount ?? 0);
@@ -520,8 +663,23 @@ export const useGameStore = create<GameStore>((set) => ({
           ? (telemetry.services.reduce((sum, s) => sum + s.error_rate, 0) / telemetry.services.length) * 100
           : 0,
         throughputProxy: healthyCount * NOMINAL_RPS_PER_HEALTHY_SERVICE,
+        sla: telemetry.sla_percentage,
       };
       const metricsHistory = [...state.metricsHistory, sample].slice(-METRICS_HISTORY_LIMIT);
+
+      // kpi chips, merged per kpi so a burst of changes (5x speed) stays readable
+      const nowMs = Date.now();
+      let kpiEvents = wasReset ? [] : state.kpiEvents;
+      for (const input of kpiInputs) {
+        kpiEvents = mergeKpiEvent(kpiEvents, input, nowMs, () => `kpi-${kpiEventSeq++}`);
+      }
+      // passive burn: the cash delta of a plain tick (no audited movement) is shown as a calm
+      // per-tick trend instead of a chip every second
+      let budgetTrend = wasReset ? 0 : state.budgetTrend;
+      const tickDelta = telemetry.tick - state.telemetry.tick;
+      if (hadAuditBaseline && !auditedCash && tickDelta > 0 && tickDelta <= 3) {
+        budgetTrend = (telemetry.budget - state.telemetry.budget) / tickDelta;
+      }
 
       // game feel: a fresh p1 alarm rattles the screen and flashes red; going bankrupt hits harder
       const newlyRaisedP1 = newlyRaised.some((i) => i.severity === "P1_CRITICAL");
@@ -556,6 +714,8 @@ export const useGameStore = create<GameStore>((set) => ({
         resolutionSummaries,
         activeDilemma,
         metricsHistory,
+        kpiEvents,
+        budgetTrend,
         screenShakeSeq,
         screenShakeMagnitude,
         impactFlashSeq,
@@ -572,7 +732,8 @@ export const useGameStore = create<GameStore>((set) => ({
               triageIncidentId: null,
               replayIncidentId: null,
               scenarioObjectives: [],
-              scenarioBriefing: null,
+              // the briefing is deliberately NOT cleared here: the launch flow opens it right after the
+              // reset, and this frame can arrive after it -- the briefing closes only via its own button
               resolutionSummaries: [],
               floatingTexts: [],
             }
@@ -593,31 +754,63 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
   dismissFloatingText: (id) =>
     set((state) => ({ floatingTexts: state.floatingTexts.filter((t) => t.id !== id) })),
-  triggerRunAnimation: (serviceId, kind) =>
-    set((state) => ({
-      runAnimations: [...state.runAnimations, { id: `ra-${runAnimationSeq++}`, serviceId, kind }],
-    })),
+  triggerRunAnimation: (serviceId, kind) => {
+    const id = `ra-${runAnimationSeq++}`;
+    set((state) => ({ runAnimations: [...state.runAnimations, { id, serviceId, kind }] }));
+    return id;
+  },
   dismissRunAnimation: (id) =>
     set((state) => ({ runAnimations: state.runAnimations.filter((a) => a.id !== id) })),
+  pushKpiEvent: (kpi, amount, label) =>
+    set((state) => ({
+      kpiEvents: mergeKpiEvent(state.kpiEvents, { kpi, amount, label }, Date.now(), () => `kpi-${kpiEventSeq++}`),
+    })),
+  dismissKpiEvent: (id) => set((state) => ({ kpiEvents: state.kpiEvents.filter((e) => e.id !== id) })),
   dismissResolutionSummary: (id) =>
     set((state) => ({ resolutionSummaries: state.resolutionSummaries.filter((r) => r.id !== id) })),
   setScenarioObjectives: (objectives) => set({ scenarioObjectives: objectives }),
   openScenarioBriefing: (scenario) => set({ scenarioBriefing: scenario }),
   closeScenarioBriefing: () => set({ scenarioBriefing: null }),
+  // a lazy dictionary is fetched first and the switch happens only once it is registered, so the UI
+  // never renders keys/undefined; the latest request wins and a failed fetch leaves the language as is
   setLanguage: (language) => {
-    persistLanguage(language);
-    set({ language });
+    const apply = () => {
+      persistLanguage(language);
+      set({ language });
+    };
+    languageRequest = language;
+    if (isLanguageReady(language)) {
+      apply();
+      return;
+    }
+    loadLanguage(language).then(
+      () => {
+        if (languageRequest === language) apply();
+      },
+      () => {
+        // offline with a cold cache: keep the current language, the user can retry the switch
+      }
+    );
   },
   setActiveDilemma: (dilemma) => set({ activeDilemma: dilemma }),
-  openOnboarding: () => set({ onboardingOpen: true }),
+  // every open starts at step 1; every close path (Escape, skip, finish) resets it again
+  openOnboarding: () => set({ onboardingOpen: true, tutorialOfferPending: false, tutorial: INITIAL_TUTORIAL_PROGRESS }),
   closeOnboarding: () => {
     try {
       localStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
     } catch {
       // best-effort only; worst case the tutorial reappears next session
     }
-    set({ onboardingOpen: false });
+    set({ onboardingOpen: false, tutorialOfferPending: false, tutorial: INITIAL_TUTORIAL_PROGRESS });
   },
+  patchTutorial: (patch) => set((state) => ({ tutorial: { ...state.tutorial, ...patch } })),
+  completeTutorialStep: (stepId) =>
+    set((state) =>
+      state.tutorial.completed.includes(stepId)
+        ? state
+        : { tutorial: { ...state.tutorial, completed: [...state.tutorial.completed, stepId] } }
+    ),
+  resetTutorial: () => set({ tutorial: INITIAL_TUTORIAL_PROGRESS }),
   openSettings: () => set({ settingsOpen: true }),
   closeSettings: () => set({ settingsOpen: false }),
   openScenarioSelect: () => set({ scenarioSelectOpen: true }),
@@ -633,7 +826,19 @@ export const useGameStore = create<GameStore>((set) => ({
   openIncidentReplay: (incidentId) => set({ replayIncidentId: incidentId }),
   closeIncidentReplay: () => set({ replayIncidentId: null }),
   hideTitleScreen: () => set({ titleScreenVisible: false }),
-  showTitleScreen: () => set({ titleScreenVisible: true, pauseMenuOpen: false }),
+  // back to the title also drops anything that would otherwise float above it: a timed CAB
+  // decision (it would keep ticking behind the menu) and incident dialogs of the run being left
+  showTitleScreen: () =>
+    set({
+      titleScreenVisible: true,
+      pauseMenuOpen: false,
+      activeDilemma: null,
+      selectedIncident: null,
+      postMortem: null,
+      triageIncidentId: null,
+      replayIncidentId: null,
+      scenarioBriefing: null,
+    }),
   openPauseMenu: () => set({ pauseMenuOpen: true }),
   closePauseMenu: () => set({ pauseMenuOpen: false }),
   togglePauseMenu: () => set((state) => ({ pauseMenuOpen: !state.pauseMenuOpen })),

@@ -73,12 +73,21 @@ export function depthOf(x: number, y: number): number {
   return x + y;
 }
 
+// shade() is called three times per IsoBox and the scene has thousands of boxes; the palette is
+// tiny, so every distinct (hex, factor) pair is computed once
+const shadeCache = new Map<string, string>();
+
 // DARKEN OR LIGHTEN A HEX COLOR BY A MULTIPLICATIVE FACTOR, USED FOR ISOMETRIC FACE SHADING
 export function shade(hex: string, factor: number): string {
+  const key = `${hex}|${factor}`;
+  const hit = shadeCache.get(key);
+  if (hit !== undefined) return hit;
   const clean = hex.replace("#", "");
   const n = parseInt(clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean, 16);
   const r = Math.max(0, Math.min(255, Math.round(((n >> 16) & 255) * factor)));
   const g = Math.max(0, Math.min(255, Math.round(((n >> 8) & 255) * factor)));
   const b = Math.max(0, Math.min(255, Math.round((n & 255) * factor)));
-  return `rgb(${r}, ${g}, ${b})`;
+  const out = `rgb(${r}, ${g}, ${b})`;
+  shadeCache.set(key, out);
+  return out;
 }

@@ -1,40 +1,40 @@
 import { DollarSign } from "lucide-react";
-import { useTranslation } from "../../i18n/useTranslation";
+import { memo } from "react";
 import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
-import DeltaTag from "./DeltaTag";
+import { useTranslation } from "../../i18n/useTranslation";
+import { useGameStore } from "../../store/useGameStore";
+import { budgetBand, toneFor } from "../../utils/kpiBands";
+import { formatBurnRate } from "../../utils/kpiEvents";
+import MeterShell from "./MeterShell";
 
 interface CreditCounterProps {
   budget: number;
 }
 
-// low runway threshold below which the counter flips to a critical red warning
-const LOW_RUNWAY_THRESHOLD = 20000;
-
 // clean digital currency counter for the runway budget, tweening toward each new value rather
-// than snapping instantly so a big spend or a passive-burn tick actually reads as a change
-export default function CreditCounter({ budget }: CreditCounterProps) {
+// than snapping instantly so a big spend or a passive-burn tick actually reads as a change.
+// The text node stays exactly "$212,450" (one element, no abbreviation). Spends show up as chips
+// that fly off the counter; the passive burn is a calm "-650/tick" trend beside it.
+export default memo(function CreditCounter({ budget }: CreditCounterProps) {
   const t = useTranslation();
   const displayBudget = useAnimatedNumber(budget);
-  const critical = budget < LOW_RUNWAY_THRESHOLD;
-  const tone = critical ? "text-rose-400" : "text-emerald-400";
+  const trend = useGameStore((s) => s.budgetTrend);
+  const band = budgetBand(budget);
+  // red is reserved for the alarm (low runway); a healthy balance reads as plain cash green
+  const tone = band === 0 ? toneFor("budget", 0) : toneFor("budget", 2);
+  const rate = Math.round(trend);
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5">
-        <DollarSign className={`w-3.5 h-3.5 ${tone}`} />
-        <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.topbar.runway}</span>
-      </div>
-      <div className="relative inline-flex items-baseline">
-        <span className={`font-bold text-base tabular-nums ${tone}`}>
-          ${Math.round(displayBudget).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-        </span>
-        <DeltaTag
-          value={Math.round(budget)}
-          threshold={100}
-          format={(d) => `${d > 0 ? "+$" : "-$"}${Math.abs(d).toLocaleString()}`}
-          className="top-0 left-full ml-1"
-        />
-      </div>
-    </div>
+    <MeterShell kpi="budget" icon={DollarSign} iconClass={tone.text} label={t.topbar.runway} band={band} tour="cash-counter">
+      <span className={`text-base font-bold tabular-nums transition-colors duration-slow ${tone.text}`}>
+        ${Math.round(displayBudget).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+      </span>
+      <span
+        className={`hidden min-w-[4.25rem] text-caption font-semibold tabular-nums hd:inline ${rate < 0 ? "text-slate-400" : "text-emerald-400"}`}
+        title={rate !== 0 ? t.hud.topbar.burnTitle(formatBurnRate(rate, "")) : undefined}
+      >
+        {rate !== 0 ? formatBurnRate(rate, t.hud.topbar.burnSuffix) : ""}
+      </span>
+    </MeterShell>
   );
-}
+});

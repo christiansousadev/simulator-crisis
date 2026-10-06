@@ -1,67 +1,188 @@
-import { AlertCircle, Crosshair, MapPin, Maximize2, Minimize2 } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, Crosshair, LocateFixed, MapPin, Maximize2, Minimize2 } from "lucide-react";
+import type { KeyboardEvent, PointerEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "../../i18n/useTranslation";
 import { useGameStore } from "../../store/useGameStore";
+import { selectDefconLevel } from "../../utils/defcon";
+import { getCameraSnapshot, subscribeCamera } from "../office/cameraBus";
+import { userToGrid, visibleWorldQuad } from "../office/cameraMath";
+import {
+  BOARDROOM_ORIGIN,
+  BOARDROOM_SIZE,
+  BREAKROOM_ORIGIN,
+  BREAKROOM_SIZE,
+  CAMERA_ORIGIN,
+  ENGINEERING_ORIGIN,
+  ENGINEERING_SIZE,
+  MAP_GRID,
+  RECEPTION_MAT_ORIGIN,
+  RECEPTION_MAT_SIZE,
+  SERVER_ROOM_ORIGIN,
+  SERVER_ROOM_SIZE,
+  deskGridPosition,
+} from "../office/sceneLayout";
+import { rackGridPosition } from "../office/ServerRoom";
 import { Service } from "../../types/game";
 
 interface TacticalMiniMapProps {
   onCenterCrisis?: () => void;
   onFocusService?: (serviceId: string) => void;
-  onPanToWorld?: (gx: number, gy: number) => void;
+  onPanToWorld?: (gx: number, gy: number, opts?: { snap?: boolean }) => void;
+  onResetView?: () => void;
 }
 
-export default function TacticalMiniMap({ onCenterCrisis, onFocusService, onPanToWorld }: TacticalMiniMapProps) {
+const MAP_W = 180;
+const MAP_H = 110;
+const toMapX = (gx: number) => (gx / MAP_GRID.width) * MAP_W;
+const toMapY = (gy: number) => (gy / MAP_GRID.depth) * MAP_H;
+
+function statusColor(srv: Pick<Service, "status">) {
+  if (srv.status === "down") return "#ef4444";
+  if (srv.status === "degraded") return "#f59e0b";
+  return "#10b981";
+}
+
+interface ZoneProps {
+  origin: { x: number; y: number };
+  size: { width: number; depth: number };
+  fill: string;
+  stroke: string;
+  label: string;
+  labelColor: string;
+  hot?: boolean;
+}
+
+function Zone({ origin, size, fill, stroke, label, labelColor, hot }: ZoneProps) {
+  return (
+    <>
+      <rect
+        x={toMapX(origin.x)}
+        y={toMapY(origin.y)}
+        width={toMapX(size.width)}
+        height={toMapY(size.depth)}
+        rx={2}
+        fill={fill}
+        stroke={hot ? "#ef4444" : stroke}
+        strokeWidth={hot ? 1.5 : 0.8}
+        strokeDasharray={hot ? "3 2" : undefined}
+        className={hot ? "animate-pulse" : undefined}
+      />
+      <text x={toMapX(origin.x + 0.3)} y={toMapY(origin.y + 0.7)} fill={labelColor} style={{ fontSize: 6, fontWeight: 700, opacity: 0.8 }}>
+        {label}
+      </text>
+    </>
+  );
+}
+
+// TOP-DOWN RADAR OF THE FLOOR PLAN. Racks sit where ServerRoom really puts them, a frame shows
+// what the camera currently sees, and the whole map is a pan control: click to fly there, drag to
+// scrub. Rack dots keep their own click (focus that rack) because the pan handler lives on the
+// svg and ignores presses that start on a node.
+function TacticalMiniMap({ onCenterCrisis, onFocusService, onPanToWorld, onResetView }: TacticalMiniMapProps) {
+  const t = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const services = useGameStore((s) => s.telemetry.services);
-  const activeIncidents = useGameStore((s) => s.telemetry.active_incidents);
   const engineers = useGameStore((s) => s.telemetry.engineers);
+  const hasIncident = useGameStore((s) => s.telemetry.active_incidents.length > 0);
   const selectedServiceId = useGameStore((s) => s.selectedServiceId);
+  const hot = useGameStore((s) => selectDefconLevel(s) <= 3);
 
-  const hasP1 = services.some((s) => s.tier === "critical" && s.status === "down");
-  const hasIncident = activeIncidents.length > 0;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const frameRef = useRef<SVGPolygonElement>(null);
+  const dragging = useRef(false);
 
-  // 2D floor projection for minimap (bounds ~22 x 14)
-  const mapW = 180;
-  const mapH = 110;
-  const toMapX = (gx: number) => (gx / 23) * mapW;
-  const toMapY = (gy: number) => (gy / 15) * mapH;
+  const serviceIds = useMemo(() => services.map((s) => s.id), [services]);
 
-  const serverPositions: Record<string, { x: number; y: number }> = {
-    "srv-auth": { x: 1.5, y: 1.5 },
-    "srv-payment": { x: 3.5, y: 1.5 },
-    "srv-api-gw": { x: 5.5, y: 1.5 },
-    "srv-search": { x: 2.5, y: 3.0 },
-    "srv-notify": { x: 4.5, y: 3.0 },
+  // the viewport frame follows the camera imperatively: no React render per animation frame
+  useEffect(() => {
+    if (collapsed) return;
+    const update = () => {
+      const poly = frameRef.current;
+      if (!poly) return;
+      const { camera, view } = getCameraSnapshot();
+      if (view.width <= 0 || view.height <= 0) {
+        poly.setAttribute("points", "");
+        return;
+      }
+      const pts = visibleWorldQuad(camera, view, CAMERA_ORIGIN)
+        .map((p) => userToGrid(p))
+        .map((g) => `${toMapX(g.x).toFixed(1)},${toMapY(g.y).toFixed(1)}`)
+        .join(" ");
+      poly.setAttribute("points", pts);
+    };
+    update();
+    return subscribeCamera(update);
+  }, [collapsed]);
+
+  const worldFromEvent = (evt: PointerEvent<SVGSVGElement>) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return null;
+    return {
+      gx: ((evt.clientX - rect.left) / rect.width) * MAP_GRID.width,
+      gy: ((evt.clientY - rect.top) / rect.height) * MAP_GRID.depth,
+    };
   };
 
-  const getServiceColor = (srv: Service) => {
-    if (srv.status === "down") return "#ef4444";
-    if (srv.status === "degraded") return "#f59e0b";
-    return "#10b981";
+  const handlePointerDown = (evt: PointerEvent<SVGSVGElement>) => {
+    if (evt.button !== 0) return;
+    if ((evt.target as Element).closest("[data-minimap-node]")) return;
+    const w = worldFromEvent(evt);
+    if (!w) return;
+    dragging.current = true;
+    evt.currentTarget.setPointerCapture(evt.pointerId);
+    onPanToWorld?.(w.gx, w.gy);
+  };
+  const handlePointerMove = (evt: PointerEvent<SVGSVGElement>) => {
+    if (!dragging.current) return;
+    const w = worldFromEvent(evt);
+    if (w) onPanToWorld?.(w.gx, w.gy, { snap: true });
+  };
+  const handlePointerUp = (evt: PointerEvent<SVGSVGElement>) => {
+    dragging.current = false;
+    if (evt.currentTarget.hasPointerCapture(evt.pointerId)) evt.currentTarget.releasePointerCapture(evt.pointerId);
+  };
+
+  const nodeKeyDown = (evt: KeyboardEvent, id: string) => {
+    if (evt.key === "Enter" || evt.key === " ") {
+      evt.preventDefault();
+      onFocusService?.(id);
+    }
   };
 
   return (
     <aside
-      aria-label="Tactical Mini-Map"
+      aria-label={t.officeCore.radarLabel}
+      data-camera-ignore
       className="absolute bottom-12 right-3 z-30 flex flex-col items-end pointer-events-auto"
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center gap-1.5 mb-1">
         {hasIncident && (
           <button
             onClick={onCenterCrisis}
             className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/80 border border-rose-500/60 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.3)] animate-pulse hover:bg-rose-900"
-            title="Jump to Crisis"
+            title={t.officeCore.jumpToCrisis}
           >
             <AlertCircle className="w-3 h-3 text-rose-400" />
-            CRISIS
+            {t.officeCore.crisis}
           </button>
         )}
         <button
+          onClick={onResetView}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 backdrop-blur-md"
+          title={`${t.officeCore.resetView} (Home)`}
+          aria-label={t.officeCore.resetView}
+        >
+          <LocateFixed className="w-3 h-3 text-sky-400" />
+        </button>
+        <button
           onClick={() => setCollapsed((v) => !v)}
           className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 backdrop-blur-md"
-          title={collapsed ? "Expand Radar" : "Collapse Radar"}
+          title={collapsed ? t.officeCore.expandRadar : t.officeCore.collapseRadar}
+          aria-expanded={!collapsed}
         >
           <MapPin className="w-3 h-3 text-sky-400" />
-          <span>RADAR</span>
+          <span>{t.officeCore.radar}</span>
           {collapsed ? <Maximize2 className="w-2.5 h-2.5 ml-0.5" /> : <Minimize2 className="w-2.5 h-2.5 ml-0.5" />}
         </button>
       </div>
@@ -78,127 +199,35 @@ export default function TacticalMiniMap({ onCenterCrisis, onFocusService, onPanT
             }}
           />
 
-          <svg width={mapW} height={mapH} className="block select-none" viewBox={`0 0 ${mapW} ${mapH}`}>
-            {/* Zone floor outlines */}
-            {/* Server Vault */}
-            <rect
-              x={toMapX(0.5)}
-              y={toMapY(0.5)}
-              width={toMapX(7.4)}
-              height={toMapY(3.6)}
-              rx={2}
-              fill="rgba(6, 182, 212, 0.08)"
-              stroke={hasP1 ? "#ef4444" : "rgba(6, 182, 212, 0.4)"}
-              strokeWidth={hasP1 ? 1.5 : 0.8}
-              strokeDasharray={hasP1 ? "3 2" : undefined}
-              className={hasP1 ? "animate-pulse" : undefined}
-            />
-            <text x={toMapX(0.8)} y={toMapY(1.2)} fill="#38bdf8" style={{ fontSize: 6, fontWeight: 700, opacity: 0.8 }}>
-              DATA CENTER
-            </text>
+          <svg
+            ref={svgRef}
+            width={MAP_W}
+            height={MAP_H}
+            className="block select-none cursor-crosshair touch-none"
+            viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            <Zone origin={SERVER_ROOM_ORIGIN} size={SERVER_ROOM_SIZE} fill="rgba(6, 182, 212, 0.08)" stroke="rgba(6, 182, 212, 0.4)" label={t.officeCore.zoneDataCenter} labelColor="#38bdf8" hot={hot} />
+            <Zone origin={ENGINEERING_ORIGIN} size={ENGINEERING_SIZE} fill="rgba(59, 130, 246, 0.05)" stroke="rgba(59, 130, 246, 0.3)" label={t.officeCore.zoneWarRoom} labelColor="#60a5fa" />
+            <Zone origin={BOARDROOM_ORIGIN} size={BOARDROOM_SIZE} fill="rgba(245, 158, 11, 0.05)" stroke="rgba(245, 158, 11, 0.3)" label={t.officeCore.zoneBoardroom} labelColor="#fbbf24" />
+            <Zone origin={BREAKROOM_ORIGIN} size={BREAKROOM_SIZE} fill="rgba(16, 185, 129, 0.05)" stroke="rgba(16, 185, 129, 0.3)" label={t.officeCore.zoneBreakroom} labelColor="#34d399" />
+            <Zone origin={RECEPTION_MAT_ORIGIN} size={RECEPTION_MAT_SIZE} fill="rgba(148, 163, 184, 0.05)" stroke="rgba(148, 163, 184, 0.3)" label="" labelColor="#94a3b8" />
 
-            {/* Engineering Bay */}
-            <rect
-              x={toMapX(9.9)}
-              y={toMapY(0.5)}
-              width={toMapX(12.0)}
-              height={toMapY(7.5)}
-              rx={2}
-              fill="rgba(59, 130, 246, 0.05)"
-              stroke="rgba(59, 130, 246, 0.3)"
-              strokeWidth={0.8}
-            />
-            <text x={toMapX(10.2)} y={toMapY(1.2)} fill="#60a5fa" style={{ fontSize: 6, fontWeight: 700, opacity: 0.8 }}>
-              WAR ROOM
-            </text>
-
-            {/* Boardroom */}
-            <rect
-              x={toMapX(0.5)}
-              y={toMapY(9.0)}
-              width={toMapX(7.0)}
-              height={toMapY(4.5)}
-              rx={2}
-              fill="rgba(245, 158, 11, 0.05)"
-              stroke="rgba(245, 158, 11, 0.3)"
-              strokeWidth={0.8}
-            />
-            <text x={toMapX(0.8)} y={toMapY(9.8)} fill="#fbbf24" style={{ fontSize: 6, fontWeight: 700, opacity: 0.8 }}>
-              BOARDROOM
-            </text>
-
-            {/* Breakroom */}
-            <rect
-              x={toMapX(8.2)}
-              y={toMapY(9.0)}
-              width={toMapX(7.5)}
-              height={toMapY(4.5)}
-              rx={2}
-              fill="rgba(16, 185, 129, 0.05)"
-              stroke="rgba(16, 185, 129, 0.3)"
-              strokeWidth={0.8}
-            />
-            <text x={toMapX(8.5)} y={toMapY(9.8)} fill="#34d399" style={{ fontSize: 6, fontWeight: 700, opacity: 0.8 }}>
-              BREAKROOM
-            </text>
-
-            {/* Server Nodes */}
-            {services.map((srv) => {
-              const pos = serverPositions[srv.id] || { x: 3, y: 2 };
-              const mx = toMapX(pos.x);
-              const my = toMapY(pos.y);
-              const isSelected = selectedServiceId === srv.id;
-              const isDown = srv.status === "down";
-              const isDegraded = srv.status === "degraded";
-              const color = getServiceColor(srv);
-
-              return (
-                <g
-                  key={srv.id}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    onFocusService?.(srv.id);
-                  }}
-                >
-                  <title>{`${srv.name} [${srv.status.toUpperCase()}]`}</title>
-                  {(isDown || isDegraded) && (
-                    <circle cx={mx} cy={my} r={isDown ? 6 : 4.5} fill="none" stroke={color} strokeWidth={0.8} className="animate-ping" />
-                  )}
-                  {isSelected && (
-                    <circle cx={mx} cy={my} r={5} fill="none" stroke="#38bdf8" strokeWidth={1} strokeDasharray="2 1" />
-                  )}
-                  <circle cx={mx} cy={my} r={3} fill={color} stroke="#0f172a" strokeWidth={0.8} />
-                </g>
-              );
-            })}
-
-            {/* Engineers on Radar */}
+            {/* engineers, behind the rack nodes so a rack click is never swallowed */}
             {engineers.map((eng, i) => {
-              const deskMap: Record<string, { x: number; y: number }> = {
-                "srv-auth": { x: 10.4, y: 1.2 },
-                "srv-payment": { x: 12.9, y: 1.2 },
-                "srv-api-gw": { x: 15.4, y: 1.2 },
-                "srv-search": { x: 11.6, y: 3.8 },
-                "srv-notify": { x: 14.1, y: 3.8 },
-              };
-              let pos = eng.assigned_service_id ? deskMap[eng.assigned_service_id] : null;
-              if (eng.on_call_status === "resting") {
-                pos = { x: 9.5 + (i % 2) * 1.5, y: 10.5 };
-              }
-              if (!pos) {
-                pos = { x: 10.5 + (i % 3) * 2.5, y: 5.8 };
-              }
-
-              const mx = toMapX(pos.x);
-              const my = toMapY(pos.y);
+              let pos = eng.assigned_service_id ? deskGridPosition(eng.assigned_service_id, serviceIds) : null;
+              if (eng.on_call_status === "resting") pos = { x: 9.5 + (i % 2) * 1.5, y: 10.5 };
+              if (!pos) pos = { x: 10.5 + (i % 3) * 2.5, y: 5.8 };
               const isTired = eng.stamina < 30;
-
               return (
-                <g key={eng.id}>
-                  <title>{`${eng.name} (${eng.on_call_status})`}</title>
+                <g key={eng.id} pointerEvents="none">
+                  <title>{t.officeCore.engineerLabel(eng.name, eng.on_call_status)}</title>
                   <circle
-                    cx={mx}
-                    cy={my}
+                    cx={toMapX(pos.x)}
+                    cy={toMapY(pos.y)}
                     r={2}
                     fill={eng.on_call_status === "resting" ? "#38bdf8" : isTired ? "#f59e0b" : "#60a5fa"}
                     stroke="#0f172a"
@@ -208,33 +237,61 @@ export default function TacticalMiniMap({ onCenterCrisis, onFocusService, onPanT
               );
             })}
 
-            {/* Quick Interactive Floor Click */}
-            <rect
-              x={0}
-              y={0}
-              width={mapW}
-              height={mapH}
-              fill="transparent"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const clickY = e.clientY - rect.top;
-                const gx = (clickX / mapW) * 23;
-                const gy = (clickY / mapH) * 15;
-                onPanToWorld?.(gx, gy);
-              }}
-              className="cursor-crosshair"
-            />
+            {/* what the camera is looking at */}
+            <polygon
+              ref={frameRef}
+              pointerEvents="none"
+              fill="rgba(56,189,248,0.08)"
+              stroke="#38bdf8"
+              strokeWidth={1}
+              strokeLinejoin="round"
+            >
+              <title>{t.officeCore.viewport}</title>
+            </polygon>
+
+            {/* rack nodes, drawn last so they sit on top of everything and keep their own clicks */}
+            {services.map((srv) => {
+              const pos = rackGridPosition(srv.id, services, SERVER_ROOM_ORIGIN.x, SERVER_ROOM_ORIGIN.y) ?? { x: 3, y: 2 };
+              const mx = toMapX(pos.x + 0.35);
+              const my = toMapY(pos.y + 0.25);
+              const color = statusColor(srv);
+              const fault = srv.status !== "healthy";
+              return (
+                <g
+                  key={srv.id}
+                  data-minimap-node
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t.officeCore.nodeLabel(srv.name, srv.status)}
+                  className="cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFocusService?.(srv.id);
+                  }}
+                  onKeyDown={(e) => nodeKeyDown(e, srv.id)}
+                >
+                  <title>{`${srv.name} [${srv.status.toUpperCase()}]`}</title>
+                  <circle cx={mx} cy={my} r={7} fill="transparent" />
+                  {fault && (
+                    <circle cx={mx} cy={my} r={srv.status === "down" ? 6 : 4.5} fill="none" stroke={color} strokeWidth={0.8} className="animate-ping" />
+                  )}
+                  {selectedServiceId === srv.id && (
+                    <circle cx={mx} cy={my} r={5} fill="none" stroke="#38bdf8" strokeWidth={1} strokeDasharray="2 1" />
+                  )}
+                  <circle cx={mx} cy={my} r={3} fill={color} stroke="#0f172a" strokeWidth={0.8} />
+                </g>
+              );
+            })}
           </svg>
 
           {/* Legend and status */}
-          <div className="flex items-center justify-between text-[8px] text-slate-400 font-mono mt-1 pt-1 border-t border-slate-900">
+          <div className="flex items-center justify-between gap-2 text-[8px] text-slate-400 font-mono mt-1 pt-1 border-t border-slate-900">
             <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> OK
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 ml-1" /> FAULT
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {t.officeCore.legendOk}
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 ml-1" /> {t.officeCore.legendFault}
             </span>
             <span className="flex items-center gap-1 text-sky-400 font-semibold">
-              <Crosshair className="w-2.5 h-2.5" /> CLICK TO NAVIGATE
+              <Crosshair className="w-2.5 h-2.5" /> {t.officeCore.clickToNavigate}
             </span>
           </div>
         </div>
@@ -242,3 +299,5 @@ export default function TacticalMiniMap({ onCenterCrisis, onFocusService, onPanT
     </aside>
   );
 }
+
+export default memo(TacticalMiniMap);

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "../../i18n/useTranslation";
 import {
   GlassCoffeeTable,
   GroundShadow,
@@ -10,6 +12,10 @@ import {
   WaterCooler,
 } from "./OfficeProps";
 import OfficeWorker from "./OfficeWorker";
+import { useRosterStage } from "./rosterStage";
+
+// how long the receptionist beams after a new hire checks in
+const GREETING_MS = 2600;
 
 interface ReceptionLobbyProps {
   originX: number;
@@ -18,6 +24,19 @@ interface ReceptionLobbyProps {
 
 // CORPORATE ENTRANCE LOBBY: RECEPTION COUNTER, SECURITY TURNSTILES AND A VISITOR WAITING LOUNGE
 export default function ReceptionLobby({ originX, originY }: ReceptionLobbyProps) {
+  const t = useTranslation();
+  // she only perks up (with the star badge) when a new hire actually reaches her desk
+  const checkIns = useRosterStage((s) => s.checkIns);
+  const [greeting, setGreeting] = useState(false);
+  const seenCheckIns = useRef(checkIns);
+  useEffect(() => {
+    if (checkIns === seenCheckIns.current) return;
+    seenCheckIns.current = checkIns;
+    setGreeting(true);
+    const timer = setTimeout(() => setGreeting(false), GREETING_MS);
+    return () => clearTimeout(timer);
+  }, [checkIns]);
+
   return (
     <g>
       <GroundShadow x={originX + 1.0} y={originY + 0.6} rx={30} ry={14} />
@@ -38,7 +57,8 @@ export default function ReceptionLobby({ originX, originY }: ReceptionLobbyProps
         hairColor="#3f2e25"
         role="casual"
         seated
-        mood="happy"
+        mood={greeting ? "happy" : "idle"}
+        name={t.officeLife.receptionist}
         badge
       />
 

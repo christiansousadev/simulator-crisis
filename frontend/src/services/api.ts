@@ -11,6 +11,7 @@ import {
   DifficultyId,
   DifficultyPresetInfo,
   Engineer,
+  Incident,
   InfrastructureCatalogEntry,
   InfrastructureNode,
   LogLine,
@@ -23,6 +24,19 @@ import { getOrCreatePlayerId } from "../utils/playerId";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export const WS_URL = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/telemetry"}?player_id=${encodeURIComponent(getOrCreatePlayerId())}`;
 
+// carries the http status (and Retry-After when the browser may read it) so callers can tell a
+// missing llm key (503) or a rate limit (429) from a plain failure; still an Error with the backend's message
+export class ApiError extends Error {
+  status: number;
+  retryAfterSeconds: number | null;
+  constructor(message: string, status: number, retryAfterSeconds: number | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -30,9 +44,44 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed: ${response.status}`);
+    const retryAfter = Number(response.headers?.get?.("Retry-After"));
+    throw new ApiError(
+      typeof body.detail === "string" && body.detail ? body.detail : `Request failed: ${response.status}`,
+      response.status,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null
+    );
   }
   return response.json() as Promise<T>;
+}
+
+export type AuditorVerdict = "PENDING" | "VALID" | "JUSTIFIED" | "NON_COMPLIANT";
+
+// backend-clamped figures only: regulatory_fine_adjustment is positive for a fine, negative for a credit
+export interface InterviewTurnResponse {
+  incident_id: string;
+  reply: string;
+  verdict: AuditorVerdict;
+  regulatory_fine_adjustment: number;
+  adjustment_cap?: number;
+  applied?: boolean;
+  transcript_turn: number;
+}
+
+export interface InterviewHistoryResponse {
+  incident_id: string;
+  turns: { role: "player" | "auditor"; content: string }[];
+  verdict: AuditorVerdict;
+  regulatory_fine_adjustment: number;
+  adjustment_cap: number;
+  applied: boolean;
+  transcript_turn: number;
+}
+
+export interface ApplyVerdictResponse {
+  success: boolean;
+  budget: number;
+  verdict?: AuditorVerdict;
+  applied_amount?: number;
 }
 
 export const api = {
@@ -59,6 +108,10 @@ export const api = {
       }),
     }),
 
+  // spawns the deterministic practice incident for the guided tutorial (fails if one is already open)
+  createTutorialIncident: () =>
+    request<{ success: boolean; incident: Incident }>("/api/tutorial/incident", { method: "POST" }),
+
   acknowledgeIncident: (incidentId: string) =>
     request(`/api/incidents/${incidentId}/acknowledge`, { method: "POST" }),
 
@@ -76,22 +129,17 @@ export const api = {
     ),
 
   conductInterview: (incidentId: string, message: string) =>
-    request<{
-      incident_id: string;
-      reply: string;
-      verdict: "PENDING" | "VALID" | "JUSTIFIED" | "NON_COMPLIANT";
-      regulatory_fine_adjustment: number;
-      transcript_turn: number;
-    }>(`/api/audits/postmortem/${incidentId}/interview`, {
+    request<InterviewTurnResponse>(`/api/audits/postmortem/${incidentId}/interview`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
 
+  // saved transcript + verdict state; 404 (ApiError) simply means no interview happened yet
+  getInterview: (incidentId: string) =>
+    request<InterviewHistoryResponse>(`/api/audits/postmortem/${encodeURIComponent(incidentId)}/interview`),
+
   applyInterviewVerdict: (incidentId: string) =>
-    request<{ success: boolean; budget: number }>(
-      `/api/audits/postmortem/${incidentId}/interview/apply-verdict`,
-      { method: "POST" }
-    ),
+    request<ApplyVerdictResponse>(`/api/audits/postmortem/${incidentId}/interview/apply-verdict`, { method: "POST" }),
 
   getUpgradesCatalog: () => request<Upgrade[]>("/api/upgrades/catalog"),
 

@@ -1,0 +1,45 @@
+import type { UiGapsCopy } from "../../uiGaps";
+
+export const uiGapsEs = {
+  hire: {
+    specialty: "Especialidad",
+    service: "Cubre el servicio",
+    recommended: "recomendado",
+    vacant: "sin cobertura",
+    matchLine: "Especialista: efecto completo",
+    mismatchLine: (quality) => `Fuera de especialidad: calidad ${quality}`,
+    confirm: (cost) => `Contratar (${cost})`,
+    needCash: (cost, short) => `Caja insuficiente: contratar cuesta ${cost} y faltan ${short}.`,
+    covers: (service) => `Cubre ${service}`,
+    reserve: "Puesto de reserva (sin servicio)",
+    vacancies: (services) => `Sin ingeniero en: ${services}`,
+  },
+  nodes: {
+    heading: "Hardware instalado",
+    paid: (amount) => `${amount} pagados`,
+    asProducer: "como productor",
+    remove: "Quitar",
+    removeAria: (name) => `Quitar ${name}`,
+    confirmPrompt: "Sin reembolso. ¿Quitar?",
+    confirm: "Confirmar",
+    cancel: "Cancelar",
+    removing: "Quitando…",
+    removed: (name) => `${name} quitado`,
+    removeFailed: "No se pudo quitar el módulo de hardware",
+  },
+  observer: {
+    badge: "Modo observador — solo lectura",
+    hint: "Los comandos están desactivados en esta pantalla.",
+  },
+  builder: {
+    startingBudget: "Caja inicial ($)",
+    startingTechDebt: "Deuda técnica inicial (TDI)",
+    useDefault: "Usar el valor de la dificultad",
+    defaultBudget: (amount) => `Por defecto: ${amount}`,
+    defaultTechDebt: (value) => `Por defecto: ${value}`,
+    errBudgetRange: "La caja inicial debe estar entre $1.000 y $2.000.000.",
+    errBudgetAboveFloor: (floor) => `La caja inicial debe estar por encima del piso de caja (${floor}).`,
+    errTechDebt: "La deuda técnica inicial debe ser un entero de 0 a 100.",
+    hintTechDebt: "Más deuda hace los incidentes más probables desde el primer tick.",
+  },
+} satisfies UiGapsCopy;

@@ -1,259 +1,63 @@
-// lightweight web audio synth effects, no external audio files required
+// synthesized sound effects and music, no external audio files required. the shared audio graph
+// lives in audioEngine.ts and the layered music in musicEngine.ts; this file is the public api
+// the game imports (names are stable) plus the definition of every individual sound.
 
-type OscType = OscillatorNode["type"];
+import {
+  allowRate,
+  getEngineDebug,
+  getSfxOutput,
+  playNoise,
+  playTone,
+  silenceLoop,
+  trackSource,
+  type AudioEngineDebug,
+  type SfxBus,
+  type ToneOptions,
+} from "./audioEngine";
+import { duckMusic, getMusicDebug, type MusicDebug } from "./musicEngine";
 
-interface ToneStep {
-  freq: number;
-  type?: OscType;
-  start: number;
-  duration: number;
-  gain?: number;
+export {
+  getAudioSettings,
+  getMusicSettings,
+  isAudioMuted,
+  setAudioMuted,
+  setMasterVolume,
+  setMusicMuted,
+  setMusicVolume,
+  setMuted,
+  unlockAudio,
+} from "./audioEngine";
+export {
+  duckMusic,
+  isMusicPlaying,
+  setMusicDefcon,
+  setMusicMode,
+  setMusicTension,
+  startAmbientMusic,
+  stopAmbientMusic,
+} from "./musicEngine";
+export type { DefconInput, MusicMode, MusicTension } from "./musicEngine";
+
+// CURRENT AUDIO STATE FOR TESTS AND DIAGNOSTICS
+export function getAudioDebug(): AudioEngineDebug & { music: MusicDebug } {
+  return { ...getEngineDebug(), music: getMusicDebug() };
 }
 
-// Safari (desktop and iOS) still only exposes the constructor under its vendor-prefixed name;
-// this is the standard cross-browser fallback, typed instead of an inline `as any` cast
-function createAudioContext(): AudioContext {
-  const w = window as typeof window & { webkitAudioContext?: typeof AudioContext };
-  const Ctor = w.AudioContext || w.webkitAudioContext;
-  return new Ctor!();
+type ToneStep = Omit<ToneOptions, "start"> & { start: number };
+
+function playToneSequence(steps: ToneStep[], bus: SfxBus = "sfx") {
+  for (const step of steps) playTone({ bus, ...step });
 }
 
-const VOLUME_STORAGE_KEY = "incidentzero.audio_volume";
-const MUTED_STORAGE_KEY = "incidentzero.audio_muted";
-const MUSIC_VOLUME_STORAGE_KEY = "incidentzero.music_volume";
-const MUSIC_MUTED_STORAGE_KEY = "incidentzero.music_muted";
-
-// PERSISTED MASTER AUDIO SETTINGS, LOADED ONCE AT MODULE INIT
-function loadStoredVolume(): number {
-  try {
-    const raw = localStorage.getItem(VOLUME_STORAGE_KEY);
-    const parsed = raw === null ? 1 : Number.parseFloat(raw);
-    return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 1;
-  } catch {
-    return 1;
-  }
-}
-
-function loadStoredMuted(): boolean {
-  try {
-    return localStorage.getItem(MUTED_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-let masterVolume = typeof window === "undefined" ? 1 : loadStoredVolume();
-let muted = typeof window === "undefined" ? false : loadStoredMuted();
-
-// READ THE CURRENT MASTER VOLUME (0-1) AND MUTE STATE
-export function getAudioSettings(): { volume: number; muted: boolean } {
-  return { volume: masterVolume, muted };
-}
-
-// SET MASTER SFX VOLUME (0-1), PERSISTED ACROSS SESSIONS
-export function setMasterVolume(volume: number) {
-  masterVolume = Math.max(0, Math.min(1, volume));
-  try {
-    localStorage.setItem(VOLUME_STORAGE_KEY, String(masterVolume));
-  } catch {
-    // best-effort only
-  }
-}
-
-// TOGGLE MASTER MUTE, PERSISTED ACROSS SESSIONS
-export function setMuted(next: boolean) {
-  muted = next;
-  try {
-    localStorage.setItem(MUTED_STORAGE_KEY, String(muted));
-  } catch {
-    // best-effort only
-  }
-}
-
-export function isAudioMuted(): boolean {
-  return muted;
-}
-
-export function setAudioMuted(next: boolean) {
-  setMuted(next);
-}
-
-export type MusicTension = "calm" | "tense" | "critical";
-
-interface MusicEngineState {
-  ctx: AudioContext | null;
-  masterGain: GainNode | null;
-  oscillators: OscillatorNode[];
-  lfo: OscillatorNode | null;
-  tension: MusicTension;
-}
-
-// three hand-picked triads, each darker than the last, for the generative ambient pad
-const MUSIC_CHORDS: Record<MusicTension, number[]> = {
-  calm: [130.81, 164.81, 196.0],
-  tense: [130.81, 155.56, 196.0],
-  critical: [123.47, 146.83, 174.61],
-};
-
-let musicEngine: MusicEngineState = { ctx: null, masterGain: null, oscillators: [], lfo: null, tension: "calm" };
-
-let musicVolume = typeof window === "undefined" ? 0.5 : loadStoredMusicVolume();
-let musicMuted = typeof window === "undefined" ? false : loadStoredMusicMuted();
-
-function loadStoredMusicVolume(): number {
-  try {
-    const raw = localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY);
-    const parsed = raw === null ? 0.5 : Number.parseFloat(raw);
-    return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0.5;
-  } catch {
-    return 0.5;
-  }
-}
-
-function loadStoredMusicMuted(): boolean {
-  try {
-    return localStorage.getItem(MUSIC_MUTED_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-// READ THE CURRENT MUSIC VOLUME (0-1) AND MUTE STATE
-export function getMusicSettings(): { volume: number; muted: boolean } {
-  return { volume: musicVolume, muted: musicMuted };
-}
-
-// SET AMBIENT MUSIC VOLUME (0-1), PERSISTED ACROSS SESSIONS, APPLIED LIVE IF PLAYING
-export function setMusicVolume(volume: number) {
-  musicVolume = Math.max(0, Math.min(1, volume));
-  try {
-    localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, String(musicVolume));
-  } catch {
-    // best-effort only
-  }
-  applyMusicGain();
-}
-
-// TOGGLE MUSIC MUTE, PERSISTED ACROSS SESSIONS, APPLIED LIVE IF PLAYING
-export function setMusicMuted(next: boolean) {
-  musicMuted = next;
-  try {
-    localStorage.setItem(MUSIC_MUTED_STORAGE_KEY, String(musicMuted));
-  } catch {
-    // best-effort only
-  }
-  applyMusicGain();
-}
-
-// RAMP THE MUSIC BUS TOWARD ITS TARGET GAIN, KEPT QUIET UNDER THE SFX BUS
-function applyMusicGain() {
-  if (!musicEngine.masterGain || !musicEngine.ctx) return;
-  const target = musicMuted ? 0 : musicVolume * 0.16;
-  musicEngine.masterGain.gain.linearRampToValueAtTime(target, musicEngine.ctx.currentTime + 0.8);
-}
-
-// START THE PROCEDURAL AMBIENT PAD LOOP; BROWSERS REQUIRE THIS TO FOLLOW A USER GESTURE
-export function startAmbientMusic() {
-  if (musicEngine.ctx) return;
-  try {
-    const ctx = createAudioContext();
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = 0;
-    masterGain.connect(ctx.destination);
-
-    // slow lfo wobbles each voice's amplitude so the pad breathes instead of droning flat
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.08;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.03;
-    lfo.connect(lfoGain);
-    lfo.start();
-
-    const oscillators = MUSIC_CHORDS.calm.map((freq) => {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const voiceGain = ctx.createGain();
-      voiceGain.gain.value = 0.33;
-      lfoGain.connect(voiceGain.gain);
-      osc.connect(voiceGain);
-      voiceGain.connect(masterGain);
-      osc.start();
-      return osc;
-    });
-
-    musicEngine = { ctx, masterGain, oscillators, lfo, tension: "calm" };
-    applyMusicGain();
-  } catch {
-    // audio unsupported or blocked by browser policy; the game remains fully playable without it
-  }
-}
-
-// STOP AND TEAR DOWN THE AMBIENT MUSIC LOOP
-export function stopAmbientMusic() {
-  if (!musicEngine.ctx) return;
-  try {
-    musicEngine.oscillators.forEach((osc) => osc.stop());
-    musicEngine.lfo?.stop();
-    musicEngine.ctx.close();
-  } catch {
-    // already stopped or unsupported
-  }
-  musicEngine = { ctx: null, masterGain: null, oscillators: [], lfo: null, tension: "calm" };
-}
-
-// RETUNE THE AMBIENT PAD'S CHORD TO REFLECT CURRENT GAME TENSION
-export function setMusicTension(tension: MusicTension) {
-  if (!musicEngine.ctx || musicEngine.tension === tension) return;
-  const ctx = musicEngine.ctx;
-  musicEngine.tension = tension;
-  const freqs = MUSIC_CHORDS[tension];
-  musicEngine.oscillators.forEach((osc, i) => {
-    osc.frequency.linearRampToValueAtTime(freqs[i], ctx.currentTime + 1.2);
-  });
-}
-
-// WHETHER THE AMBIENT MUSIC LOOP IS CURRENTLY RUNNING
-export function isMusicPlaying(): boolean {
-  return musicEngine.ctx !== null;
-}
-
-// PLAY A SEQUENCE OF SYNTHESIZED TONE STEPS THROUGH A SHARED AUDIO CONTEXT
-function playToneSequence(steps: ToneStep[]) {
-  if (muted || masterVolume <= 0) return;
-  try {
-    const ctx = createAudioContext();
-    const now = ctx.currentTime;
-    let latestEnd = now;
-
-    for (const step of steps) {
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      oscillator.type = step.type ?? "sine";
-      oscillator.frequency.value = step.freq;
-
-      const startAt = now + step.start;
-      const endAt = startAt + step.duration;
-      const peakGain = (step.gain ?? 0.08) * masterVolume;
-      gainNode.gain.setValueAtTime(peakGain, startAt);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, endAt);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      oscillator.start(startAt);
-      oscillator.stop(endAt);
-      latestEnd = Math.max(latestEnd, endAt);
-    }
-
-    setTimeout(() => ctx.close(), (latestEnd - now) * 1000 + 100);
-  } catch {
-    // audio unsupported or blocked by browser autoplay policy; fail silently
-  }
+// a short high-passed noise tick, the "plastic" part of clicks and keystrokes
+function clickNoise(gain: number, freq = 3000, duration = 0.015, bus: SfxBus = "sfx", start = 0) {
+  playNoise({ start, duration, gain, filter: { type: "highpass", freq }, bus });
 }
 
 // GENTLE MECHANICAL CLICK FOR DIRECTIVE BUTTON PRESSES
 export function playClickSound() {
   playToneSequence([{ freq: 620, type: "square", start: 0, duration: 0.05, gain: 0.05 }]);
+  clickNoise(0.03);
 }
 
 // KA-CHING CASH DEDUCTION TONE FOR A SUCCESSFUL MITIGATION SPEND
@@ -261,12 +65,22 @@ export function playCashSound() {
   playToneSequence([
     { freq: 880, type: "triangle", start: 0, duration: 0.09, gain: 0.09 },
     { freq: 1320, type: "triangle", start: 0.07, duration: 0.14, gain: 0.09 },
+    { freq: 2640, type: "sine", start: 0.07, duration: 0.2, gain: 0.015 },
   ]);
 }
 
 // SOFT EMERGENCY SIREN CHIRP WHEN A NEW INCIDENT SPAWNS
 export function playIncidentChirp(critical: boolean) {
-  playToneSequence([{ freq: critical ? 880 : 660, type: "square", start: 0, duration: 0.35, gain: 0.08 }]);
+  playToneSequence([
+    {
+      freq: critical ? 880 : 660,
+      type: "square",
+      start: 0,
+      duration: 0.35,
+      gain: 0.08,
+      filter: { type: "lowpass", freq: 3200 },
+    },
+  ]);
 }
 
 // UPLIFTING CHIME WHEN A NODE RETURNS TO HEALTHY
@@ -297,6 +111,7 @@ export function playMitigationMismatch() {
 
 // SOLEMN BOARDROOM CHIME WHEN A CAB DILEMMA IS OFFERED
 export function playDilemmaChime() {
+  duckMusic(1800);
   playToneSequence([
     { freq: 440, type: "sine", start: 0, duration: 0.22, gain: 0.07 },
     { freq: 330, type: "sine", start: 0.18, duration: 0.3, gain: 0.07 },
@@ -305,26 +120,31 @@ export function playDilemmaChime() {
 
 // SOFT CLICK FOR OPENING A MODAL OR PANEL, QUIETER THAN THE DIRECTIVE BUTTON CLICK
 export function playUiOpenSound() {
-  playToneSequence([{ freq: 480, type: "sine", start: 0, duration: 0.06, gain: 0.04 }]);
+  playToneSequence([{ freq: 400, freqEnd: 620, type: "sine", start: 0, duration: 0.08, gain: 0.04 }], "ui");
+  clickNoise(0.012, 4000, 0.012, "ui");
 }
 
 // TRIUMPHANT ASCENDING FANFARE FOR SURVIVING THE FULL MONTHLY AUDIT CYCLE
 export function playVictoryFanfare() {
+  duckMusic(2600);
   playToneSequence([
     { freq: 523.25, type: "triangle", start: 0, duration: 0.16, gain: 0.1 },
     { freq: 659.25, type: "triangle", start: 0.14, duration: 0.16, gain: 0.1 },
     { freq: 783.99, type: "triangle", start: 0.28, duration: 0.16, gain: 0.1 },
     { freq: 1046.5, type: "triangle", start: 0.42, duration: 0.4, gain: 0.12 },
     { freq: 783.99, type: "sine", start: 0.42, duration: 0.4, gain: 0.06 },
+    { freq: 2093, type: "sine", start: 0.42, duration: 0.6, gain: 0.015 },
   ]);
 }
 
 // GRAVE DESCENDING STING FOR BANKRUPTCY LIQUIDATION
 export function playDefeatSting() {
+  duckMusic(3000);
   playToneSequence([
-    { freq: 220, type: "sawtooth", start: 0, duration: 0.22, gain: 0.09 },
-    { freq: 174.61, type: "sawtooth", start: 0.18, duration: 0.22, gain: 0.09 },
-    { freq: 130.81, type: "sawtooth", start: 0.36, duration: 0.5, gain: 0.11 },
+    { freq: 220, type: "sawtooth", start: 0, duration: 0.22, gain: 0.09, filter: { type: "lowpass", freq: 1400 } },
+    { freq: 174.61, type: "sawtooth", start: 0.18, duration: 0.22, gain: 0.09, filter: { type: "lowpass", freq: 1200 } },
+    { freq: 130.81, type: "sawtooth", start: 0.36, duration: 0.5, gain: 0.11, filter: { type: "lowpass", freq: 900 } },
+    { freq: 65.41, type: "sine", start: 0.36, duration: 0.9, gain: 0.12 },
   ]);
 }
 
@@ -339,50 +159,186 @@ export function playChaChing() {
 
 // FRANTIC MECHANICAL-KEYBOARD CLATTER, PLAYED WHILE A RUNBOOK IS BEING APPLIED
 export function playKeyboardClatter() {
-  const steps: ToneStep[] = [];
-  const clacks = 8;
-  for (let i = 0; i < clacks; i++) {
-    steps.push({
-      freq: 1800 + Math.random() * 1400,
-      type: "square",
-      start: i * 0.055 + Math.random() * 0.02,
-      duration: 0.02,
-      gain: 0.025,
-    });
+  for (let i = 0; i < 8; i++) {
+    const start = i * 0.055 + Math.random() * 0.02;
+    playTone({ freq: 1800 + Math.random() * 1400, type: "square", start, duration: 0.02, gain: 0.025 });
+    clickNoise(0.02, 2500, 0.012, "sfx", start);
   }
-  playToneSequence(steps);
 }
 
 // TWO-TONE ROTARY EMERGENCY SIREN, ONE SWEEP CYCLE -- CALL AGAIN ON A LOOP WHILE A P1 IS ACTIVE
 export function playRedAlertSiren() {
-  if (muted || masterVolume <= 0) return;
+  const target = getSfxOutput("siren");
+  if (!target) return;
+  const { ctx, out } = target;
   try {
-    const ctx = createAudioContext();
     const now = ctx.currentTime;
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(500, now);
-    oscillator.frequency.linearRampToValueAtTime(900, now + 0.5);
-    oscillator.frequency.linearRampToValueAtTime(500, now + 1.0);
-    const peak = 0.05 * masterVolume;
-    gainNode.gain.setValueAtTime(peak, now);
-    gainNode.gain.setValueAtTime(peak, now + 0.95);
-    gainNode.gain.linearRampToValueAtTime(0.0001, now + 1.0);
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 1.0);
-    setTimeout(() => ctx.close(), 1100);
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.linearRampToValueAtTime(900, now + 0.5);
+    osc.frequency.linearRampToValueAtTime(500, now + 1.0);
+    // the saw is rolled off so the alarm is urgent without being shrill
+    const tone = ctx.createBiquadFilter();
+    tone.type = "lowpass";
+    tone.frequency.value = 2400;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.linearRampToValueAtTime(0.05, now + 0.02);
+    env.gain.setValueAtTime(0.05, now + 0.95);
+    env.gain.linearRampToValueAtTime(0.0001, now + 1.0);
+    osc.connect(tone);
+    tone.connect(env);
+    env.connect(out);
+    trackSource(osc, [tone, env]);
+    osc.start(now);
+    osc.stop(now + 1.03);
   } catch {
     // audio unsupported or blocked; the alarm stays purely visual
   }
 }
 
+// CUT THE SIREN'S ALREADY-SCHEDULED TAIL, FOR WHEN THE GAME PAUSES OR LEAVES THE PLAYING STATE
+export function stopRedAlertSiren() {
+  silenceLoop("siren");
+}
+
 // TENSE, SUBTLE CARDIAC-MONITOR BEEP FOR WHEN THE RUNWAY IS NEARLY EXHAUSTED
 export function playCriticalHeartbeat() {
-  playToneSequence([
-    { freq: 1000, type: "sine", start: 0, duration: 0.08, gain: 0.05 },
-    { freq: 1000, type: "sine", start: 0.16, duration: 0.08, gain: 0.05 },
-  ]);
+  playToneSequence(
+    [
+      { freq: 1000, type: "sine", start: 0, duration: 0.08, gain: 0.05 },
+      { freq: 1000, type: "sine", start: 0.16, duration: 0.08, gain: 0.05 },
+    ],
+    "heartbeat",
+  );
+}
+
+export function stopCriticalHeartbeat() {
+  silenceLoop("heartbeat");
+}
+
+// --- ui sound set -----------------------------------------------------------------------------
+// PUBLIC API FOR MENU/HUD/MODAL FEEDBACK. All of these ride the `ui` bus.
+
+const HOVER_MIN_GAP_MS = 60;
+const TYPE_TICK_MIN_GAP_MS = 28;
+
+// VERY QUIET TICK WHEN THE POINTER ENTERS A MENU BUTTON (AT MOST ONE PER 60 MS)
+export function playUiHoverSound() {
+  if (!allowRate("ui-hover", HOVER_MIN_GAP_MS)) return;
+  playToneSequence([{ freq: 1180, type: "sine", start: 0, duration: 0.03, gain: 0.012 }], "ui");
+}
+
+// CONFIRMING TWO-NOTE RISE FOR A PRIMARY ACTION (START GAME, CONFIRM CHOICE)
+export function playUiConfirmSound() {
+  playToneSequence(
+    [
+      { freq: 520, type: "triangle", start: 0, duration: 0.07, gain: 0.05 },
+      { freq: 780, type: "triangle", start: 0.06, duration: 0.12, gain: 0.05 },
+      { freq: 1560, type: "sine", start: 0.06, duration: 0.14, gain: 0.012 },
+    ],
+    "ui",
+  );
+}
+
+// SOFT DESCENDING TICK FOR GOING BACK OR CLOSING
+export function playUiBackSound() {
+  playToneSequence(
+    [
+      { freq: 520, type: "sine", start: 0, duration: 0.05, gain: 0.04 },
+      { freq: 390, type: "sine", start: 0.04, duration: 0.07, gain: 0.04 },
+    ],
+    "ui",
+  );
+}
+
+// SHORT SWEPT-DOWN BLIP WHEN A PANEL CLOSES
+export function playUiCloseSound() {
+  playToneSequence([{ freq: 460, freqEnd: 300, type: "sine", start: 0, duration: 0.07, gain: 0.035 }], "ui");
+}
+
+// BRIGHT CHIME WHEN A RUNBOOK COOLDOWN FINISHES
+export function playReadySound() {
+  playToneSequence(
+    [
+      { freq: 990, type: "sine", start: 0, duration: 0.1, gain: 0.04 },
+      { freq: 1320, type: "sine", start: 0.07, duration: 0.14, gain: 0.04 },
+      { freq: 1980, type: "sine", start: 0.07, duration: 0.24, gain: 0.012 },
+    ],
+    "ui",
+  );
+}
+
+// HEAVY THUD FOR A STAMP LANDING (DEBRIEF GRADE, "RESOLVED" STAMP): SUB-BASS DROP + BODY + PAPER SLAP
+export function playStampSound() {
+  playToneSequence([{ freq: 96, freqEnd: 38, type: "sine", start: 0, duration: 0.34, gain: 0.2 }]);
+  playToneSequence([{ freq: 130, freqEnd: 70, type: "square", start: 0, duration: 0.1, gain: 0.05 }]);
+  playNoise({ duration: 0.09, gain: 0.12, filter: { type: "lowpass", freq: 1100, freqEnd: 250 } });
+  clickNoise(0.05, 2200, 0.02);
+}
+
+// GAVEL FOR A BOARD DECISION: A WOODY KNOCK WITH A SMALLER REBOUND
+export function playGavelSound() {
+  const knock = (at: number, level: number) => {
+    playNoise({ start: at, duration: 0.05, gain: 0.14 * level, filter: { type: "bandpass", freq: 1800, q: 2.5 } });
+    playToneSequence([
+      { freq: 230, freqEnd: 130, type: "triangle", start: at, duration: 0.12, gain: 0.09 * level },
+      { freq: 80, type: "sine", start: at, duration: 0.18, gain: 0.1 * level },
+    ]);
+  };
+  knock(0, 1);
+  knock(0.16, 0.45);
+}
+
+// SHORT TICK FOR A COUNTDOWN (LAST SECONDS OF A TIMED DECISION)
+export function playCountdownTickSound() {
+  playToneSequence([{ freq: 760, type: "square", start: 0, duration: 0.04, gain: 0.04 }]);
+  clickNoise(0.02, 2800, 0.01);
+}
+
+// QUICK RISING SWEEP FOR A SCREEN TRANSITION
+export function playWhooshSound() {
+  playNoise({
+    duration: 0.4,
+    attack: 0.14,
+    gain: 0.1,
+    filter: { type: "bandpass", freq: 300, freqEnd: 3600, q: 1.1 },
+    bus: "ui",
+  });
+  playToneSequence([{ freq: 200, freqEnd: 900, type: "sine", start: 0, duration: 0.3, gain: 0.015, attack: 0.1 }], "ui");
+}
+
+// RISING ARPEGGIO FOR TUTORIAL STEP SUCCESS / ACHIEVEMENT-LIKE MOMENTS
+export function playSuccessSound() {
+  playToneSequence(
+    [
+      { freq: 660, type: "triangle", start: 0, duration: 0.09, gain: 0.05 },
+      { freq: 880, type: "triangle", start: 0.07, duration: 0.09, gain: 0.05 },
+      { freq: 1175, type: "triangle", start: 0.14, duration: 0.1, gain: 0.05 },
+      { freq: 1760, type: "triangle", start: 0.21, duration: 0.22, gain: 0.05 },
+      { freq: 3520, type: "sine", start: 0.21, duration: 0.3, gain: 0.01 },
+    ],
+    "ui",
+  );
+}
+
+// LOW DOUBLE BUZZ FOR A REJECTED ACTION OR A WRONG PICK
+export function playErrorSound() {
+  const buzz = (start: number) => ({
+    freq: 150,
+    type: "sawtooth" as const,
+    start,
+    duration: 0.1,
+    gain: 0.05,
+    filter: { type: "lowpass" as const, freq: 900 },
+  });
+  playToneSequence([buzz(0), buzz(0.13)], "ui");
+}
+
+// VERY SHORT KEYSTROKE TICK FOR TYPEWRITER TEXT, RATE-LIMITED SO FAST TYPING STAYS SOFT
+export function playTypeTick() {
+  if (!allowRate("type-tick", TYPE_TICK_MIN_GAP_MS)) return;
+  playTone({ freq: 1700 + Math.random() * 900, type: "square", duration: 0.012, gain: 0.008, bus: "ui" });
+  clickNoise(0.012, 3200, 0.01, "ui");
 }

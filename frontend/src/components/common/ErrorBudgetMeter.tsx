@@ -1,17 +1,14 @@
-import { Gauge } from "lucide-react";
+import { Gauge, Snowflake } from "lucide-react";
+import { memo } from "react";
+import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
 import { useTranslation } from "../../i18n/useTranslation";
+import { errorBudgetBand, toneFor } from "../../utils/kpiBands";
 import DeltaTag from "./DeltaTag";
+import MeterShell from "./MeterShell";
 
 interface ErrorBudgetMeterProps {
   remainingRatio: number;
   frozen: boolean;
-}
-
-// maps remaining ratio to a color tone matching the three depletion tiers
-function toneFor(ratio: number) {
-  if (ratio > 0.5) return { text: "text-emerald-600", bar: "bg-emerald-500" };
-  if (ratio > 0.1) return { text: "text-amber-600", bar: "bg-amber-500" };
-  return { text: "text-rose-600", bar: "bg-rose-500" };
 }
 
 // GUARD AGAINST NaN/NULL/UNDEFINED/INFINITE INPUT, DEFAULTING TO A FULL (SAFE) BUDGET
@@ -20,36 +17,39 @@ function safeRatio(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-// horizontal burn-down bar for the sre error budget, with a feature freeze badge overlay
-export default function ErrorBudgetMeter({ remainingRatio, frozen }: ErrorBudgetMeterProps) {
+// horizontal burn-down bar for the sre error budget. A feature freeze swaps the icon for a snowflake
+// and shows a badge in a reserved slot, so the meter never changes width when the freeze toggles
+// (the old inline badge made the whole centered kpi cluster re-center).
+export default memo(function ErrorBudgetMeter({ remainingRatio, frozen }: ErrorBudgetMeterProps) {
   const t = useTranslation();
   const clamped = safeRatio(remainingRatio);
-  const tone = toneFor(clamped);
-  // belt-and-suspenders: never let a stray NaN reach the formatted label, even if clamping above changes
-  const pct = Number.isFinite(clamped * 100) ? clamped * 100 : 100;
+  const band = errorBudgetBand(clamped);
+  const tone = toneFor("errorBudget", band);
+  const pct = clamped * 100;
+  const shownPct = useAnimatedNumber(pct);
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5">
-        <Gauge className={`w-3.5 h-3.5 ${tone.text}`} />
-        <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.errorBudget.label}</span>
+    <MeterShell
+      kpi="errorBudget"
+      icon={frozen ? Snowflake : Gauge}
+      iconClass={frozen ? "text-rose-400" : tone.text}
+      label={t.errorBudget.label}
+      band={band}
+      className="w-[9rem]"
+    >
+      <div className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-slate-700">
+        <div className={`h-full rounded-full transition-[width] duration-slow ease-out-expo ${tone.bar}`} style={{ width: `${pct}%` }} />
       </div>
-      <div className="relative flex items-center gap-2">
-        <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <span className={`font-bold text-sm tabular-nums ${tone.text} hd:hidden`}>{pct.toFixed(0)}%</span>
-        <span className={`font-bold text-sm tabular-nums ${tone.text} hidden hd:inline`}>{t.errorBudget.remaining(pct)}</span>
-        <DeltaTag value={Math.round(pct)} format={(d) => `${d > 0 ? "+" : ""}${d}%`} className="top-0 left-full ml-1" />
-        {frozen && (
-          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 text-[9px] font-bold uppercase tracking-wide animate-pulse">
-            {t.errorBudget.featureFreezeActive}
-          </span>
-        )}
-      </div>
-    </div>
+      <span className={`min-w-[2.2rem] text-sm font-bold tabular-nums transition-colors duration-slow ${tone.text}`}>{shownPct.toFixed(0)}%</span>
+      <DeltaTag value={Math.round(pct)} format={(r) => `${r > 0 ? "+" : ""}${r.toFixed(1)}% / tick`} />
+      {frozen && (
+        <span
+          title={t.hud.topbar.freezeTitle}
+          className="absolute -top-0.5 right-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-micro font-bold uppercase leading-none tracking-wide text-rose-300 animate-badge-bump"
+        >
+          {t.hud.topbar.freeze}
+        </span>
+      )}
+    </MeterShell>
   );
-}
+});

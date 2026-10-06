@@ -1,0 +1,239 @@
+/* menus & flow: title screen life, screen transitions, credits roll and debrief set pieces.
+   reduced motion needs nothing special here: index.css switches every animation off, and the
+   resting styles below are always the readable final state. */
+
+/* ---- title screen -------------------------------------------------------------------------- */
+
+/* slow camera drift on a wrapper around the live office; the office's own transform (pan/zoom
+   camera) is on an inner element and is never touched */
+@keyframes flow-drift {
+  0% {
+    transform: scale(1.07) translate3d(-1.2%, 0.6%, 0);
+  }
+  100% {
+    transform: scale(1.12) translate3d(1.4%, -0.8%, 0);
+  }
+}
+.flow-title-drift {
+  transform-origin: 55% 50%;
+  animation: flow-drift 38s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes flow-grid-pan {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 48px 48px, 48px 48px;
+  }
+}
+.flow-title-grid {
+  background-image: linear-gradient(rgba(56, 189, 248, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.14) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: flow-grid-pan 9s linear infinite;
+  mask-image: radial-gradient(ellipse at 30% 50%, black 10%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 30% 50%, black 10%, transparent 75%);
+}
+
+@keyframes flow-beam-sweep {
+  0% {
+    transform: translateY(-30vh);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+.flow-title-beam {
+  height: 26vh;
+  background: linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.09) 70%, rgba(125, 211, 252, 0.28) 98%, transparent);
+  animation: flow-beam-sweep 8s linear infinite;
+}
+
+/* the card slides away to the left while the veil fades; pointer events are off the whole time */
+@keyframes flow-card-out {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-48px);
+    opacity: 0;
+  }
+}
+.flow-card-out {
+  animation: flow-card-out 0.38s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+/* menu row: accent bar grows on hover / keyboard focus */
+.flow-menu-btn {
+  position: relative;
+  overflow: hidden;
+}
+.flow-menu-btn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #38bdf8;
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.flow-menu-btn:hover::before,
+.flow-menu-btn:focus-visible::before {
+  transform: scaleY(1);
+}
+
+/* ---- hud entrance after the title is dismissed ---------------------------------------------- */
+
+@keyframes flow-hud-top {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes flow-hud-bottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.office-intro > header {
+  animation: flow-hud-top 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.office-intro > footer {
+  animation: flow-hud-bottom 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+}
+
+/* ---- screen transition layer ---------------------------------------------------------------- */
+
+@keyframes flow-wipe-line {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+.flow-wipe-line {
+  animation: flow-wipe-line 0.7s cubic-bezier(0.65, 0, 0.35, 1) both;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.0) 20%, rgba(56, 189, 248, 0.22) 85%, rgba(186, 230, 253, 0.85) 99%, transparent);
+}
+
+@keyframes flow-progress-run {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+.flow-progress-run {
+  animation: flow-progress-run 1.1s ease-in-out infinite;
+}
+
+@keyframes flow-banner {
+  0% {
+    transform: translateY(-16px) scale(0.98);
+    opacity: 0;
+  }
+  12% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+.flow-banner {
+  animation: flow-banner 2.6s ease-out both;
+}
+
+/* ---- credits roll -------------------------------------------------------------------------- */
+
+@keyframes flow-credits-roll {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+.flow-credits-roll {
+  animation: flow-credits-roll var(--roll-seconds, 38s) linear infinite;
+}
+.flow-credits-viewport:hover .flow-credits-roll,
+.flow-credits-viewport:focus-within .flow-credits-roll {
+  animation-play-state: paused;
+}
+
+/* ---- debrief set pieces -------------------------------------------------------------------- */
+
+.flow-desaturate {
+  transition: filter 0.6s ease;
+}
+.flow-desaturate[data-stage="stamp"],
+.flow-desaturate[data-stage="metrics"],
+.flow-desaturate[data-stage="done"] {
+  filter: saturate(0.55) brightness(0.92);
+}
+
+@keyframes flow-bar-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+.flow-bar-fill {
+  transform-origin: left center;
+  animation: flow-bar-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes flow-record-glint {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(251, 191, 36, 0);
+  }
+}
+.flow-record-glint {
+  animation: flow-record-glint 1.6s ease-out 2;
+}
+
+/* the camera settles back while the title leaves (a one-shot, never relied on to end visible) */
+@keyframes flow-drift-settle {
+  from {
+    transform: scale(1.1) translate3d(0.5%, -0.2%, 0);
+  }
+  to {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+.flow-title-drift-out {
+  animation: flow-drift-settle 0.45s ease-out both;
+}

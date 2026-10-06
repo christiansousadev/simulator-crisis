@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { project } from "./isoMath";
 
@@ -35,6 +35,16 @@ interface OfficeWorkerProps {
   facing?: "left" | "right";
   name?: string;
   workerStatusText?: string;
+  /** only seated engineers at a lit desk type; everyone else keeps their hands still */
+  typing?: boolean;
+  /** stand and lean forward, e.g. reacting to an acknowledged alert at their desk */
+  leaning?: boolean;
+  /** easing of the walk transition; walkers use "linear" so a constant pace reads as walking */
+  transitionEasing?: string;
+  /** fade the sprite in when it first mounts (a new hire arriving) */
+  fadeIn?: boolean;
+  /** when set, a click runs this (after the banter bubble) and stops there instead of bubbling to the canvas */
+  onActivate?: () => void;
 }
 
 interface HandPose {
@@ -118,7 +128,7 @@ function WalkingLegs() {
 }
 
 // STYLIZED 2.5D ISOMETRIC HUMANOID SPRITE, SCREEN-SPACE DRAWN AT A PROJECTED WORLD ANCHOR
-export default function OfficeWorker({
+function OfficeWorker({
   x,
   y,
   z = 0,
@@ -136,6 +146,11 @@ export default function OfficeWorker({
   facing,
   name,
   workerStatusText,
+  typing = false,
+  leaning = false,
+  transitionEasing = "ease-in-out",
+  fadeIn = false,
+  onActivate,
 }: OfficeWorkerProps) {
   const t = useTranslation();
   const anchor = project(x, y, z);
@@ -149,8 +164,17 @@ export default function OfficeWorker({
   const [autoFacing, setAutoFacing] = useState<"left" | "right">("right");
   const prevPos = useRef({ x, y });
 
+  const walkingRef = useRef(false);
   useEffect(() => {
-    if (prevPos.current.x === x && prevPos.current.y === y) return;
+    if (prevPos.current.x === x && prevPos.current.y === y) {
+      // only the hop duration changed mid-walk: re-arm the stop timer instead of leaving the legs going
+      if (!walkingRef.current || !transitionMs) return;
+      const timer = setTimeout(() => {
+        walkingRef.current = false;
+        setIsWalking(false);
+      }, transitionMs);
+      return () => clearTimeout(timer);
+    }
     const dx = x - prevPos.current.x;
     const dy = y - prevPos.current.y;
     // in isometric projection, x-increase moves bottom-right, y-increase moves bottom-left
@@ -161,8 +185,12 @@ export default function OfficeWorker({
     }
     prevPos.current = { x, y };
     setIsWalking(true);
+    walkingRef.current = true;
     if (!transitionMs) return;
-    const timer = setTimeout(() => setIsWalking(false), transitionMs);
+    const timer = setTimeout(() => {
+      walkingRef.current = false;
+      setIsWalking(false);
+    }, transitionMs);
     return () => clearTimeout(timer);
   }, [x, y, transitionMs]);
 
@@ -179,28 +207,38 @@ export default function OfficeWorker({
     return () => clearTimeout(timer);
   }, [quip]);
   const handleBanter = (evt: ReactMouseEvent<SVGGElement>) => {
-    void evt;
     const pool = t.workerQuips[quipPoolKey(mood)];
     setQuip(pool[Math.floor(Math.random() * pool.length)]);
+    if (onActivate) {
+      evt.stopPropagation();
+      onActivate();
+    }
   };
+
+  // facing, slump and lean live on their own wrapper: the body keyframes (bob, bounce, sprint) animate
+  // `transform` too, so putting scaleX(-1) on the same element let them override it and the sprite
+  // snapped back to facing right whenever it was idle, happy, panicking or running
+  const poseTransform =
+    [
+      slumped ? "translateY(2px) scaleY(0.94)" : "",
+      leaning ? "translateX(2px) rotate(7deg)" : "",
+      effectiveFacing === "left" ? "scaleX(-1)" : "",
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
   return (
     <g
       style={{
         transform: `translate(${anchor.x}px, ${anchor.y}px)`,
-        transition: transitionMs ? `transform ${transitionMs}ms ease-in-out` : undefined,
+        transition: transitionMs ? `transform ${transitionMs}ms ${transitionEasing}` : undefined,
       }}
       onClick={handleBanter}
-      className="cursor-pointer group"
+      className={`cursor-pointer group${fadeIn ? " ol-sprite-in" : ""}`}
     >
-      <title>{name ? `${name} [${workerStatusText || mood}]` : `Worker [${mood}]`}</title>
-      <g
-        className={BODY_ANIMATION[mood]}
-        style={{
-          transform: `${slumped ? "translateY(2px) scaleY(0.94)" : ""} ${effectiveFacing === "left" ? "scaleX(-1)" : ""}`.trim() || undefined,
-          transformOrigin: "0px 0px",
-        }}
-      >
+      <title>{name ? `${name} [${workerStatusText || t.officeLife.moods[mood]}]` : `${t.officeLife.workerLabel} [${t.officeLife.moods[mood]}]`}</title>
+      <g className="ol-pose" style={{ transform: poseTransform, transformOrigin: "0px 0px" }}>
+      <g className={BODY_ANIMATION[mood]}>
         {/* legs and shoes, hidden when seated behind a desk or chair */}
         {!seated && (isWalking ? <WalkingLegs /> : <StandingLegs />)}
 
@@ -262,13 +300,14 @@ export default function OfficeWorker({
           <ellipse cx={0} cy={-29} rx={5.5} ry={5} fill={glowColor} opacity={0.25} className="animate-screen-glow-pulse" />
         )}
 
-        {/* typing hands jitter subtly while idle to sell the keyboard interaction */}
-        <g className={mood === "idle" ? "animate-type-jitter" : undefined}>
+        {/* typing hands jitter subtly, only for a seated engineer at a lit desk */}
+        <g className={typing && mood === "idle" ? "animate-type-jitter" : undefined}>
           <circle cx={hands.left[0]} cy={hands.left[1]} r={1.6} fill={skinTone} />
           <circle cx={hands.right[0]} cy={hands.right[1]} r={1.6} fill={skinTone} />
         </g>
 
         {holdsMug && <rect x={hands.right[0] - 1.5} y={hands.right[1] - 3} width={3} height={3.4} rx={0.8} fill="#e2e8f0" />}
+      </g>
       </g>
 
       {mood === "panic" && (
@@ -356,3 +395,5 @@ export default function OfficeWorker({
     </g>
   );
 }
+
+export default memo(OfficeWorker);

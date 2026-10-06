@@ -15,7 +15,23 @@ export function computeDefconLevel(telemetry: TelemetryState): DefconLevel {
   return 5;
 }
 
+// STORE SELECTOR FOR THE LEVEL ALONE: A PRIMITIVE, SO SUBSCRIBERS ONLY RE-RENDER WHEN IT CHANGES
+export function selectDefconLevel(state: { telemetry: TelemetryState }): DefconLevel {
+  return computeDefconLevel(state.telemetry);
+}
+
+// HOW THE OFFICE LIGHTING RIG REACTS TO EACH LEVEL, THE ONE RULE EVERY CONSUMER SHARES:
+// 5 = nominal, 4 = faint amber pool over the vault, 3 = slow amber beacons, 2 and 1 = red alert
+export type DefconLightingTier = "nominal" | "watch" | "warning" | "alert";
+
+export function defconLightingTier(level: DefconLevel): DefconLightingTier {
+  if (level <= 2) return "alert";
+  if (level === 3) return "warning";
+  if (level === 4) return "watch";
+  return "nominal";
+}
+
 // WHETHER THE OFFICE-WIDE RED ALERT LIGHTING RIG SHOULD BE ACTIVE
-export function isRedAlertActive(telemetry: TelemetryState): boolean {
-  return telemetry.status === "breached" || telemetry.active_incidents.some((i) => i.severity === "P1_CRITICAL");
+export function isRedAlertLevel(level: DefconLevel): boolean {
+  return level <= 2;
 }

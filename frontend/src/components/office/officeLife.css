@@ -1,0 +1,254 @@
+/* motion for the living office scene (racks, roster, ambient props). every rule here is decorative:
+   index.css switches all animation and transitions off under reduced motion, so each base style is
+   already the correct final state, and anything that only exists during an animation also carries
+   `motion-only` and is unmounted by a timer in its component. */
+
+/* ---- sprites ---- */
+@keyframes ol-sprite-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ol-sprite-in {
+  animation: ol-sprite-in 0.45s ease-out;
+}
+/* facing / slump / lean eases instead of snapping; a flip passes through zero width, which reads as a turn */
+.ol-pose {
+  transition: transform 220ms ease-out;
+}
+
+/* ---- server rack ---- */
+@keyframes ol-rack-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-2.2px, 0.8px); }
+  25% { transform: translate(2px, -0.8px); }
+  40% { transform: translate(-1.6px, -0.6px); }
+  55% { transform: translate(1.2px, 0.6px); }
+  75% { transform: translate(-0.6px, 0.2px); }
+}
+.ol-rack-shake {
+  animation: ol-rack-shake 0.6s ease-out;
+}
+
+@keyframes ol-fx-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.ol-fx-fade {
+  animation: ol-fx-fade 0.6s ease-out forwards;
+}
+
+/* the spawn flash is invisible at rest: it only exists for the 500 ms it animates */
+@keyframes ol-spawn-flash {
+  0% { opacity: 0; }
+  14% { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+.ol-spawn-flash {
+  opacity: 0;
+  animation: ol-spawn-flash 0.5s ease-out;
+}
+
+/* emerald scan bar climbing the rack face on recovery; --ol-rise is the rack height in px (negative) */
+@keyframes ol-scan-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  14% { opacity: 0.95; }
+  84% { opacity: 0.95; }
+  100% { transform: translateY(var(--ol-rise, -60px)); opacity: 0; }
+}
+.ol-scan {
+  opacity: 0;
+  animation: ol-scan-rise 0.95s ease-in-out 0.1s both;
+}
+
+@keyframes ol-chip-rise {
+  0% { transform: translateY(5px); opacity: 0; }
+  18% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { transform: translateY(-24px); opacity: 0; }
+}
+.ol-chip {
+  opacity: 0;
+  animation: ol-chip-rise 1.7s ease-out both;
+}
+
+/* status leds: slow green breathing, amber stutter, red solid (no animation). phases are desynced
+   per rack and led through a negative inline animation-delay */
+.ol-led {
+  transition: fill 0.4s ease;
+}
+@keyframes ol-led-healthy {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.ol-led-healthy {
+  animation: ol-led-healthy 3.2s ease-in-out infinite;
+}
+@keyframes ol-led-stutter {
+  0%, 100% { opacity: 1; }
+  8% { opacity: 0.2; }
+  14% { opacity: 1; }
+  44% { opacity: 1; }
+  48% { opacity: 0.25; }
+  52% { opacity: 0.9; }
+  54% { opacity: 0.2; }
+  62% { opacity: 1; }
+}
+.ol-led-stutter {
+  animation: ol-led-stutter 1.7s linear infinite;
+}
+/* recovery: each led fades from its old colour to green in sequence (delay is per led) */
+@keyframes ol-led-boot {
+  from { fill: var(--ol-led-from, #ef4444); }
+  to { fill: #22c55e; }
+}
+.ol-led-boot {
+  animation: ol-led-boot 0.45s ease-out both;
+}
+
+/* cooling fan spin-up: one accelerating turn, then the steady spin takes over */
+@keyframes ol-fan-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes ol-fan-spinup {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ol-fan {
+  animation: ol-fan-spin 1.2s linear infinite;
+}
+.ol-fan-spinup {
+  animation: ol-fan-spinup 1.2s cubic-bezier(0.55, 0, 0.9, 0.7), ol-fan-spin 1.2s linear 1.2s infinite;
+}
+
+/* cabinet tint eases between statuses instead of snapping */
+.ol-tint polygon {
+  transition: fill 0.8s ease;
+}
+
+/* alert badge: pop in on the outer element, then a calm loop on the inner one */
+@keyframes ol-badge-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.ol-badge-bob {
+  animation: ol-badge-bob 1.5s ease-in-out infinite;
+}
+.ol-badge-bob-urgent {
+  animation-duration: 0.75s;
+}
+
+/* ---- cascade ripple ---- */
+@keyframes ol-ripple {
+  0% { transform: scale(0.07); opacity: 0.9; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.ol-ripple {
+  opacity: 0;
+  transform-origin: 0 0;
+  animation: ol-ripple var(--ol-ripple-dur, 1.1s) cubic-bezier(0.2, 0.7, 0.3, 1) var(--ol-ripple-delay, 0s) both;
+}
+@keyframes ol-ripple-core {
+  0% { transform: scale(0.25); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.ol-ripple-core {
+  opacity: 0;
+  transform-origin: 0 0;
+  animation: ol-ripple-core 0.45s ease-out both;
+}
+
+/* ---- dash flows: the offset travels exactly one pattern period per loop, so a loop never jumps ---- */
+@keyframes ol-dash-12 {
+  from { stroke-dashoffset: 12; }
+  to { stroke-dashoffset: 0; }
+}
+.ol-dash-12 {
+  animation: ol-dash-12 0.7s linear infinite;
+}
+.ol-dash-12-stutter {
+  animation: ol-dash-12 0.5s steps(3, end) infinite;
+}
+@keyframes ol-dash-18 {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -18; }
+}
+.ol-dash-18 {
+  animation: ol-dash-18 1s linear infinite;
+}
+
+/* ---- desks ---- */
+@keyframes ol-bar {
+  0%, 100% { transform: scaleX(0.35); }
+  30% { transform: scaleX(1); }
+  60% { transform: scaleX(0.55); }
+  80% { transform: scaleX(0.9); }
+}
+.ol-bar {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: ol-bar 1.8s ease-in-out infinite;
+}
+
+/* ---- radial menu ---- */
+@keyframes ol-radial-in {
+  from { transform: scale(0.55); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.ol-radial {
+  animation: ol-radial-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes ol-radial-btn {
+  from { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.12); opacity: 1; }
+  to { transform: scale(1); opacity: 1; }
+}
+.ol-radial-btn {
+  transform-origin: 0 0;
+  animation: ol-radial-btn 0.3s ease-out backwards;
+}
+.ol-radial-btn:focus-visible {
+  outline: none;
+}
+.ol-radial-btn:focus-visible circle {
+  stroke: #e0f2fe;
+  stroke-width: 2.4;
+}
+
+/* ---- build mode ---- */
+@keyframes ol-drop-in {
+  0% { transform: translateY(-28px); opacity: 0; }
+  55% { transform: translateY(0); opacity: 1; }
+  72% { transform: translateY(-3px); }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.ol-drop-in {
+  animation: ol-drop-in 0.6s ease-in backwards;
+}
+@keyframes ol-ghost-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.75; }
+}
+.ol-ghost {
+  animation: ol-ghost-pulse 1.4s ease-in-out infinite;
+}
+
+/* ---- ambient props ---- */
+.ol-door-slide {
+  transition: transform 0.6s ease-in-out;
+}
+.ol-clock-hand {
+  transition: transform 1s linear;
+}
+.ol-walk-slide {
+  transition: transform 1.8s ease-in-out;
+}
+
+@keyframes ol-dash-7 {
+  from { stroke-dashoffset: 7; }
+  to { stroke-dashoffset: 0; }
+}
+.ol-dash-7 {
+  animation: ol-dash-7 0.6s linear infinite;
+}

@@ -1,7 +1,13 @@
 import type { MouseEvent } from "react";
+import { memo } from "react";
+import { useServiceTransitions } from "../../hooks/useServiceTransitions";
 import { IncidentSeverity, Service } from "../../types/game";
+import BuildPlacementGhost from "./BuildPlacementGhost";
+import { SERVER_DOOR_OFFSET } from "./officeLayout";
 import { SlidingGlassDoor } from "./OfficeProps";
+import { useRosterStage } from "./rosterStage";
 import ServerRack from "./ServerRack";
+import "./officeLife.css";
 
 interface ServerRoomProps {
   originX: number;
@@ -34,7 +40,7 @@ export function rackGridPosition(serviceId: string, services: Service[], originX
 }
 
 // SECURE SERVER VAULT HOUSING ONE 42U CABINET PER MICROSERVICE, GATED BY A GLASS SLIDING DOOR
-export default function ServerRoom({
+function ServerRoom({
   originX,
   originY,
   services,
@@ -46,12 +52,16 @@ export default function ServerRoom({
   onHoverService,
   onLeaveService,
 }: ServerRoomProps) {
+  // this is the one mount point of the status-transition watcher: racks, ripple and restore fx read its run-animations
+  useServiceTransitions(services);
+  const someoneInside = useRosterStage((s) => s.serverRoomOccupied);
+
   const byId = new Map(services.map((s) => [s.id, s]));
   const orderedIds = [...RACK_ORDER.filter((id) => byId.has(id)), ...services.map((s) => s.id).filter((id) => !RACK_ORDER.includes(id))];
 
   return (
     <g>
-      <SlidingGlassDoor x={originX + 3.4} y={originY + 3.55} />
+      <SlidingGlassDoor x={originX + SERVER_DOOR_OFFSET.x} y={originY + SERVER_DOOR_OFFSET.y} open={someoneInside} />
 
       {orderedIds.map((id, i) => {
         const service = byId.get(id);
@@ -72,6 +82,9 @@ export default function ServerRoom({
           />
         );
       })}
+      <BuildPlacementGhost />
     </g>
   );
 }
+
+export default memo(ServerRoom);

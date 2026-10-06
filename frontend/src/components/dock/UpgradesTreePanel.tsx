@@ -1,40 +1,27 @@
-import { useMemo } from "react";
-import { Coffee, Eye, LucideIcon, Radar, Shuffle, Sofa, Workflow } from "lucide-react";
+import { Check, CornerDownRight, Lock } from "lucide-react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
-import { UpgradeActionId, UpgradeCategoryKey } from "../../i18n/translations";
+import { UpgradeCategoryKey } from "../../i18n/translations";
 import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
-import { playCashSound, playClickSound } from "../../utils/sound";
-
-interface UpgradeDef {
-  upgradeId: UpgradeActionId;
-  cost: number;
-  category: UpgradeCategoryKey;
-  prerequisite: UpgradeActionId | null;
-  icon: LucideIcon;
-}
-
-// mirrors app.engine.upgrades.UPGRADE_CATALOG on the backend; display copy lives in i18n
-const UPGRADES: UpgradeDef[] = [
-  { upgradeId: "apm_tracing", cost: 18000, category: "observability", prerequisite: null, icon: Eye },
-  { upgradeId: "predictive_anomaly_detection", cost: 32000, category: "observability", prerequisite: "apm_tracing", icon: Radar },
-  { upgradeId: "multi_az_clusters", cost: 45000, category: "resilience", prerequisite: null, icon: Shuffle },
-  { upgradeId: "automated_cicd", cost: 28000, category: "resilience", prerequisite: null, icon: Workflow },
-  { upgradeId: "espresso_machine", cost: 9500, category: "facility", prerequisite: null, icon: Coffee },
-  { upgradeId: "ergonomic_chairs", cost: 14000, category: "facility", prerequisite: null, icon: Sofa },
-];
+import { claimLocalSpend } from "../../utils/localSpendClaims";
+import { playCashSound, playClickSound, playErrorSound } from "../../utils/sound";
+import { runExclusive, usePendingActions } from "../../hooks/useAsyncAction";
+import { UpgradeDef, UPGRADES } from "./upgradeCatalog";
 
 const CATEGORY_COLOR: Record<UpgradeCategoryKey, string> = {
-  observability: "text-cyan-400 border-cyan-500/40 bg-cyan-950/20",
-  resilience: "text-violet-400 border-violet-500/40 bg-violet-950/20",
-  facility: "text-amber-400 border-amber-500/40 bg-amber-950/20",
+  observability: "text-cyan-300 border-cyan-500/40 bg-cyan-950/20",
+  resilience: "text-violet-300 border-violet-500/40 bg-violet-950/20",
+  facility: "text-amber-300 border-amber-500/40 bg-amber-950/20",
 };
 
 const CATEGORY_GROUPS: UpgradeCategoryKey[] = ["observability", "resilience", "facility"];
 
+const upgradeKey = (id: string) => `upgrade:${id}`;
+
 // dependency tree: list of { upgradeId, children } per category
-function buildTree(upgrades: UpgradeDef[]): Map<UpgradeActionId | null, UpgradeDef[]> {
-  const map = new Map<UpgradeActionId | null, UpgradeDef[]>();
+function buildTree(upgrades: UpgradeDef[]): Map<string | null, UpgradeDef[]> {
+  const map = new Map<string | null, UpgradeDef[]>();
   for (const upg of upgrades) {
     const key = upg.prerequisite;
     if (!map.has(key)) map.set(key, []);
@@ -43,73 +30,151 @@ function buildTree(upgrades: UpgradeDef[]): Map<UpgradeActionId | null, UpgradeD
   return map;
 }
 
+interface UpgradeCardProps {
+  upg: UpgradeDef;
+  budget: number;
+  purchasedUpgrades: string[];
+  pending: boolean;
+  onPurchase: (upg: UpgradeDef) => void;
+}
+
+const UpgradeCard = memo(function UpgradeCard({ upg, budget, purchasedUpgrades, pending, onPurchase }: UpgradeCardProps) {
+  const t = useTranslation();
+  const Icon = upg.icon;
+  const copy = t.upgrades.actions[upg.upgradeId];
+  const owned = purchasedUpgrades.includes(upg.upgradeId);
+  const prereqMet = !upg.prerequisite || purchasedUpgrades.includes(upg.prerequisite);
+  const prereqName = upg.prerequisite ? t.upgrades.actions[upg.prerequisite].name : null;
+  const affordable = budget >= upg.cost;
+  const disabled = owned || !prereqMet || !affordable || pending;
+  const price = `−$${upg.cost.toLocaleString()}`;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onPurchase(upg)}
+      disabled={disabled}
+      aria-busy={pending}
+      title={owned ? copy.description : t.hud.upgrades.buyTitle(copy.name, price)}
+      className={`group w-full rounded-xl border p-2.5 text-left transition-[background-color,border-color,box-shadow] duration-base disabled:cursor-not-allowed ${
+        owned
+          ? "border-emerald-500/40 bg-emerald-950/20 shadow-[0_0_12px_rgba(16,185,129,0.12)]"
+          : !prereqMet
+          ? "border-slate-800 bg-slate-900/40"
+          : !affordable
+          ? "border-slate-800 bg-slate-900/60"
+          : "border-slate-600 bg-slate-900/80 hover:border-cyan-500/50 hover:bg-slate-800/80 hover:shadow-lg"
+      }`}
+    >
+      <span className="mb-1.5 flex items-center gap-1.5">
+        <span
+          className={`rounded-lg border p-1.5 ${
+            owned ? "border-emerald-500/30 bg-emerald-950/40 text-emerald-300" : "border-slate-700 bg-slate-950/50 text-slate-200"
+          }`}
+        >
+          <Icon className="h-3 w-3" aria-hidden />
+        </span>
+        <span className={`truncate text-xs font-bold leading-tight ${prereqMet ? "text-slate-100" : "text-slate-400"}`}>{copy.name}</span>
+      </span>
+
+      <span className="mb-2 block line-clamp-2 text-caption leading-tight text-slate-300">{copy.description}</span>
+
+      <span className="flex items-center justify-between gap-2 text-caption font-bold tabular-nums">
+        {owned ? (
+          <span className="flex items-center gap-1 text-emerald-300">
+            <Check className="h-3 w-3" aria-hidden /> {t.upgrades.owned}
+          </span>
+        ) : !prereqMet ? (
+          <span className="flex min-w-0 items-center gap-1 text-slate-300">
+            <Lock className="h-3 w-3 shrink-0" aria-hidden />
+            <span className="truncate">{t.hud.upgrades.requires(prereqName ?? "")}</span>
+          </span>
+        ) : (
+          <>
+            {/* prices are a plain neutral: red is kept for alarms, a cost is not one */}
+            <span className="text-slate-100">{price}</span>
+            {!affordable && <span className="text-amber-300">{t.hud.upgrades.shortBy(`$${(upg.cost - budget).toLocaleString()}`)}</span>}
+          </>
+        )}
+      </span>
+    </button>
+  );
+});
+
 // TECH TREE SHOP: VISUAL DEPENDENCY GRAPH + UPGRADE CARDS
 export default function UpgradesTreePanel() {
   const t = useTranslation();
   const budget = useGameStore((s) => s.telemetry.budget);
   const purchasedUpgrades = useGameStore((s) => s.telemetry.purchased_upgrades);
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
+  const pushKpiEvent = useGameStore((s) => s.pushKpiEvent);
+  const pending = usePendingActions();
 
   const tree = useMemo(() => buildTree(UPGRADES), []);
 
-  const handlePurchase = async (upg: UpgradeDef) => {
+  const handlePurchase = (upg: UpgradeDef) => {
     playClickSound();
     const copy = t.upgrades.actions[upg.upgradeId];
-    try {
-      await api.purchaseUpgrade(upg.upgradeId);
-      pushFloatingText(`-$${upg.cost.toLocaleString()} :: ${copy.name}`, "info");
-      playCashSound();
-    } catch (err) {
-      pushFloatingText(
-        err instanceof Error && err.message ? err.message : t.upgrades.insufficientBudget,
-        "danger"
-      );
-    }
+    void runExclusive(upgradeKey(upg.upgradeId), () => api.purchaseUpgrade(upg.upgradeId), {
+      // pending until telemetry shows the upgrade as owned, so a double click cannot buy twice
+      confirmed: (s) => s.telemetry.purchased_upgrades.includes(upg.upgradeId),
+      onSuccess: () => {
+        pushFloatingText(`-$${upg.cost.toLocaleString()} :: ${copy.name}`, "info");
+        claimLocalSpend("UPGRADE_PURCHASED");
+        pushKpiEvent("budget", -upg.cost, copy.name);
+        playCashSound();
+      },
+      onError: (err) => {
+        playErrorSound();
+        pushFloatingText(err instanceof Error && err.message ? err.message : t.upgrades.insufficientBudget, "danger");
+      },
+    });
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto p-3">
-        <div className="space-y-4">
+        {/* one column per tech branch on wide screens, so the whole tree is visible at a glance
+            inside the short dock; narrow screens stack the branches */}
+        <div className="grid items-start gap-4 lg:grid-cols-3">
           {CATEGORY_GROUPS.map((cat) => {
             const rootNodes = (tree.get(null) ?? []).filter((u) => u.category === cat);
             if (rootNodes.length === 0) return null;
 
             return (
-              <div key={cat}>
-                {/* Category header */}
-                <div
-                  className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded w-fit mb-2 border ${CATEGORY_COLOR[cat]}`}
+              <section key={cat}>
+                <h3
+                  className={`mb-2 w-fit rounded border px-2 py-0.5 font-heading text-xs font-bold uppercase tracking-widest ${CATEGORY_COLOR[cat]}`}
                 >
                   {t.upgrades.categories[cat]}
-                </div>
+                </h3>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {rootNodes.map((root) => {
-                    const children = (tree.get(root.upgradeId) ?? []);
+                    const children = tree.get(root.upgradeId) ?? [];
                     return (
                       <div key={root.upgradeId} className="flex flex-col gap-2">
                         <UpgradeCard
                           upg={root}
                           budget={budget}
                           purchasedUpgrades={purchasedUpgrades}
-                          t={t}
+                          pending={pending.has(upgradeKey(root.upgradeId))}
                           onPurchase={handlePurchase}
-                          categoryColor={CATEGORY_COLOR[cat]}
                         />
-                        {/* Dependency connector + children */}
                         {children.length > 0 && (
-                          <div className="flex flex-col items-start gap-1 pl-3 border-l-2 border-dashed border-slate-700/60 ml-4">
-                            <span className="text-[9px] text-slate-500 font-mono mb-0.5">↳ requires above</span>
+                          <div className="ml-4 flex flex-col items-stretch gap-1 border-l-2 border-dashed border-slate-700 pl-3">
+                            <span className="mb-0.5 flex items-center gap-1 text-micro text-slate-400">
+                              <CornerDownRight className="h-3 w-3" aria-hidden />
+                              {t.hud.upgrades.nextTier}
+                            </span>
                             {children.map((child) => (
                               <UpgradeCard
                                 key={child.upgradeId}
                                 upg={child}
                                 budget={budget}
                                 purchasedUpgrades={purchasedUpgrades}
-                                t={t}
+                                pending={pending.has(upgradeKey(child.upgradeId))}
                                 onPurchase={handlePurchase}
-                                categoryColor={CATEGORY_COLOR[cat]}
                               />
                             ))}
                           </div>
@@ -118,75 +183,11 @@ export default function UpgradesTreePanel() {
                     );
                   })}
                 </div>
-              </div>
+              </section>
             );
           })}
         </div>
       </div>
     </div>
-  );
-}
-
-interface UpgradeCardProps {
-  upg: UpgradeDef;
-  budget: number;
-  purchasedUpgrades: string[];
-  t: ReturnType<typeof useTranslation>;
-  onPurchase: (upg: UpgradeDef) => void;
-  categoryColor: string;
-}
-
-function UpgradeCard({ upg, budget, purchasedUpgrades, t, onPurchase, categoryColor }: UpgradeCardProps) {
-  const Icon = upg.icon;
-  const copy = t.upgrades.actions[upg.upgradeId];
-  const owned = purchasedUpgrades.includes(upg.upgradeId);
-  const prereqMet = !upg.prerequisite || purchasedUpgrades.includes(upg.prerequisite);
-  const prereqName = upg.prerequisite ? t.upgrades.actions[upg.prerequisite].name : null;
-  const disabled = owned || !prereqMet || budget < upg.cost;
-
-  return (
-    <button
-      onClick={() => onPurchase(upg)}
-      disabled={disabled}
-      title={copy.description}
-      className={`w-44 rounded-xl border p-2.5 text-left transition-all active:scale-95 group ${
-        owned
-          ? "border-emerald-500/40 bg-emerald-950/20 shadow-[0_0_12px_rgba(16,185,129,0.12)]"
-          : !prereqMet
-          ? "border-slate-800/50 bg-slate-900/40 opacity-40 cursor-not-allowed"
-          : budget < upg.cost
-          ? "border-slate-800 bg-slate-900/60 opacity-50 cursor-not-allowed"
-          : `border-slate-700/60 bg-slate-900/80 hover:bg-slate-800/80 hover:border-slate-600/60 hover:shadow-lg`
-      }`}
-    >
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <div
-          className={`p-1.5 rounded-lg border ${
-            owned
-              ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-400"
-              : `${categoryColor} text-current opacity-80`
-          }`}
-        >
-          <Icon className="w-3 h-3" />
-        </div>
-        <span className="text-xs font-bold text-slate-200 leading-tight truncate">{copy.name}</span>
-      </div>
-
-      <p className="text-[10px] text-slate-400 leading-tight line-clamp-2 mb-2">{copy.description}</p>
-
-      <div className="flex items-center justify-between text-[10px] font-bold">
-        {owned ? (
-          <span className="flex items-center gap-1 text-emerald-400">
-            <span>✓</span> {t.upgrades.owned}
-          </span>
-        ) : !prereqMet ? (
-          <span className="text-slate-500 truncate">🔒 {prereqName}</span>
-        ) : (
-          <span className={budget < upg.cost ? "text-slate-500" : "text-rose-400"}>
-            -${upg.cost.toLocaleString()}
-          </span>
-        )}
-      </div>
-    </button>
   );
 }

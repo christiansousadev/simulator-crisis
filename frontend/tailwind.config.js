@@ -11,11 +11,108 @@ export default {
       screens: {
         hd: "1400px",
       },
+      // named stacking layers: every overlay picks one of these instead of an ad hoc z-[NN]
+      zIndex: {
+        hud: "30",
+        title: "40",
+        dialog: "50",
+        system: "80",
+        critical: "88",
+        tutorial: "90",
+        toast: "96",
+      },
+      // motion tokens: one short scale of durations and shared easings
+      transitionDuration: {
+        fast: "120ms",
+        base: "180ms",
+        slow: "320ms",
+        glide: "600ms",
+      },
+      transitionTimingFunction: {
+        "out-expo": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "in-out-soft": "cubic-bezier(0.65, 0, 0.35, 1)",
+      },
+      // hud type scale: nothing smaller than `micro` (10px), `caption` for secondary readouts
+      fontSize: {
+        micro: ["0.625rem", { lineHeight: "0.875rem" }],
+        caption: ["0.6875rem", { lineHeight: "1rem" }],
+      },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
         heading: ["Rajdhani", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       keyframes: {
+        // exits mirror the entrances; used with usePresence so a closing dialog stays mounted
+        "modal-out": {
+          "0%": { transform: "scale(1)", opacity: "1" },
+          "100%": { transform: "scale(0.97)", opacity: "0" },
+        },
+        "backdrop-out": {
+          "0%": { opacity: "1" },
+          "100%": { opacity: "0" },
+        },
+        "panel-in": {
+          "0%": { transform: "translateY(6px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        "slide-up-in": {
+          "0%": { transform: "translateY(14px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        "slide-down-in": {
+          "0%": { transform: "translateY(-14px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        "item-in": {
+          "0%": { transform: "translateY(8px) scale(0.98)", opacity: "0" },
+          "100%": { transform: "translateY(0) scale(1)", opacity: "1" },
+        },
+        "item-out": {
+          "0%": { transform: "scale(1)", opacity: "1" },
+          "100%": { transform: "scale(0.96) translateX(-8px)", opacity: "0" },
+        },
+        // one-shot sweep behind a freshly added row, so new entries are findable
+        "item-highlight": {
+          "0%": { backgroundColor: "rgba(34, 211, 238, 0.28)" },
+          "100%": { backgroundColor: "rgba(34, 211, 238, 0)" },
+        },
+        "badge-bump": {
+          "0%": { transform: "scale(1)" },
+          "35%": { transform: "scale(1.35)" },
+          "100%": { transform: "scale(1)" },
+        },
+        // one-shot pulse when a KPI crosses a band (colour comes from currentColor)
+        "kpi-band-flash": {
+          "0%": { boxShadow: "0 0 0 0 currentColor" },
+          "100%": { boxShadow: "0 0 0 10px transparent" },
+        },
+        "kpi-chip-fly": {
+          "0%": { transform: "translateY(0) scale(0.85)", opacity: "0" },
+          "15%": { transform: "translateY(-4px) scale(1.05)", opacity: "1" },
+          "70%": { transform: "translateY(-16px) scale(1)", opacity: "1" },
+          "100%": { transform: "translateY(-26px) scale(1)", opacity: "0" },
+        },
+        "ready-flash": {
+          "0%": { boxShadow: "0 0 0 0 rgba(34, 211, 238, 0.7)" },
+          "100%": { boxShadow: "0 0 0 8px rgba(34, 211, 238, 0)" },
+        },
+        "stamp-in": {
+          "0%": { transform: "scale(2.2) rotate(-8deg)", opacity: "0" },
+          "60%": { transform: "scale(0.94) rotate(-4deg)", opacity: "1" },
+          "100%": { transform: "scale(1) rotate(-4deg)", opacity: "1" },
+        },
+        "wipe-in": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "wipe-out": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        "ring-pulse": {
+          "0%": { transform: "scale(1)", opacity: "0.9" },
+          "100%": { transform: "scale(1.5)", opacity: "0" },
+        },
         "pop-in": {
           "0%": { transform: "scale(0.4)", opacity: "0" },
           "60%": { transform: "scale(1.1)", opacity: "1" },
@@ -34,6 +131,14 @@ export default {
         "bounce-panic": {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-6px)" },
+        },
+        // one-shot horizontal rejection wobble (wrong pick); shake above loops for the screen shake
+        "shake-once": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "20%": { transform: "translateX(-5px)" },
+          "40%": { transform: "translateX(4px)" },
+          "60%": { transform: "translateX(-3px)" },
+          "80%": { transform: "translateX(2px)" },
         },
         shake: {
           "0%, 100%": { transform: "translate(0, 0)" },
@@ -190,10 +295,27 @@ export default {
         },
       },
       animation: {
+        "modal-out": "modal-out 0.16s ease-in forwards",
+        "backdrop-out": "backdrop-out 0.16s ease-in forwards",
+        "panel-in": "panel-in 0.2s cubic-bezier(0.22, 1, 0.36, 1)",
+        "slide-up-in": "slide-up-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "slide-down-in": "slide-down-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "item-in": "item-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "item-out": "item-out 0.2s ease-in forwards",
+        "item-highlight": "item-highlight 1.4s ease-out forwards",
+        "badge-bump": "badge-bump 0.4s ease-out",
+        "kpi-band-flash": "kpi-band-flash 0.7s ease-out",
+        "kpi-chip-fly": "kpi-chip-fly 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "ready-flash": "ready-flash 0.6s ease-out",
+        "stamp-in": "stamp-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "wipe-in": "wipe-in 0.28s cubic-bezier(0.65, 0, 0.35, 1) both",
+        "wipe-out": "wipe-out 0.3s cubic-bezier(0.65, 0, 0.35, 1) both",
+        "ring-pulse": "ring-pulse 1.4s ease-out infinite",
         "pop-in": "pop-in 0.25s ease-out",
         "modal-in": "modal-in 0.18s ease-out",
         "backdrop-in": "backdrop-in 0.15s ease-out",
         "bounce-panic": "bounce-panic 0.5s ease-in-out infinite",
+        "shake-once": "shake-once 0.32s ease-in-out both",
         shake: "shake 0.22s linear infinite",
         "spin-slow": "spin-slow 2.4s linear infinite",
         "float-up-fade": "float-up-fade 1.6s ease-out forwards",

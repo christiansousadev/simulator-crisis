@@ -1,6 +1,8 @@
 import { Database, Layers, Shuffle, X, Zap } from "lucide-react";
+import { useEffect } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { InfrastructureNodeType } from "../../types/game";
+import { useBuildGhost } from "./buildGhost";
 
 interface BuildModeOverlayProps {
   armedNodeType: InfrastructureNodeType | null;
@@ -19,6 +21,12 @@ const CATALOG: { nodeType: InfrastructureNodeType; cost: number; icon: typeof Da
 // SCREEN-SPACE PALETTE STRIP FOR THE SERVER ROOM BUILD-MODE OVERLAY
 export default function BuildModeOverlay({ armedNodeType, pendingTargetId, onArm, onCancel }: BuildModeOverlayProps) {
   const t = useTranslation();
+
+  // tell the in-scene placement ghost which module is armed, and clear it when build mode closes
+  useEffect(() => {
+    useBuildGhost.setState({ armedNodeType });
+    return () => useBuildGhost.setState({ armedNodeType: null });
+  }, [armedNodeType]);
 
   return (
     <div className="absolute top-3 right-3 z-30 flex flex-col gap-2 items-end">

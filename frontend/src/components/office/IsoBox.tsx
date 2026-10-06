@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { boxFaces, shade } from "./isoMath";
 
 interface IsoBoxProps {
@@ -16,8 +17,9 @@ interface IsoBoxProps {
   className?: string;
 }
 
-// RENDER A FLAT-SHADED ISOMETRIC BOX FROM THREE POLYGON FACES
-export default function IsoBox({
+// RENDER A FLAT-SHADED ISOMETRIC BOX FROM THREE POLYGON FACES. Memoized: props are all primitives,
+// so a parent re-render (every telemetry tick) no longer rebuilds the polygons of static boxes.
+function IsoBoxImpl({
   x,
   y,
   z = 0,
@@ -41,3 +43,6 @@ export default function IsoBox({
     </g>
   );
 }
+
+const IsoBox = memo(IsoBoxImpl);
+export default IsoBox;

@@ -1,43 +1,32 @@
-import { Smile, Frown, Meh } from "lucide-react";
+import { Frown, Meh, Smile } from "lucide-react";
+import { memo } from "react";
+import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
 import { useTranslation } from "../../i18n/useTranslation";
+import { moraleBand, toneFor } from "../../utils/kpiBands";
 import DeltaTag from "./DeltaTag";
+import MeterShell from "./MeterShell";
 
 interface MoraleMeterProps {
   happiness: number;
 }
 
-// pick a face and tone that match the current morale band
-function moraleTone(happiness: number) {
-  if (happiness >= 70) return { icon: Smile, text: "text-emerald-400", bar: "bg-emerald-500" };
-  if (happiness >= 40) return { icon: Meh, text: "text-amber-400", bar: "bg-amber-500" };
-  return { icon: Frown, text: "text-rose-400", bar: "bg-rose-500" };
-}
+const ICONS = [Frown, Meh, Smile] as const;
 
 // clean morale meter for the office's overall satisfaction
-export default function MoraleMeter({ happiness }: MoraleMeterProps) {
+export default memo(function MoraleMeter({ happiness }: MoraleMeterProps) {
   const t = useTranslation();
-  const tone = moraleTone(happiness);
-  const Icon = tone.icon;
+  const band = moraleBand(happiness);
+  const tone = toneFor("morale", band);
   const ratio = Math.min(1, Math.max(0, happiness / 100));
+  const shown = useAnimatedNumber(happiness);
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5">
-        <Icon className={`w-3.5 h-3.5 ${tone.text}`} />
-        <span className="hidden hd:inline text-[10px] text-slate-400 uppercase tracking-wide font-semibold">{t.topbar.morale}</span>
+    <MeterShell kpi="morale" icon={ICONS[band]} iconClass={tone.text} label={t.topbar.morale} band={band}>
+      <div className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-slate-700">
+        <div className={`h-full rounded-full transition-[width] duration-slow ease-out-expo ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
       </div>
-      <div className="relative flex items-center gap-2">
-        <div className="w-20 h-2 rounded-full bg-slate-700 overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${ratio * 100}%` }} />
-        </div>
-        <span className={`font-bold text-sm tabular-nums ${tone.text}`}>{happiness.toFixed(0)}%</span>
-        <DeltaTag
-          value={Math.round(happiness)}
-          format={(d) => `${d > 0 ? "+" : ""}${d}%`}
-          threshold={1}
-          className="top-0 left-full ml-1"
-        />
-      </div>
-    </div>
+      <span className={`min-w-[2.2rem] text-sm font-bold tabular-nums transition-colors duration-slow ${tone.text}`}>{shown.toFixed(0)}%</span>
+      <DeltaTag value={happiness} threshold={0.05} format={(r) => `${r > 0 ? "+" : ""}${r.toFixed(1)}% / tick`} />
+    </MeterShell>
   );
-}
+});

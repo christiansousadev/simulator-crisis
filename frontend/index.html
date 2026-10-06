@@ -11,10 +11,27 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <title>IncidentZero Corp. | Office Operations Simulator</title>
+    <title>IncidentZero | SRE Crisis Simulator</title>
+    <script>
+      // set the document language before first paint (App keeps it in sync afterwards)
+      try {
+        var l = localStorage.getItem("incidentzero.language");
+        if (l) document.documentElement.lang = l;
+        else if (/^pt/i.test(navigator.language)) document.documentElement.lang = "pt-BR";
+        else if (/^es/i.test(navigator.language)) document.documentElement.lang = "es";
+      } catch (e) {}
+    </script>
   </head>
-  <body class="bg-slate-200 text-slate-900 overflow-hidden font-sans">
-    <div id="root"></div>
+  <body class="bg-slate-950 text-slate-200 overflow-hidden font-sans" style="background:#020617;margin:0">
+    <!-- first-paint splash: shown while the active language's dictionary chunk loads, replaced by React -->
+    <div id="root">
+      <div
+        aria-hidden="true"
+        style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#020617;color:#22d3ee;font:700 14px/1 system-ui,sans-serif;letter-spacing:.35em;text-transform:uppercase;opacity:.8"
+      >
+        IncidentZero
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

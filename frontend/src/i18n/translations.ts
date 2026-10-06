@@ -1,4 +1,10 @@
 import { Language } from "./language";
+import { auditorChatEn, AuditorChatCopy } from "./auditorChat";
+import { gameplayModalsEn, GameplayModalsCopy } from "./gameplayModals";
+import { hudEn, HudCopy } from "./hud";
+import { officeLifeEn, OfficeLifeCopy } from "./officeLife";
+import { uiGapsEn, UiGapsCopy } from "./uiGaps";
+import { flowEn, FlowStrings } from "./flowStrings";
 
 // mitigation action ids mirror app.engine.formulas.MITIGATION_CATALOG on the backend
 export type MitigationActionId = "rollback" | "scale_replicas" | "circuit_breaker" | "emergency_patch";
@@ -18,9 +24,29 @@ export type UpgradeCategoryKey = "observability" | "resilience" | "facility";
 export type CompetencyKey = "auth" | "payments" | "gateway" | "db";
 export type OnCallStatusKey = "on_duty" | "off_duty" | "resting";
 export type ScenarioIdKey = "black_friday_rush" | "ransomware_infiltration" | "chaos_engineering_drill";
+// scenarios whose name is translated but whose briefing text still comes from the backend catalog
+export type ExtraScenarioIdKey = "ddos_global" | "deployment_rollback" | "third_party_outage";
 export type InfrastructureNodeTypeKey = "redis_cache" | "kafka_queue" | "db_read_replica" | "nginx_lb";
+export type TutorialStepId =
+  | "welcome"
+  | "rack"
+  | "card"
+  | "acknowledge"
+  | "investigate"
+  | "findCause"
+  | "runbooks"
+  | "mitigate"
+  | "recap"
+  | "governance";
+export type TutorialCauseKey = "deploy_regression" | "capacity_saturation" | "dependency_fault" | "acute_defect";
 
 export interface Translations {
+  flow: FlowStrings;
+  auditorChat: AuditorChatCopy;
+  gameplayModals: GameplayModalsCopy;
+  hud: HudCopy;
+  officeLife: OfficeLifeCopy;
+  uiGaps: UiGapsCopy;
   common: {
     close: string;
     none: string;
@@ -56,6 +82,34 @@ export interface Translations {
     moraleSummary: (pct: number) => string;
     centerOnCrisis: string;
     focusService: string;
+  };
+  officeCore: {
+    radarLabel: string;
+    crisis: string;
+    jumpToCrisis: string;
+    radar: string;
+    expandRadar: string;
+    collapseRadar: string;
+    legendOk: string;
+    legendFault: string;
+    clickToNavigate: string;
+    viewport: string;
+    zoneDataCenter: string;
+    zoneWarRoom: string;
+    zoneBoardroom: string;
+    zoneBreakroom: string;
+    signDataCenter: string;
+    signWarRoom: string;
+    signBoardroom: string;
+    signBreakroom: string;
+    signReception: string;
+    featureFreezeTitle: string;
+    featureFreezeDetail: string;
+    waveform: string;
+    nodeLabel: (name: string, status: string) => string;
+    engineerLabel: (name: string, status: string) => string;
+    cameraHint: string;
+    resetView: string;
   };
   nodeInspector: {
     status: string;
@@ -96,7 +150,7 @@ export interface Translations {
     affectedServicesLabel: string;
     highRisk: string;
     readyIn: (ticks: number) => string;
-    blocked: { budget: string; cooldown: string; featureFreeze: string };
+    blocked: { budget: string; cooldown: string; featureFreeze: string; noIncident: string; providerOutage: string };
   };
   ledger: {
     header: string;
@@ -221,7 +275,7 @@ export interface Translations {
   };
   cabDilemma: {
     modalTitle: string;
-    timeRemaining: (ticks: number) => string;
+    timeRemaining: (seconds: number) => string;
     choiceImpact: { budget: string; techDebt: string; morale: string; reputation: string };
   };
   staff: {
@@ -237,7 +291,7 @@ export interface Translations {
   };
   scenarios: {
     header: string;
-    names: Record<ScenarioIdKey, string>;
+    names: Record<ScenarioIdKey | ExtraScenarioIdKey, string>;
     descriptions: Record<ScenarioIdKey, string>;
     victoryRequirements: Record<ScenarioIdKey, string>;
     sandbox: string;
@@ -279,21 +333,36 @@ export interface Translations {
     reputationTooltip: string;
   };
   onboarding: {
+    offerTitle: string;
+    offerBody: string;
+    offerStart: string;
+    offerSkip: string;
+    reopenTitle: string;
+  };
+  tutorial: {
+    dialogLabel: string;
     stepLabel: (current: number, total: number) => string;
-    skip: string;
     next: string;
     back: string;
-    getStarted: string;
-    reopenTitle: string;
+    finish: string;
+    skipStep: string;
+    leave: string;
     pausedNotice: string;
-    steps: {
-      welcome: { title: string; body: string };
-      spotIncident: { title: string; body: string; waitingBody: string };
-      acknowledge: { title: string; body: string };
-      investigate: { title: string; body: string };
-      mitigate: { title: string; body: string };
-      consequence: { title: string; body: string };
-      governance: { title: string; body: string };
+    waitingFor: (action: string) => string;
+    done: string;
+    alreadyDone: string;
+    preparing: string;
+    mismatchHint: (runbook: string, percent: number, best: string) => string;
+    steps: Record<TutorialStepId, { title: string; body: string; action?: string; alt?: string }>;
+    recap: { mtta: string; mttr: string; spent: string; notMeasured: string };
+    cheatSheet: {
+      title: string;
+      intro: string;
+      runbookHeader: string;
+      causes: Record<TutorialCauseKey, string>;
+      legendFull: string;
+      legendPartial: string;
+      tip: string;
     };
   };
   settings: {
@@ -479,6 +548,12 @@ export interface Translations {
 }
 
 const en: Translations = {
+  flow: flowEn,
+  auditorChat: auditorChatEn,
+  gameplayModals: gameplayModalsEn,
+  hud: hudEn,
+  officeLife: officeLifeEn,
+  uiGaps: uiGapsEn,
   common: { close: "Close", none: "none", target: "Target", day: "Day", collapseDock: "Collapse dock", expandDock: "Expand dock", more: "More" },
   status: { healthy: "Healthy", degraded: "Degraded", down: "Down" },
   severities: {
@@ -511,6 +586,34 @@ const en: Translations = {
     moraleSummary: (pct) => `morale ${pct.toFixed(0)}%`,
     centerOnCrisis: "Center on Crisis",
     focusService: "Focus Rack",
+  },
+  officeCore: {
+    radarLabel: "Tactical mini-map",
+    crisis: "CRISIS",
+    jumpToCrisis: "Jump to the failing rack",
+    radar: "RADAR",
+    expandRadar: "Expand radar",
+    collapseRadar: "Collapse radar",
+    legendOk: "OK",
+    legendFault: "FAULT",
+    clickToNavigate: "CLICK OR DRAG TO NAVIGATE",
+    viewport: "Current view",
+    zoneDataCenter: "DATA CENTER",
+    zoneWarRoom: "WAR ROOM",
+    zoneBoardroom: "BOARDROOM",
+    zoneBreakroom: "BREAKROOM",
+    signDataCenter: "// DATA CENTER · TIER-1 VAULT",
+    signWarRoom: "// SRE WAR ROOM · INCIDENT COMMAND",
+    signBoardroom: "// CAB BOARDROOM · EXECUTIVE SUITE",
+    signBreakroom: "// RECHARGE LOUNGE & BREAKROOM",
+    signReception: "// RECEPTION & LOBBY",
+    featureFreezeTitle: "Feature Freeze Active",
+    featureFreezeDetail: "Deployments suspended until the error budget recovers",
+    waveform: "Telemetry waveform",
+    nodeLabel: (name, status) => `${name}, ${status}`,
+    engineerLabel: (name, status) => `${name} (${status})`,
+    cameraHint: "Arrows pan, + and - zoom, Home resets the view",
+    resetView: "Reset view",
   },
   nodeInspector: {
     status: "Status",
@@ -570,6 +673,8 @@ const en: Translations = {
       budget: "Insufficient runway",
       cooldown: "Still on cooldown",
       featureFreeze: "Locked by feature freeze",
+      noIncident: "No open incident on this service",
+      providerOutage: "Provider outage: wait for recovery",
     },
   },
   ledger: {
@@ -706,7 +811,7 @@ const en: Translations = {
   },
   cabDilemma: {
     modalTitle: "Change Advisory Board — Decision Required",
-    timeRemaining: (ticks) => `${ticks} ticks to decide`,
+    timeRemaining: (seconds) => `${seconds}s to decide`,
     choiceImpact: { budget: "Runway", techDebt: "Tech Debt", morale: "Morale", reputation: "Reputation" },
   },
   staff: {
@@ -726,6 +831,9 @@ const en: Translations = {
       black_friday_rush: "Black Friday Rush",
       ransomware_infiltration: "Ransomware Infiltration",
       chaos_engineering_drill: "Chaos Engineering Drill",
+      ddos_global: "DDoS Global Attack",
+      deployment_rollback: "Deployment Rollback Emergency",
+      third_party_outage: "Third-Party Provider Outage",
     },
     descriptions: {
       black_friday_rush: "A 48-tick, 4x traffic surge hits every service at once. Cloud burn accelerates and only capacity-scaling runbooks are permitted against the strain.",
@@ -776,43 +884,90 @@ const en: Translations = {
     reputationTooltip: "Shaped by your CAB dilemma choices. Falling too low invites board scrutiny (and worse incident luck); staying high buys goodwill.",
   },
   onboarding: {
+    offerTitle: "First time here?",
+    offerBody: "Take a 2-minute guided tour with a practice incident, or jump straight in. You can replay it any time from the help button.",
+    offerStart: "Do the tutorial",
+    offerSkip: "Skip",
+    reopenTitle: "Replay the tutorial",
+  },
+  tutorial: {
+    dialogLabel: "Guided tutorial",
     stepLabel: (current, total) => `Step ${current} of ${total}`,
-    skip: "Skip Tutorial",
     next: "Next",
     back: "Back",
-    getStarted: "Get Started",
-    reopenTitle: "Replay the tutorial",
-    pausedNotice: "Simulation paused while the tutorial is open",
+    finish: "Finish",
+    skipStep: "Skip step",
+    leave: "Leave tutorial",
+    pausedNotice: "Simulation paused during the tutorial",
+    waitingFor: (action) => `Waiting for you: ${action}`,
+    done: "Done!",
+    alreadyDone: "Already done, continuing…",
+    preparing: "Preparing a practice incident…",
+    mismatchHint: (runbook, percent, best) =>
+      `${runbook} only fixes this cause ${percent}%. Match the runbook to the cause: try ${best}.`,
     steps: {
       welcome: {
-        title: "Welcome & Mission",
-        body: "Welcome, Head of Infrastructure. IncidentZero Corp. has entrusted you with keeping five critical services online, the books balanced, and the board off your back. Every tick is one office hour — survive a full monthly audit cycle without going bankrupt or breaching your SLA.",
+        title: "Welcome, Head of Infrastructure",
+        body: "You keep five services online, the books balanced and the board calm. Two minutes, one practice incident: spot it, acknowledge it, find the cause, fix it. The clock stays paused while you learn.",
       },
-      spotIncident: {
-        title: "Spot the Incident",
-        body: "Your office floor mirrors your real infrastructure — click any server rack to inspect its health, latency and error rate. A rack glowing and flashing like this one has an active incident. That's where we start.",
-        waitingBody: "No incident is active right now. Keep an eye on the server room — a rack will start glowing the moment one fires. You can move on for now.",
+      rack: {
+        title: "Your infrastructure",
+        body: "Each rack is a live service. This one just raised an alert: see it pulse? Click any rack later to inspect its health.",
+        alt: "We could not create a practice incident. When a real alert fires, its rack pulses like the ones on this floor. Press Next to jump to governance.",
+      },
+      card: {
+        title: "The incident card",
+        body: "Every alert lands in the dock: severity, affected service and the regulatory fine countdown.",
       },
       acknowledge: {
-        title: "Acknowledge It",
-        body: "The clock is ticking on this alert. Acknowledging it stops alert fatigue from draining morale and keeps the regulators from fining you every tick. Hit Acknowledge below on the highlighted incident.",
+        title: "Acknowledge it",
+        body: "Acknowledging stops the fine countdown and the alert fatigue. Click Acknowledge on the highlighted card.",
+        action: "click Acknowledge",
       },
       investigate: {
-        title: "Investigate the Logs",
-        body: "The root cause isn't confirmed yet — open the log terminal and find the line that actually explains the failure. Confirming it halves your mitigation cost and MTTR.",
+        title: "Open the logs",
+        body: "Do not guess the cause. Open the log terminal from the card.",
+        action: "click Investigate",
+      },
+      findCause: {
+        title: "Find the root cause",
+        body: "Read the logs and click the line that explains the failure: the memory leak in the connection pool. Confirming it cuts cost and recovery time.",
+        alt: "Read the logs and click the line that explains the failure. Confirming the cause cuts mitigation cost and recovery time.",
+        action: "click the root-cause log line",
+      },
+      runbooks: {
+        title: "Your runbooks",
+        body: "Four runbooks, and each one fixes some causes better than others. Cost, tech debt and cooldown are on every card. The affected service is already selected.",
       },
       mitigate: {
-        title: "Choose a Mitigation",
-        body: "Every runbook trades cost, speed and technical debt differently. A hotfix is cheap but messy; a rollback is slower but keeps the platform clean. Pick one for the affected service.",
+        title: "Apply the fix",
+        body: "A bad deploy is fixed by a rollback: 100% effective on that cause. Click Rollback.",
+        action: "click Rollback",
       },
-      consequence: {
-        title: "Watch the Consequence",
-        body: "Watch the rack: the wrench animation means the fix is being applied, and the status LED should turn back to green shortly. Every action here has a visible, immediate consequence in the office.",
+      recap: {
+        title: "Incident closed",
+        body: "Service restored. That is the whole loop: acknowledge, investigate, fix. Here is what it cost you.",
+        alt: "The incident is still open. When you finish the tutorial, close it with a Rollback.",
       },
       governance: {
-        title: "IT Governance",
-        body: "Your Error Budget is your license to fail — burn through it and a Feature Freeze locks out risky runbooks until you pay down technical debt. Keep your SLA above the regulatory threshold for the full monthly cycle to pass the audit and win.",
+        title: "Keep the SLA alive",
+        body: "The shield is your SLA and the meter is your error budget. Burn the budget and a feature freeze locks risky runbooks; drop below the SLA and regulators fine you. Keep both healthy through the monthly audit.",
       },
+    },
+    recap: { mtta: "Time to acknowledge", mttr: "Time to recover", spent: "Money spent", notMeasured: "n/a" },
+    cheatSheet: {
+      title: "Runbook cheat sheet",
+      intro: "How well each runbook fixes each cause. 70% or more fully resolves the incident; less leaves it open and adds tech debt.",
+      runbookHeader: "Runbook",
+      causes: {
+        deploy_regression: "Bad deploy",
+        capacity_saturation: "Saturated capacity",
+        dependency_fault: "Failing dependency",
+        acute_defect: "Code bug",
+      },
+      legendFull: "Fully resolves (70%+)",
+      legendPartial: "Partial: the incident stays open",
+      tip: "Read the logs first: confirming the root cause tells you which column you are in.",
     },
   },
   settings: {
@@ -1039,1126 +1194,31 @@ const en: Translations = {
   },
 };
 
-const ptBR: Translations = {
-  common: { close: "Fechar", none: "nenhum", target: "Alvo", day: "Dia", collapseDock: "Recolher painel", expandDock: "Expandir painel", more: "Mais" },
-  status: { healthy: "Saudável", degraded: "Degradado", down: "Inativo" },
-  severities: {
-    P1_CRITICAL: "P1 Crítico",
-    P2_HIGH: "P2 Alto",
-    P3_MEDIUM: "P3 Médio",
-    P4_LOW: "P4 Baixo",
+// every key whose copy lives in its own per-namespace module; a locale assembles core + these four
+export type NamespaceKey = "auditorChat" | "flow" | "gameplayModals" | "hud" | "officeLife" | "uiGaps";
+// the locale modules type their inline dictionary against this, then assemble the full Translations
+export type CoreTranslations = Omit<Translations, NamespaceKey>;
+
+// English is bundled (fallback + tests); every other dictionary lives in its own lazy chunk and is
+// registered by loadLanguage (see ./loadLanguage) before the UI switches to it
+const loaded: Partial<Record<Language, Translations>> = { en };
+
+export function registerTranslations(language: Language, dict: Translations): void {
+  loaded[language] = dict;
+}
+
+export function isLanguageReady(language: Language): boolean {
+  return language in loaded;
+}
+
+// a Record-shaped accessor: always resolves to a dictionary (english while a language is not yet
+// loaded, which loadLanguage prevents from ever being visible)
+export const TRANSLATIONS: Record<Language, Translations> = {
+  en,
+  get "pt-BR"() {
+    return loaded["pt-BR"] ?? en;
   },
-  topbar: {
-    tagline: "Operações do Escritório",
-    live: "Ao vivo",
-    reconnecting: "Reconectando",
-    slaShield: "Escudo de SLA",
-    runway: "Caixa Disponível",
-    techDebt: "Dívida Técnica",
-    morale: "Moral",
-    pause: "Pausar simulação",
-    resume: "Retomar simulação",
-    newGame: "Novo Jogo",
-    help: "Ajuda e Tutorial",
-    settings: "Configurações",
-    pausedBadge: "PAUSADO",
-  },
-  office: {
-    serverRoom: "SALA DE SERVIDORES",
-    engineeringFloor: "ANDAR DE ENGENHARIA",
-    boardroom: "SALA DE REUNIÕES",
-    breakroom: "COPA",
-    auditSummary: (clean, flagged) => `${clean} sem ressalvas / ${flagged} sinalizados`,
-    moraleSummary: (pct) => `moral ${pct.toFixed(0)}%`,
-    centerOnCrisis: "Centralizar na Crise",
-    focusService: "Focar Rack",
-  },
-  nodeInspector: {
-    status: "Status",
-    tier: "Camada",
-    latency: "Latência",
-    errorRate: "Taxa de Erro",
-    upstream: "Dependências",
-  },
-  incidents: {
-    header: "Incidentes Ativos",
-    openCount: (count) => `${count} em aberto`,
-    allNominal: "Todos os sistemas normais",
-    mtta: "MTTA",
-    mttr: "MTTR",
-    sanctionCountdown: (ticks) => `T-${ticks}`,
-    acknowledge: "Reconhecer",
-    investigate: "Investigar",
-    activeFor: (ticks) => `ativo há ${ticks}t`,
-    impactTier: { critical: "Serviço crítico", standard: "Serviço padrão" },
-    dependentsAffected: (count) => (count === 1 ? "1 serviço dependente" : `${count} serviços dependentes`),
-    statusPill: {
-      new: "Novo",
-      acknowledged: "Reconhecido",
-      investigating: "Investigando",
-      mitigating: "Mitigando",
-      resolved: "Resolvido",
-    },
-  },
-  mitigations: {
-    header: "Diretivas Operacionais",
-    targetLabel: (serviceId) => `alvo: ${serviceId}`,
-    categories: {
-      deployment: "Implantação",
-      compute: "Computação",
-      resilience: "Resiliência",
-      emergency: "Hotfix de Emergência",
-    },
-    actions: {
-      rollback: { name: "Reverter Canário", description: "Voltar à última versão estável." },
-      scale_replicas: { name: "Escalar Réplicas", description: "Adicionar 4 pods de computação." },
-      circuit_breaker: { name: "Circuit Breaker", description: "Descartar tráfego não crítico." },
-      emergency_patch: { name: "Hotfix em Produção", description: "Correção direta em produção." },
-    },
-    impact: {
-      rollback: "Resolução estável, sem bônus de velocidade",
-      scale_replicas: "Absorve carga, aceleração moderada",
-      circuit_breaker: "Alívio rápido para o serviço afetado",
-      emergency_patch: "Correção mais rápida, maior custo no longo prazo",
-    },
-    tdiSuffix: "TDI",
-    rejected: "AÇÃO REJEITADA: ORÇAMENTO INSUFICIENTE",
-    selectServiceHint: "Selecione um serviço afetado para comparar as mitigações.",
-    affectedServicesLabel: "Serviços afetados",
-    highRisk: "Alto risco",
-    readyIn: (ticks) => `pronto em ${ticks}t`,
-    blocked: {
-      budget: "Caixa insuficiente",
-      cooldown: "Ainda em recarga",
-      featureFreeze: "Bloqueado pelo congelamento de funcionalidades",
-    },
-  },
-  ledger: {
-    header: "Registro de Conformidade",
-    noActivity: "Nenhuma atividade registrada ainda",
-    postmortemUnavailable: "REGISTRO INDISPONÍVEL",
-    cleanFlagged: (clean, flagged) => `${clean} sem ressalvas / ${flagged} sinalizados`,
-    generatePostmortem: "Gerar Post-Mortem",
-  },
-  postMortem: {
-    title: (incidentId) => `Relatório de Post-Mortem :: ${incidentId}`,
-    exportPdf: "Exportar PDF Oficial",
-  },
-  incidentDetail: {
-    incidentId: "ID do Incidente",
-    affectedService: "Serviço Afetado",
-    rootCause: "Causa Raiz",
-    status: "Status",
-    createdTick: "Tick de Criação",
-    acknowledgedTick: "Tick de Reconhecimento",
-    whatsHappening: "O que está acontecendo",
-    impactHeader: "Qual o impacto",
-    actionsHeader: "O que posso fazer agora",
-    symptoms: "Sintomas",
-    rootCausePending: "Causa raiz ainda não confirmada — investigue os logs para identificá-la.",
-    quickMitigate: "Mitigação rápida",
-    backToIncident: "Voltar ao incidente",
-  },
-  liquidation: {
-    eyebrow: "IncidentZero Corp. · Conselho de Administração",
-    title: "Aviso de Desligamento",
-    reference: (day) => `Referência: Revisão de Falência Operacional, Dia ${day}`,
-    salutation: "Ao Chefe de Infraestrutura,",
-    body: "Com efeito imediato, o Conselho de Administração resolveu encerrar o comando operacional atual. Os créditos de caixa da empresa foram totalmente esgotados, sem capital restante para sustentar as operações de infraestrutura.",
-    ticksSurvived: "Ticks Sobrevividos",
-    finalSla: "SLA Final",
-    finalTechDebt: "Dívida Técnica Final",
-    footer: "Esta decisão é final e entra em vigor no encerramento do expediente. Agradecemos pelos seus serviços.",
-    button: "Recandidatar-se ao Cargo",
-    stamp: "ENCERRADO",
-    finalReputation: "Reputação Final",
-    objectivesHeader: "Objetivos",
-    achievementsHeader: "Conquistas Desbloqueadas",
-    incidentsHeader: "Incidentes Recentes",
-    chooseScenario: "Escolher um Cenário",
-  },
-  victory: {
-    eyebrow: "IncidentZero Corp. · Escritório de Auditoria Externa",
-    title: "Certificado de Conformidade",
-    reference: (day) => `Referência: Ciclo Mensal de Auditoria de SLA, Dia ${day}`,
-    salutation: "Ao Chefe de Infraestrutura,",
-    body: "Esta carta certifica que a IncidentZero Corp. concluiu com êxito um ciclo completo de auditoria mantendo a disponibilidade do serviço acima do limite de violação regulatória. O Conselho aprova a continuidade do seu mandato.",
-    ticksSurvived: "Ticks Sobrevividos",
-    finalSla: "SLA Final",
-    runwayLeft: "Caixa Restante",
-    footer: "Certificado e arquivado no registro de conformidade.",
-    button: "Iniciar Próximo Ciclo de Auditoria",
-    finalTechDebt: "Dívida Técnica Final",
-    finalReputation: "Reputação Final",
-    objectivesHeader: "Objetivos",
-    achievementsHeader: "Conquistas Desbloqueadas",
-    incidentsHeader: "Incidentes Recentes",
-    chooseScenario: "Escolher um Cenário",
-  },
-  language: { en: "English", ptBR: "Português (BR)", es: "Español" },
-  floatingTexts: {
-    criticalThreat: "AMEAÇA CRÍTICA DETECTADA",
-    threatDetected: "AMEAÇA DETECTADA",
-    nodeRestored: (serviceId) => `NÓ RESTAURADO: ${serviceId}`,
-    slaWarning: "ALERTA DE SLA: SANÇÕES DE AUDITORIA ATIVAS",
-    preAlertWarning: (serviceId, ticksRemaining) => `FALHA IMINENTE: ${serviceId} (T-${ticksRemaining})`,
-    fineApplied: (amount) => `-$${amount} :: MULTA REGULATÓRIA`,
-    slaSanction: "SANÇÃO DE SLA APLICADA",
-    cycleSurvived: "CICLO DE AUDITORIA CONCLUÍDO",
-    techDebtImproved: (amount) => `-${amount} TDI`,
-    techDebtWorsened: (amount) => `+${amount} TDI`,
-    budgetGain: (amount) => `+$${amount}`,
-    budgetLoss: (amount) => `-$${amount}`,
-    moraleGain: (amount) => `+${amount} MORAL`,
-    moraleLoss: (amount) => `-${amount} MORAL`,
-    reputationGain: (amount) => `+${amount} REPUTAÇÃO`,
-    reputationLoss: (amount) => `-${amount} REPUTAÇÃO`,
-    actionFailed: "AÇÃO FALHOU — TENTE NOVAMENTE",
-    mitigationSuccess: "MITIGAÇÃO BEM-SUCEDIDA",
-    mitigationMismatch: "MITIGAÇÃO INADEQUADA — CAUSA RAIZ PERSISTE",
-    auditorFineApplied: (amount) => `-$${amount} :: MULTA DO AUDITOR`,
-    auditorCreditApplied: (amount) => `+$${amount} :: CRÉDITO DO AUDITOR`,
-    featureFreezeEngaged: "CONGELAMENTO DE RECURSOS: Orçamento de erro esgotado",
-    featureFreezeLifted: "CONGELAMENTO SUSPENSO: Orçamento de erro recuperado",
-    rootCauseIdentified: "CAUSA RAIZ IDENTIFICADA: Custo de mitigação reduzido pela metade",
-  },
-  upgrades: {
-    header: "Melhorias",
-    categories: {
-      observability: "Observabilidade",
-      resilience: "Resiliência",
-      facility: "Instalações & Ergonomia",
-    },
-    actions: {
-      apm_tracing: {
-        name: "Rastreamento Distribuído APM",
-        description: "Reduz o MTTA efetivo em 2 ticks para avaliação de violação regulatória.",
-      },
-      predictive_anomaly_detection: {
-        name: "Detecção Preditiva de Anomalias",
-        description: "Alerta sobre uma falha iminente 5 ticks antes de ela se materializar.",
-      },
-      multi_az_clusters: {
-        name: "Clusters de Computação Multi-AZ",
-        description: "Reduz o risco de falha em cascata em 40%.",
-      },
-      automated_cicd: {
-        name: "Pipelines de CI/CD Automatizados",
-        description: "Reduz pela metade o custo e a penalidade de dívida técnica do runbook Rollback.",
-      },
-      espresso_machine: {
-        name: "Máquina de Café Expresso Comercial",
-        description: "Reduz a queda de moral em 25%.",
-      },
-      ergonomic_chairs: {
-        name: "Cadeiras Ergonômicas Herman Miller",
-        description: "Reduz o acúmulo de fadiga dos engenheiros de plantão em 20%.",
-      },
-    },
-    purchase: "Comprar",
-    owned: "Adquirido",
-    prerequisiteLocked: (upgradeName) => `Requer: ${upgradeName}`,
-    insufficientBudget: "Orçamento de caixa insuficiente",
-  },
-  errorBudget: {
-    label: "Orçamento de Erro",
-    remaining: (pct) => `${pct.toFixed(1)}% restante`,
-    featureFreezeActive: "CONGELAMENTO DE FUNCIONALIDADES ATIVO",
-  },
-  cabDilemma: {
-    modalTitle: "Comitê de Mudanças — Decisão Necessária",
-    timeRemaining: (ticks) => `${ticks} ticks para decidir`,
-    choiceImpact: { budget: "Caixa", techDebt: "Dívida Técnica", morale: "Moral", reputation: "Reputação" },
-  },
-  staff: {
-    header: "Equipe",
-    competencies: { auth: "Identidade & Auth", payments: "Pagamentos", gateway: "Gateway", db: "Banco de Dados" },
-    onCallStatus: { on_duty: "Em Plantão", off_duty: "Fora de Plantão", resting: "Descansando" },
-    rotateShift: "Trocar Turno",
-    hireEngineer: "Contratar Engenheiro",
-    insufficientStamina: "Disposição insuficiente para retomar o plantão",
-    hiringCost: (amount) => `Custo de contratação: ${amount}`,
-    stress: "Estresse",
-    stamina: "Disposição",
-  },
-  scenarios: {
-    header: "Cenários",
-    names: {
-      black_friday_rush: "Corrida da Black Friday",
-      ransomware_infiltration: "Infiltração de Ransomware",
-      chaos_engineering_drill: "Simulado de Chaos Engineering",
-    },
-    descriptions: {
-      black_friday_rush: "Um pico de tráfego 4x por 48 ticks atinge todos os serviços de uma vez. O consumo de nuvem acelera e apenas runbooks de escalonamento de capacidade são permitidos contra a sobrecarga.",
-      ransomware_infiltration: "Um malware parte do Notification Dispatcher e se espalha nó a nó pelo grafo de dependências. Isole os serviços infectados com Circuit Breakers antes que ele alcance o banco de dados mestre.",
-      chaos_engineering_drill: "Um chaos monkey automatizado encerra pods saudáveis aleatoriamente por 40 ticks seguidos, independentemente da dívida técnica. Resiliência pura, sem trégua.",
-    },
-    victoryRequirements: {
-      black_friday_rush: "Mantenha o SLA acima do limite regulatório durante toda a janela de 48 ticks do pico.",
-      ransomware_infiltration: "Evite que o Payment Gateway Core seja totalmente criptografado antes do fim da janela de 60 ticks.",
-      chaos_engineering_drill: "Termine o simulado de 40 ticks sem nenhuma sinalização de violação regulatória no registro de conformidade.",
-    },
-    sandbox: "Modo Sandbox",
-    sandboxDescription: "A simulação padrão e livre. Sem limite de tempo, sem regras especiais — apenas o organograma e o que o modelo de risco jogar contra você.",
-    sandboxVictoryRequirement: "Sobreviva a um ciclo mensal completo de 720 ticks com o SLA igual ou acima do limite regulatório.",
-    durationTicks: (ticks) => `${ticks} ticks`,
-    unlimitedDuration: "Sem limite de tempo",
-    selectModeTitle: "Selecionar Modo de Jogo",
-    selectModeSubtitle: "Escolha um cenário de desafio ou inicie a simulação livre em modo sandbox.",
-    launch: "Iniciar",
-    start: "Iniciar Cenário",
-    active: (elapsed, duration) => `Tick ${elapsed} / ${duration}`,
-    victory: "Cenário Concluído",
-    defeat: "Cenário Fracassado",
-    briefingContext: "Briefing",
-    briefingObjectives: "Objetivos",
-    briefingBegin: "Começar",
-    specialConditions: "Condições Especiais",
-    objectives: "Objetivos Centrais",
-    locked: "Bloqueado",
-    unlockCondition: (cond) => `Condição de desbloqueio: ${cond}`,
-    personalBest: (sla, days, diff) => `Melhor Histórico: ${sla.toFixed(2)}% SLA · ${days}d · ${diff}`,
-    noPersonalBest: "Nenhuma partida registrada ainda",
-  },
-  difficulty: {
-    label: "Dificuldade",
-    intern: "Estagiário",
-    internDescription: "Orçamento inicial de $320k (+28%), taxa de incidentes 0.7x (-30%). Ambiente operacional tolerante para aprender runbooks.",
-    standard: "Padrão",
-    standardDescription: "Orçamento inicial de $250k (Linha de base), taxa de incidentes 1.0x. A experiência formal de simulação corporativa.",
-    chaos: "Caos Total",
-    chaosDescription: "Orçamento inicial de $180k (-28%), taxa de incidentes 1.4x (+40%). Risco severo de cascata e margem mínima de erros.",
-    budgetDim: "Capital Inicial",
-    incidentRateDim: "Frequência de Incidentes",
-    cascadeDim: "Severidade da Cascata",
-  },
-  governance: {
-    reputationLabel: "Reputação com o Conselho",
-    reputationTooltip: "Moldada pelas escolhas nos dilemas do CAB. Cair demais atrai escrutínio do conselho (e mais azar com incidentes); ficar alta compra boa vontade.",
-  },
-  onboarding: {
-    stepLabel: (current, total) => `Passo ${current} de ${total}`,
-    skip: "Pular Tutorial",
-    next: "Avançar",
-    back: "Voltar",
-    getStarted: "Começar",
-    reopenTitle: "Repetir o tutorial",
-    pausedNotice: "Simulação pausada enquanto o tutorial está aberto",
-    steps: {
-      welcome: {
-        title: "Boas-vindas e Missão",
-        body: "Bem-vindo, Chefe de Infraestrutura. A IncidentZero Corp. confiou a você a tarefa de manter cinco serviços críticos no ar, as contas em dia e o conselho longe do seu pé. Cada tick é uma hora de expediente — sobreviva a um ciclo mensal completo de auditoria sem falir ou violar o seu SLA.",
-      },
-      spotIncident: {
-        title: "Localize o Incidente",
-        body: "O andar do seu escritório espelha sua infraestrutura real — clique em qualquer rack de servidor para inspecionar sua saúde, latência e taxa de erro. Um rack pulsando e piscando como este tem um incidente ativo. É por aí que começamos.",
-        waitingBody: "Nenhum incidente está ativo agora. Fique de olho na sala de servidores — um rack vai começar a pulsar assim que um disparar. Por enquanto, você pode avançar.",
-      },
-      acknowledge: {
-        title: "Reconheça o Incidente",
-        body: "O relógio já está correndo neste alerta. Reconhecê-lo evita que a fadiga de alertas drene o moral e impede que os reguladores multem você a cada tick. Clique em Reconhecer no incidente destacado abaixo.",
-      },
-      investigate: {
-        title: "Investigue os Logs",
-        body: "A causa raiz ainda não foi confirmada — abra o terminal de logs e encontre a linha que realmente explica a falha. Confirmá-la reduz pela metade o custo de mitigação e o MTTR.",
-      },
-      mitigate: {
-        title: "Escolha uma Mitigação",
-        body: "Cada runbook troca custo, velocidade e dívida técnica de um jeito diferente. Um hotfix é barato mas bagunçado; um rollback é mais lento mas mantém a plataforma limpa. Escolha um para o serviço afetado.",
-      },
-      consequence: {
-        title: "Observe a Consequência",
-        body: "Observe o rack: a animação de chave inglesa mostra que a correção está sendo aplicada, e o LED de status deve voltar ao verde em instantes. Toda ação aqui tem uma consequência visível e imediata no escritório.",
-      },
-      governance: {
-        title: "Governança de TI",
-        body: "Seu Orçamento de Erro é sua licença para falhar — esgote-o e um Congelamento de Funcionalidades bloqueia runbooks arriscados até você reduzir a dívida técnica. Mantenha o SLA acima do limite regulatório durante todo o ciclo mensal para passar na auditoria e vencer.",
-      },
-    },
-  },
-  settings: {
-    title: "Configurações",
-    audioSection: "Áudio",
-    sfxVolume: "Volume dos Efeitos",
-    muteAll: "Silenciar Todo o Áudio",
-    musicSection: "Música",
-    muteMusic: "Silenciar Música",
-    accessibilitySection: "Acessibilidade",
-    highContrast: "Alto Contraste",
-    colorblindSafe: "Paleta para Daltonismo",
-    languageSection: "Idioma",
-    close: "Fechar",
-  },
-  titleScreen: {
-    tagline: "Gestão de Crises SRE, em Formato de Jogo",
-    pillars: ["Incidentes", "Infraestrutura", "Decisões", "Dívida Técnica", "Caixa", "Equipe", "Consequências"],
-    continue: "Continuar",
-    newGame: "Novo Jogo / Selecionar Modo",
-    hallOfFame: "Hall da Fama",
-    settings: "Configurações",
-    credits: "Créditos",
-    footer: "Uma simulação tycoon de gestão de crises SRE e governança de TI.",
-  },
-  credits: {
-    body: "Cada incidente, fórmula e controle de auditoria desta simulação foi desenhado para espelhar práticas reais de SRE e governança de TI — matemática de SLA, orçamento de erro, modelos de falha em cascata e mais.",
-    builtWith: "Construído com FastAPI, React, Zustand e SVG puro — sem motor de jogo externo.",
-  },
-  hallOfFame: {
-    empty: "Nenhuma partida concluída ainda. Sobreviva ou vá à falência para registrar sua primeira entrada.",
-    sandbox: "Sandbox",
-    daysSurvived: (days) => `${days} dias sobrevividos`,
-    myRecords: "Meus Recordes",
-    global: "Global",
-    anonymousPlayer: (shortId) => `Operador #${shortId}`,
-    title: "Histórico de Carreira & Hall da Fama",
-    recentRuns: "Partidas Recentes",
-    rankings: "Classificação",
-    allScenarios: "Todos os Cenários",
-    filterScenario: "Filtrar por Cenário",
-    operatorRank: (rank) => `Patente: ${rank}`,
-    lifetimePrestige: (pts) => `${pts} Prestígio Acumulado`,
-    totalRuns: (count) => `${count} Partidas Registradas`,
-    incidentsHandled: (resolved, total) => `${resolved}/${total} incidentes resolvidos`,
-    noObjectives: "Regras padrão do sandbox",
-    date: "Data",
-    outcomeLabel: "Resultado",
-    techDebtRepLabel: "Dívida Técnica / Rep",
-    incidentsLabel: "Incidentes",
-    recordedAtLabel: "Registrado Em",
-    objectivesSnapshot: "Instantâneo dos Objetivos",
-    resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resolvidos`,
-  },
-  debrief: {
-    titleVictory: "CICLO DE AUDITORIA CERTIFICADO",
-    titleLiquidation: "ORDEM DE LIQUIDAÇÃO DO CONSELHO",
-    titleDefeat: "CONTENÇÃO DE INCIDENTE VIOLADA",
-    subtitleVictory: "Aviso Oficial de Conformidade Regulatória Integral e Estabilidade Operacional",
-    subtitleLiquidation: "Aviso Oficial de Insolvência Imediata e Execução de Ativos",
-    subtitleDefeat: "Escalação Crítica de Segurança e Falha em Cascata Descontrolada",
-    runSummary: "Debriefing da Partida",
-    survivalDuration: "Tempo de Sobrevivência",
-    finalSla: "SLA Consolidado",
-    remainingBudget: "Caixa Restante",
-    techDebt: "Índice de Dívida Técnica",
-    reputation: "Reputação com o Conselho",
-    incidentsResolved: "Incidentes Resolvidos",
-    scenarioObjectives: "Objetivos da Missão",
-    allObjectivesMet: "Todos os Objetivos do Cenário Foram Cumpridos",
-    objectivesFailed: "Objetivos Comprometidos",
-    careerProgression: "Progressão de Carreira",
-    prestigeEarned: (pts) => `+${pts} Pontos de Prestígio Obtidos`,
-    achievementsUnlocked: "Conquistas Desbloqueadas Nesta Partida",
-    noAchievements: "Nenhuma nova conquista desbloqueada nesta partida",
-    comparisonHeader: "Comparação com Seu Melhor Resultado",
-    firstRunRecord: "Primeiro registro oficial de carreira estabelecido neste cenário e dificuldade!",
-    newPersonalBest: "NOVO RECORDE PESSOAL!",
-    betterThanBest: (metric, delta) => `${metric}: Melhoria de ${delta} em relação ao seu melhor recorde`,
-    belowBest: (metric, delta) => `${metric}: ${delta} abaixo do seu recorde anterior`,
-    matchedBest: (metric) => `${metric}: Igualou o seu recorde histórico`,
-    nextChallengeHeader: "Próximos Passos Sugeridos",
-    playAgain: "Repetir Partida (Mesma Configuração)",
-    increaseDifficulty: "Aumentar Dificuldade",
-    selectAnotherScenario: "Escolher Outro Cenário",
-    viewCareerRecord: "Ver Histórico de Carreira",
-    targetGoal: (goal) => `Meta Recomendada: ${goal}`,
-    auditGrade: "Avaliação de Auditoria",
-    acceptChallenge: "Aceitar Desafio",
-    totalRunsLabel: "Total de Partidas:",
-    victoriesLabel: "Vitórias:",
-    lifetimePrestigeLabel: "Prestígio Total:",
-    achievementsUnlockedCount: (count, total) => `Conquistas Desbloqueadas: ${count}/${total}`,
-    completedCount: (done, total) => `${done}/${total} Concluídos`,
-    slaVsPriorBest: "SLA vs Melhor Anterior",
-    survivalVsPriorBest: "Sobrevivência vs Melhor Anterior",
-    priorOutcome: "Resultado Anterior",
-    stampBreached: "VIOLADO",
-    stampLiquidated: "LIQUIDADO",
-  },
-  newsTicker: {
-    label: "IZ NOTÍCIAS",
-    flavorLines: [
-      "Conselho elogia disponibilidade do trimestre, exige mais com menos orçamento",
-      "Fonte anônima: máquina de café da copa pode ganhar upgrade",
-      "Analistas do setor: 'Ninguém lê post-mortems, mas todo mundo deveria'",
-      "Ações da IncidentZero Corp. não afetadas pela pequena instabilidade de ontem, segundo fontes",
-    ],
-    eventHeadlines: {
-      INCIDENT_RAISED: "URGENTE: Nova interrupção de serviço registrada no andar",
-      INCIDENT_ACKNOWLEDGED: "Engenheiro de plantão reconhece alerta, conselho respira aliviado",
-      RUNBOOK_EXECUTED: "Equipe de infraestrutura executa runbook de emergência",
-      UPGRADE_PURCHASED: "Investimento aprovado para upgrade de infraestrutura",
-      ACHIEVEMENT_UNLOCKED: "Indicado a funcionário do mês anunciado internamente",
-      DILEMMA_RESOLVED: "Decisão do Comitê de Mudanças finalizada",
-      FEATURE_FREEZE_ENGAGED: "Congelamento de funcionalidades declarado após esgotamento do orçamento de erro",
-      SLA_BREACH_EMERGENCY_SANCTION: "Reguladores emitem sanção emergencial por violação de SLA",
-      BANKRUPTCY_LIQUIDATION: "Conselho de Administração anuncia liquidação imediata",
-      MONTHLY_AUDIT_CYCLE_SURVIVED: "Empresa certificada em conformidade após auditoria mensal",
-      ENGINEER_HIRED: "Novo engenheiro se junta à escala de plantão",
-      INFRASTRUCTURE_NODE_PLACED: "Novo módulo de hardware instalado na sala de servidores",
-      ROOT_CAUSE_IDENTIFIED: "Engenharia elogiada por diagnóstico rápido de causa raiz",
-      COSMETIC_UNLOCKED: "Orçamento de decoração aprovado para upgrade estético",
-    },
-    eventConsequence: {
-      INCIDENT_RAISED: "Um incidente ativo está consumindo o MTTA — reconheça antes que a multa comece a contar.",
-      SLA_BREACH_EMERGENCY_SANCTION: "O SLA caiu abaixo do piso regulatório — espere uma revisão do conselho se isso se repetir.",
-      BANKRUPTCY_LIQUIDATION: "O caixa chegou a zero — esta partida terminou.",
-      FEATURE_FREEZE_ENGAGED: "O orçamento de erro se esgotou — runbooks arriscados ficam bloqueados até a dívida técnica cair.",
-    },
-    moreEvents: (count) => `+${count} eventos`,
-  },
-  objectiveHints: {
-    acknowledgeIncident: "Há um alerta esperando — reconheça antes que a multa comece a contar.",
-    hireEngineer: "Contrate seu primeiro engenheiro de plantão na aba Equipe.",
-    buyUpgrade: "Seu caixa já dá pra sua primeira melhoria — veja a aba Melhorias.",
-    tryBuildMode: "Experimente o Modo de Construção: instale seu primeiro módulo na sala de servidores.",
-    earnAchievement: "Continue assim — sua primeira conquista de carreira está por perto.",
-  },
-  objectiveTracker: {
-    header: "Objetivos",
-    done: "Concluído",
-    pending: "Pendente",
-  },
-  resolutionSummary: {
-    header: (serviceId) => `${serviceId} restaurado`,
-    mtta: (ticks) => `MTTA ${ticks}t`,
-    mttr: (ticks) => `MTTR ${ticks}t`,
-    cost: (amount) => `Custo $${amount}`,
-    costUnknown: "Custo indisponível",
-    techDebt: (delta) => `Dívida ${delta > 0 ? `+${delta}` : delta}`,
-    viewPostmortem: "Ver pós-mortem",
-  },
-  incidentReplay: {
-    openButton: "Replay",
-    title: (incidentId) => `Replay do Incidente :: ${incidentId}`,
-    empty: "Nenhum evento do registro correlacionado a este incidente foi encontrado.",
-    play: "Reproduzir",
-    pause: "Pausar",
-  },
-  buildMode: {
-    toggle: "Modo de Construção",
-    catalog: {
-      redis_cache: { name: "Cluster de Cache Redis", description: "Absorve picos de leitura; reduz a latência upstream em 45%." },
-      kafka_queue: { name: "Fila de Mensagens Kafka", description: "Desacopla serviços; evita falhas em cascata entre produtor e consumidor." },
-      db_read_replica: { name: "Réplica de Leitura do Banco", description: "Divide a carga de consultas; reduz a probabilidade de deadlock em 60%." },
-      nginx_lb: { name: "Balanceador de Carga NGINX", description: "Distribui o tráfego de borda entre nós de computação replicados." },
-    },
-    selectTargetHint: "Clique em um rack de servidor para o alvo",
-    selectProducerHint: "Agora clique no rack produtor para desacoplar",
-    placed: "Módulo de infraestrutura instalado",
-    placementFailed: "Falha na instalação: orçamento insuficiente ou alvo inválido",
-  },
-  logTriage: {
-    title: "Triagem de Logs — Causa Raiz",
-    investigateLogs: "Investigar Logs",
-    alreadySolved: "Causa Raiz Já Identificada",
-    rootCauseConfirmed: "CAUSA RAIZ CONFIRMADA",
-    rewardEarned: "CAUSA RAIZ ENCONTRADA: -50% no custo de mitigação, MTTR reduzido pela metade",
-    incorrectLine: "NÃO É A CAUSA RAIZ — CONTINUE PROCURANDO",
-  },
-  achievements: {
-    header: "Conquistas",
-    unlockedToast: "Conquista Desbloqueada",
-    prestigePoints: "Pontos de Prestígio",
-    owned: "Adquirido",
-    insufficientPrestige: "Pontos de prestígio insuficientes",
-  },
-  liveOps: {
-    title: "Operações ao Vivo",
-    subtitle: "Painel de espectador somente leitura — seguro para um segundo monitor",
-    activeAlerts: "Alertas Ativos",
-    complianceWaterfall: "Linha do Tempo de Conformidade",
-  },
-  scenarioBuilder: {
-    openBuilder: "Criar Cenário Personalizado",
-    title: "Construtor de Cenários do Chaos Sandbox",
-    durationTicks: "Duração (ticks)",
-    hazardMultiplier: "Multiplicador de Risco",
-    budgetFloor: "Piso de Orçamento ($)",
-    chaosInjections: "Injeções de Caos Agendadas",
-    addInjection: "Adicionar Injeção",
-    exportCode: "Copiar Código de Desafio",
-    importCode: "Importar",
-    importPlaceholder: "Cole um código de desafio…",
-    importSuccess: "Cenário importado",
-    importFailed: "Código de desafio inválido",
-    testScenario: "Testar Cenário",
-    testFailed: "Falha ao carregar cenário personalizado",
-  },
-  workerQuips: {
-    idle: ["Monitorando logs... nada explodindo por enquanto.", "Acabei de encher a caneca. Mandem incidentes com moderação."],
-    panic: ["QUEM FEZ DEPLOY NA SEXTA-FEIRA?!?!", "SOCORRO, O BANCO PEGOU FOGO!", "EU AVISEI PRA ESCALAR MAIS RÉPLICAS!"],
-    tired: ["Mais uma hora de plantão e eu viro vegetal...", "Cadê o café...? Zzz"],
-    happy: ["Deploy com zero bugs! Alguém me belisca!", "SLA de volta a 99,9%, rodada de donuts pro time."],
-  },
-  defcon: {
-    label: "DEFCON",
-    level5: "NOMINAL",
-    level4: "ELEVADO",
-    level3: "P1 ATIVO",
-    level2: "MÚLTIPLOS P1s",
-    level1: "COLAPSO IMINENTE",
+  get es() {
+    return loaded.es ?? en;
   },
 };
-
-const es: Translations = {
-  common: { close: "Cerrar", none: "ninguno", target: "Objetivo", day: "Día", collapseDock: "Contraer panel", expandDock: "Expandir panel", more: "Más" },
-  status: { healthy: "Saludable", degraded: "Degradado", down: "Caído" },
-  severities: {
-    P1_CRITICAL: "P1 Crítico",
-    P2_HIGH: "P2 Alto",
-    P3_MEDIUM: "P3 Medio",
-    P4_LOW: "P4 Bajo",
-  },
-  topbar: {
-    tagline: "Operaciones de la Oficina",
-    live: "En vivo",
-    reconnecting: "Reconectando",
-    slaShield: "Escudo de SLA",
-    runway: "Fondos Disponibles",
-    techDebt: "Deuda Técnica",
-    morale: "Moral",
-    pause: "Pausar simulación",
-    resume: "Reanudar simulación",
-    newGame: "Nueva Partida",
-    help: "Ayuda y Tutorial",
-    settings: "Configuración",
-    pausedBadge: "PAUSADO",
-  },
-  office: {
-    serverRoom: "SALA DE SERVIDORES",
-    engineeringFloor: "PISO DE INGENIERÍA",
-    boardroom: "SALA DE JUNTAS",
-    breakroom: "SALA DE DESCANSO",
-    auditSummary: (clean, flagged) => `${clean} limpios / ${flagged} marcados`,
-    moraleSummary: (pct) => `moral ${pct.toFixed(0)}%`,
-    centerOnCrisis: "Centrar en la Crisis",
-    focusService: "Enfocar Rack",
-  },
-  nodeInspector: {
-    status: "Estado",
-    tier: "Nivel",
-    latency: "Latencia",
-    errorRate: "Tasa de Error",
-    upstream: "Dependencias",
-  },
-  incidents: {
-    header: "Incidentes Activos",
-    openCount: (count) => `${count} abiertos`,
-    allNominal: "Todos los sistemas normales",
-    mtta: "MTTA",
-    mttr: "MTTR",
-    sanctionCountdown: (ticks) => `T-${ticks}`,
-    acknowledge: "Reconocer",
-    investigate: "Investigar",
-    activeFor: (ticks) => `activo hace ${ticks}t`,
-    impactTier: { critical: "Servicio crítico", standard: "Servicio estándar" },
-    dependentsAffected: (count) => (count === 1 ? "1 servicio dependiente" : `${count} servicios dependientes`),
-    statusPill: {
-      new: "Nuevo",
-      acknowledged: "Reconocido",
-      investigating: "Investigando",
-      mitigating: "Mitigando",
-      resolved: "Resuelto",
-    },
-  },
-  mitigations: {
-    header: "Directivas Operativas",
-    targetLabel: (serviceId) => `objetivo: ${serviceId}`,
-    categories: {
-      deployment: "Despliegue",
-      compute: "Cómputo",
-      resilience: "Resiliencia",
-      emergency: "Hotfix de Emergencia",
-    },
-    actions: {
-      rollback: { name: "Revertir Canary", description: "Volver a la última versión estable." },
-      scale_replicas: { name: "Escalar Réplicas", description: "Agregar 4 pods de cómputo." },
-      circuit_breaker: { name: "Circuit Breaker", description: "Descartar tráfico no crítico." },
-      emergency_patch: { name: "Hotfix en Producción", description: "Corrección directa en producción." },
-    },
-    impact: {
-      rollback: "Resolución estable, sin bono de velocidad",
-      scale_replicas: "Absorbe carga, aceleración moderada",
-      circuit_breaker: "Alivio rápido para el servicio afectado",
-      emergency_patch: "Corrección más rápida, mayor costo a largo plazo",
-    },
-    tdiSuffix: "TDI",
-    rejected: "ACCIÓN RECHAZADA: PRESUPUESTO INSUFICIENTE",
-    selectServiceHint: "Selecciona un servicio afectado para comparar las mitigaciones.",
-    affectedServicesLabel: "Servicios afectados",
-    highRisk: "Alto riesgo",
-    readyIn: (ticks) => `listo en ${ticks}t`,
-    blocked: {
-      budget: "Presupuesto insuficiente",
-      cooldown: "Todavía en recarga",
-      featureFreeze: "Bloqueado por el congelamiento de funciones",
-    },
-  },
-  ledger: {
-    header: "Registro de Cumplimiento",
-    noActivity: "Aún no hay actividad registrada",
-    postmortemUnavailable: "REGISTRO NO DISPONIBLE",
-    cleanFlagged: (clean, flagged) => `${clean} limpios / ${flagged} marcados`,
-    generatePostmortem: "Generar Post-Mortem",
-  },
-  postMortem: {
-    title: (incidentId) => `Informe Post-Mortem :: ${incidentId}`,
-    exportPdf: "Exportar PDF Oficial",
-  },
-  incidentDetail: {
-    incidentId: "ID del Incidente",
-    affectedService: "Servicio Afectado",
-    rootCause: "Causa Raíz",
-    status: "Estado",
-    createdTick: "Tick de Creación",
-    acknowledgedTick: "Tick de Reconocimiento",
-    whatsHappening: "Qué está pasando",
-    impactHeader: "Cuál es el impacto",
-    actionsHeader: "Qué puedo hacer ahora",
-    symptoms: "Síntomas",
-    rootCausePending: "Causa raíz aún no confirmada — investiga los logs para identificarla.",
-    quickMitigate: "Mitigación rápida",
-    backToIncident: "Volver al incidente",
-  },
-  liquidation: {
-    eyebrow: "IncidentZero Corp. · Junta Directiva",
-    title: "Aviso de Terminación",
-    reference: (day) => `Referencia: Revisión de Quiebra Operativa, Día ${day}`,
-    salutation: "Al Jefe de Infraestructura,",
-    body: "Con efecto inmediato, la Junta Directiva ha resuelto terminar el mando operativo actual. Los créditos de fondos de la empresa se han agotado por completo, sin capital restante para sostener las operaciones de infraestructura.",
-    ticksSurvived: "Ticks Sobrevividos",
-    finalSla: "SLA Final",
-    finalTechDebt: "Deuda Técnica Final",
-    footer: "Esta decisión es final y efectiva al cierre de operaciones. Le agradecemos sus servicios.",
-    button: "Volver a Postularse al Cargo",
-    stamp: "TERMINADO",
-    finalReputation: "Reputación Final",
-    objectivesHeader: "Objetivos",
-    achievementsHeader: "Logros Desbloqueados",
-    incidentsHeader: "Incidentes Recientes",
-    chooseScenario: "Elegir un Escenario",
-  },
-  victory: {
-    eyebrow: "IncidentZero Corp. · Oficina de Auditoría Externa",
-    title: "Certificado de Cumplimiento",
-    reference: (day) => `Referencia: Ciclo Mensual de Auditoría de SLA, Día ${day}`,
-    salutation: "Al Jefe de Infraestructura,",
-    body: "Esta carta certifica que IncidentZero Corp. ha completado con éxito un ciclo completo de auditoría manteniendo la disponibilidad del servicio por encima del umbral de incumplimiento regulatorio. La Junta aprueba la continuidad de su gestión.",
-    ticksSurvived: "Ticks Sobrevividos",
-    finalSla: "SLA Final",
-    runwayLeft: "Fondos Restantes",
-    footer: "Certificado y archivado en el registro de cumplimiento.",
-    button: "Iniciar Próximo Ciclo de Auditoría",
-    finalTechDebt: "Deuda Técnica Final",
-    finalReputation: "Reputación Final",
-    objectivesHeader: "Objetivos",
-    achievementsHeader: "Logros Desbloqueados",
-    incidentsHeader: "Incidentes Recientes",
-    chooseScenario: "Elegir un Escenario",
-  },
-  language: { en: "English", ptBR: "Português (BR)", es: "Español" },
-  floatingTexts: {
-    criticalThreat: "AMENAZA CRÍTICA DETECTADA",
-    threatDetected: "AMENAZA DETECTADA",
-    nodeRestored: (serviceId) => `NODO RESTAURADO: ${serviceId}`,
-    slaWarning: "ALERTA DE SLA: SANCIONES DE AUDITORÍA ACTIVAS",
-    preAlertWarning: (serviceId, ticksRemaining) => `FALLA INMINENTE: ${serviceId} (T-${ticksRemaining})`,
-    fineApplied: (amount) => `-$${amount} :: MULTA REGULATORIA`,
-    slaSanction: "SANCIÓN DE SLA APLICADA",
-    cycleSurvived: "CICLO DE AUDITORÍA SUPERADO",
-    techDebtImproved: (amount) => `-${amount} TDI`,
-    techDebtWorsened: (amount) => `+${amount} TDI`,
-    budgetGain: (amount) => `+$${amount}`,
-    budgetLoss: (amount) => `-$${amount}`,
-    moraleGain: (amount) => `+${amount} MORAL`,
-    moraleLoss: (amount) => `-${amount} MORAL`,
-    reputationGain: (amount) => `+${amount} REPUTACIÓN`,
-    reputationLoss: (amount) => `-${amount} REPUTACIÓN`,
-    actionFailed: "ACCIÓN FALLIDA — INTÉNTALO DE NUEVO",
-    mitigationSuccess: "MITIGACIÓN EXITOSA",
-    mitigationMismatch: "MITIGACIÓN INCORRECTA — LA CAUSA RAÍZ PERSISTE",
-    auditorFineApplied: (amount) => `-$${amount} :: MULTA DEL AUDITOR`,
-    auditorCreditApplied: (amount) => `+$${amount} :: CRÉDITO DEL AUDITOR`,
-    featureFreezeEngaged: "CONGELAMIENTO DE FUNCIONES: Presupuesto de errores agotado",
-    featureFreezeLifted: "CONGELAMIENTO LEVANTADO: Presupuesto de errores restaurado",
-    rootCauseIdentified: "CAUSA RAÍZ IDENTIFICADA: Costo de mitigación reducido a la mitad",
-  },
-  upgrades: {
-    header: "Mejoras",
-    categories: {
-      observability: "Observabilidad",
-      resilience: "Resiliencia",
-      facility: "Instalaciones y Ergonomía",
-    },
-    actions: {
-      apm_tracing: {
-        name: "Rastreo Distribuido APM",
-        description: "Reduce el MTTA efectivo en 2 ticks para la evaluación de incumplimiento regulatorio.",
-      },
-      predictive_anomaly_detection: {
-        name: "Detección Predictiva de Anomalías",
-        description: "Advierte de una falla inminente 5 ticks antes de que se materialice.",
-      },
-      multi_az_clusters: {
-        name: "Clústeres de Cómputo Multi-AZ",
-        description: "Reduce el riesgo de falla en cascada en un 40%.",
-      },
-      automated_cicd: {
-        name: "Pipelines de CI/CD Automatizados",
-        description: "Reduce a la mitad el costo y la penalización de deuda técnica del runbook Rollback.",
-      },
-      espresso_machine: {
-        name: "Máquina de Café Espresso Comercial",
-        description: "Ralentiza la caída de la moral en un 25%.",
-      },
-      ergonomic_chairs: {
-        name: "Sillas Ergonómicas Herman Miller",
-        description: "Reduce la acumulación de fatiga de los ingenieros de guardia en un 20%.",
-      },
-    },
-    purchase: "Comprar",
-    owned: "Adquirido",
-    prerequisiteLocked: (upgradeName) => `Requiere: ${upgradeName}`,
-    insufficientBudget: "Presupuesto insuficiente",
-  },
-  errorBudget: {
-    label: "Presupuesto de Errores",
-    remaining: (pct) => `${pct.toFixed(1)}% restante`,
-    featureFreezeActive: "CONGELAMIENTO DE FUNCIONES ACTIVO",
-  },
-  cabDilemma: {
-    modalTitle: "Comité de Cambios — Decisión Requerida",
-    timeRemaining: (ticks) => `${ticks} ticks para decidir`,
-    choiceImpact: { budget: "Fondos", techDebt: "Deuda Técnica", morale: "Moral", reputation: "Reputación" },
-  },
-  staff: {
-    header: "Personal",
-    competencies: { auth: "Identidad y Auth", payments: "Pagos", gateway: "Gateway", db: "Base de Datos" },
-    onCallStatus: { on_duty: "De Guardia", off_duty: "Fuera de Guardia", resting: "Descansando" },
-    rotateShift: "Rotar Turno",
-    hireEngineer: "Contratar Ingeniero",
-    insufficientStamina: "Resistencia insuficiente para volver al turno",
-    hiringCost: (amount) => `Costo de contratación: ${amount}`,
-    stress: "Estrés",
-    stamina: "Resistencia",
-  },
-  scenarios: {
-    header: "Escenarios",
-    names: {
-      black_friday_rush: "Avalancha del Black Friday",
-      ransomware_infiltration: "Infiltración de Ransomware",
-      chaos_engineering_drill: "Simulacro de Chaos Engineering",
-    },
-    descriptions: {
-      black_friday_rush: "Un pico de tráfico 4x durante 48 ticks golpea todos los servicios a la vez. El consumo de nube se acelera y solo se permiten runbooks de escalado de capacidad contra la sobrecarga.",
-      ransomware_infiltration: "Un malware parte del Notification Dispatcher y se propaga nodo a nodo por el grafo de dependencias. Aísla los servicios infectados con Circuit Breakers antes de que llegue a la base de datos maestra.",
-      chaos_engineering_drill: "Un chaos monkey automatizado termina pods saludables al azar durante 40 ticks seguidos, sin importar la deuda técnica. Resiliencia pura, sin tregua.",
-    },
-    victoryRequirements: {
-      black_friday_rush: "Mantén el SLA por encima del umbral regulatorio durante toda la ventana de 48 ticks del pico.",
-      ransomware_infiltration: "Evita que el Payment Gateway Core sea cifrado por completo antes de que termine la ventana de 60 ticks.",
-      chaos_engineering_drill: "Termina el simulacro de 40 ticks sin ninguna alerta de incumplimiento regulatorio en el registro de cumplimiento.",
-    },
-    sandbox: "Modo Sandbox",
-    sandboxDescription: "La simulación libre por defecto. Sin límite de tiempo, sin reglas especiales — solo el organigrama y lo que el modelo de riesgo te depare.",
-    sandboxVictoryRequirement: "Sobrevive un ciclo mensual completo de 720 ticks con el SLA igual o por encima del umbral regulatorio.",
-    durationTicks: (ticks) => `${ticks} ticks`,
-    unlimitedDuration: "Sin límite de tiempo",
-    selectModeTitle: "Seleccionar Modo de Juego",
-    selectModeSubtitle: "Elige un escenario de desafío o inicia la simulación libre en modo sandbox.",
-    launch: "Iniciar",
-    start: "Iniciar Escenario",
-    active: (elapsed, duration) => `Tick ${elapsed} / ${duration}`,
-    victory: "Escenario Completado",
-    defeat: "Escenario Fallido",
-    briefingContext: "Briefing",
-    briefingObjectives: "Objetivos",
-    briefingBegin: "Comenzar",
-    specialConditions: "Condiciones Especiales",
-    objectives: "Objetivos Principales",
-    locked: "Bloqueado",
-    unlockCondition: (cond) => `Condición de desbloqueo: ${cond}`,
-    personalBest: (sla, days, diff) => `Mejor Histórico: ${sla.toFixed(2)}% SLA · ${days}d · ${diff}`,
-    noPersonalBest: "Sin partidas registradas aún",
-  },
-  difficulty: {
-    label: "Dificultad",
-    intern: "Interno",
-    internDescription: "Presupuesto inicial de $320k (+28%), tasa de incidentes 0.7x (-30%). Entorno tolerante para aprender runbooks.",
-    standard: "Estándar",
-    standardDescription: "Presupuesto inicial de $250k (Línea base), tasa de incidentes 1.0x. La experiencia canónica de simulación.",
-    chaos: "Caos Total",
-    chaosDescription: "Presupuesto inicial de $180k (-28%), tasa de incidentes 1.4x (+40%). Riesgo severo de cascadas y margen mínimo.",
-    budgetDim: "Capital Inicial",
-    incidentRateDim: "Frecuencia de Incidentes",
-    cascadeDim: "Severidad de Cascadas",
-  },
-  governance: {
-    reputationLabel: "Reputación ante la Junta",
-    reputationTooltip: "Moldeada por tus decisiones en los dilemas del CAB. Caer demasiado atrae escrutinio de la junta (y peor suerte con los incidentes); mantenerla alta compra buena voluntad.",
-  },
-  onboarding: {
-    stepLabel: (current, total) => `Paso ${current} de ${total}`,
-    skip: "Omitir Tutorial",
-    next: "Siguiente",
-    back: "Atrás",
-    getStarted: "Comenzar",
-    reopenTitle: "Repetir el tutorial",
-    pausedNotice: "Simulación pausada mientras el tutorial está abierto",
-    steps: {
-      welcome: {
-        title: "Bienvenida y Misión",
-        body: "Bienvenido, Jefe de Infraestructura. IncidentZero Corp. te ha confiado mantener cinco servicios críticos en línea, las cuentas equilibradas y a la junta directiva tranquila. Cada tick es una hora de oficina — sobrevive un ciclo mensual completo de auditoría sin quebrar ni incumplir tu SLA.",
-      },
-      spotIncident: {
-        title: "Localiza el Incidente",
-        body: "El piso de tu oficina refleja tu infraestructura real — haz clic en cualquier rack de servidor para inspeccionar su estado, latencia y tasa de error. Un rack que pulsa y parpadea así tiene un incidente activo. Por ahí empezamos.",
-        waitingBody: "Ahora mismo no hay ningún incidente activo. Vigila la sala de servidores — un rack empezará a pulsar en cuanto se dispare uno. Por ahora puedes continuar.",
-      },
-      acknowledge: {
-        title: "Reconócelo",
-        body: "El reloj ya corre en esta alerta. Reconocerla evita que la fatiga de alertas agote la moral y que los reguladores te multen cada tick. Haz clic en Reconocer en el incidente destacado abajo.",
-      },
-      investigate: {
-        title: "Investiga los Logs",
-        body: "La causa raíz aún no está confirmada — abre el terminal de logs y encuentra la línea que realmente explica la falla. Confirmarla reduce a la mitad el costo de mitigación y el MTTR.",
-      },
-      mitigate: {
-        title: "Elige una Mitigación",
-        body: "Cada runbook combina costo, velocidad y deuda técnica de forma distinta. Un hotfix es barato pero desordenado; un rollback es más lento pero mantiene la plataforma sana. Elige uno para el servicio afectado.",
-      },
-      consequence: {
-        title: "Observa la Consecuencia",
-        body: "Observa el rack: la animación de la llave inglesa indica que la corrección se está aplicando, y el LED de estado debería volver al verde en breve. Cada acción aquí tiene una consecuencia visible e inmediata en la oficina.",
-      },
-      governance: {
-        title: "Gobernanza de TI",
-        body: "Tu Presupuesto de Errores es tu licencia para fallar — agótalo y un Congelamiento de Funciones bloquea los runbooks arriesgados hasta que reduzcas la deuda técnica. Mantén el SLA por encima del umbral regulatorio durante todo el ciclo mensual para pasar la auditoría y ganar.",
-      },
-    },
-  },
-  settings: {
-    title: "Configuración",
-    audioSection: "Audio",
-    sfxVolume: "Volumen de Efectos",
-    muteAll: "Silenciar Todo el Audio",
-    musicSection: "Música",
-    muteMusic: "Silenciar Música",
-    accessibilitySection: "Accesibilidad",
-    highContrast: "Alto Contraste",
-    colorblindSafe: "Paleta para Daltonismo",
-    languageSection: "Idioma",
-    close: "Cerrar",
-  },
-  titleScreen: {
-    tagline: "Gestión de Crisis SRE, en Formato de Juego",
-    pillars: ["Incidentes", "Infraestructura", "Decisiones", "Deuda Técnica", "Fondos", "Personal", "Consecuencias"],
-    continue: "Continuar",
-    newGame: "Nueva Partida / Seleccionar Modo",
-    hallOfFame: "Salón de la Fama",
-    settings: "Configuración",
-    credits: "Créditos",
-    footer: "Una simulación tycoon de gestión de crisis SRE y gobernanza de TI.",
-  },
-  credits: {
-    body: "Cada incidente, fórmula y control de auditoría en esta simulación fue diseñado para reflejar prácticas reales de SRE y gobernanza de TI — matemática de SLA, presupuesto de errores, modelos de falla en cascada y más.",
-    builtWith: "Construido con FastAPI, React, Zustand y SVG puro — sin motor de juego externo.",
-  },
-  hallOfFame: {
-    empty: "Aún no hay partidas concluidas. Sobrevive o quiebra para registrar tu primera entrada.",
-    sandbox: "Sandbox",
-    daysSurvived: (days) => `${days} días sobrevividos`,
-    myRecords: "Mis Récords",
-    global: "Global",
-    anonymousPlayer: (shortId) => `Operador #${shortId}`,
-    title: "Historial de Carrera & Salón de la Fama",
-    recentRuns: "Partidas Recientes",
-    rankings: "Clasificación",
-    allScenarios: "Todos los Escenarios",
-    filterScenario: "Filtrar por Escenario",
-    operatorRank: (rank) => `Rango: ${rank}`,
-    lifetimePrestige: (pts) => `${pts} Prestigio Acumulado`,
-    totalRuns: (count) => `${count} Partidas Registradas`,
-    incidentsHandled: (resolved, total) => `${resolved}/${total} incidentes resueltos`,
-    noObjectives: "Reglas estándar de sandbox",
-    date: "Fecha",
-    outcomeLabel: "Resultado",
-    techDebtRepLabel: "Deuda Técnica / Rep",
-    incidentsLabel: "Incidentes",
-    recordedAtLabel: "Registrado En",
-    objectivesSnapshot: "Instantánea de Objetivos",
-    resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resueltos`,
-  },
-  debrief: {
-    titleVictory: "CICLO DE AUDITORÍA CERTIFICADO",
-    titleLiquidation: "ORDEN DE LIQUIDACIÓN DE LA JUNTA",
-    titleDefeat: "CONTENCIÓN DE INCIDENTE FALLIDA",
-    subtitleVictory: "Aviso Oficial de Cumplimiento Regulatorio Total y Estabilidad Operacional",
-    subtitleLiquidation: "Aviso Oficial de Insolvencia Inmediata y Ejecución de Activos",
-    subtitleDefeat: "Escalada Crítica de Seguridad y Falla en Cascada Descontrolada",
-    runSummary: "Debriefing de la Partida",
-    survivalDuration: "Tiempo de Supervivencia",
-    finalSla: "SLA Consolidado",
-    remainingBudget: "Presupuesto Restante",
-    techDebt: "Índice de Deuda Técnica",
-    reputation: "Reputación ante la Junta",
-    incidentsResolved: "Incidentes Resueltos",
-    scenarioObjectives: "Objetivos de la Misión",
-    allObjectivesMet: "Todos los Objetivos del Escenario Fueron Cumplidos",
-    objectivesFailed: "Objetivos Comprometidos",
-    careerProgression: "Progresión de Carrera",
-    prestigeEarned: (pts) => `+${pts} Puntos de Prestigio Ganados`,
-    achievementsUnlocked: "Logros Desbloqueados en Esta Partida",
-    noAchievements: "No se desbloquearon nuevos logros en esta partida",
-    comparisonHeader: "Comparación con tu Mejor Resultado",
-    firstRunRecord: "¡Primer registro oficial de carrera establecido en este escenario y dificultad!",
-    newPersonalBest: "¡NUEVO RÉCORD PERSONAL!",
-    betterThanBest: (metric, delta) => `${metric}: Mejora de ${delta} respecto a tu récord anterior`,
-    belowBest: (metric, delta) => `${metric}: ${delta} por debajo de tu mejor récord`,
-    matchedBest: (metric) => `${metric}: Igual a tu récord histórico`,
-    nextChallengeHeader: "Próximos Pasos Sugeridos",
-    playAgain: "Repetir Partida (Misma Configuración)",
-    increaseDifficulty: "Aumentar Dificultad",
-    selectAnotherScenario: "Elegir Otro Escenario",
-    viewCareerRecord: "Ver Historial de Carrera",
-    targetGoal: (goal) => `Meta Recomendada: ${goal}`,
-    auditGrade: "Evaluación de Auditoría",
-    acceptChallenge: "Aceptar Desafío",
-    totalRunsLabel: "Total de Partidas:",
-    victoriesLabel: "Victorias:",
-    lifetimePrestigeLabel: "Prestigio Total:",
-    achievementsUnlockedCount: (count, total) => `Logros Desbloqueados: ${count}/${total}`,
-    completedCount: (done, total) => `${done}/${total} Completados`,
-    slaVsPriorBest: "SLA vs Mejor Anterior",
-    survivalVsPriorBest: "Supervivencia vs Mejor Anterior",
-    priorOutcome: "Resultado Anterior",
-    stampBreached: "INCUMPLIDO",
-    stampLiquidated: "LIQUIDADO",
-  },
-  newsTicker: {
-    label: "IZ NOTICIAS",
-    flavorLines: [
-      "La Junta elogia el tiempo de actividad del trimestre, exige más con menos presupuesto",
-      "Fuente anónima: se rumorea una mejora para la máquina de café de la oficina",
-      "Analistas del sector: 'Nadie lee los post-mortems, pero todos deberían'",
-      "Las acciones de IncidentZero Corp. no se vieron afectadas por la falla menor de ayer, según fuentes",
-    ],
-    eventHeadlines: {
-      INCIDENT_RAISED: "ÚLTIMA HORA: Nueva interrupción de servicio reportada en el piso",
-      INCIDENT_ACKNOWLEDGED: "Ingeniero de guardia reconoce la alerta, la junta respira aliviada",
-      RUNBOOK_EXECUTED: "El equipo de infraestructura despliega un runbook de emergencia",
-      UPGRADE_PURCHASED: "Inversión aprobada para mejora de infraestructura",
-      ACHIEVEMENT_UNLOCKED: "Nominado a empleado del mes anunciado internamente",
-      DILEMMA_RESOLVED: "Decisión del Comité de Cambios finalizada",
-      FEATURE_FREEZE_ENGAGED: "Se declara congelamiento de funciones tras agotarse el presupuesto de errores",
-      SLA_BREACH_EMERGENCY_SANCTION: "Reguladores emiten sanción de emergencia por incumplimiento de SLA",
-      BANKRUPTCY_LIQUIDATION: "La Junta Directiva anuncia liquidación inmediata",
-      MONTHLY_AUDIT_CYCLE_SURVIVED: "Empresa certificada en cumplimiento tras la auditoría mensual",
-      ENGINEER_HIRED: "Nuevo ingeniero se une al equipo de guardia",
-      INFRASTRUCTURE_NODE_PLACED: "Nuevo módulo de hardware instalado en la sala de servidores",
-      ROOT_CAUSE_IDENTIFIED: "Ingeniería elogiada por diagnóstico rápido de causa raíz",
-      COSMETIC_UNLOCKED: "Presupuesto de decoración aprobado para una mejora estética",
-    },
-    eventConsequence: {
-      INCIDENT_RAISED: "Un incidente activo está consumiendo el MTTA — reconócelo antes de que empiece la multa.",
-      SLA_BREACH_EMERGENCY_SANCTION: "El SLA cayó por debajo del umbral regulatorio — espera una revisión de la junta si se repite.",
-      BANKRUPTCY_LIQUIDATION: "El presupuesto llegó a cero — esta partida terminó.",
-      FEATURE_FREEZE_ENGAGED: "El presupuesto de errores se agotó — los runbooks arriesgados quedan bloqueados hasta bajar la deuda técnica.",
-    },
-    moreEvents: (count) => `+${count} más`,
-  },
-  objectiveHints: {
-    acknowledgeIncident: "Hay una alerta esperando — reconócela antes de que empiece la multa.",
-    hireEngineer: "Contrata a tu primer ingeniero de guardia en la pestaña Personal.",
-    buyUpgrade: "Tu presupuesto ya alcanza para tu primera mejora — revisa la pestaña Mejoras.",
-    tryBuildMode: "Prueba el Modo Construcción: instala tu primer módulo en la sala de servidores.",
-    earnAchievement: "Sigue así — tu primer logro de carrera está cerca.",
-  },
-  objectiveTracker: {
-    header: "Objetivos",
-    done: "Completado",
-    pending: "Pendiente",
-  },
-  resolutionSummary: {
-    header: (serviceId) => `${serviceId} restaurado`,
-    mtta: (ticks) => `MTTA ${ticks}t`,
-    mttr: (ticks) => `MTTR ${ticks}t`,
-    cost: (amount) => `Costo $${amount}`,
-    costUnknown: "Costo no disponible",
-    techDebt: (delta) => `Deuda ${delta > 0 ? `+${delta}` : delta}`,
-    viewPostmortem: "Ver post-mortem",
-  },
-  incidentReplay: {
-    openButton: "Reproducir",
-    title: (incidentId) => `Repetición del Incidente :: ${incidentId}`,
-    empty: "No se encontraron eventos del registro correlacionados con este incidente.",
-    play: "Reproducir",
-    pause: "Pausar",
-  },
-  buildMode: {
-    toggle: "Modo Construcción",
-    catalog: {
-      redis_cache: { name: "Clúster de Caché Redis", description: "Absorbe picos de lectura; reduce la latencia upstream en 45%." },
-      kafka_queue: { name: "Cola de Mensajes Kafka", description: "Desacopla servicios; evita fallas en cascada entre productor y consumidor." },
-      db_read_replica: { name: "Réplica de Lectura de la BD", description: "Divide la carga de consultas; reduce la probabilidad de deadlock en 60%." },
-      nginx_lb: { name: "Balanceador de Carga NGINX", description: "Distribuye el tráfico de borde entre nodos de cómputo replicados." },
-    },
-    selectTargetHint: "Haz clic en un rack de servidor para el objetivo",
-    selectProducerHint: "Ahora haz clic en el rack productor para desacoplar",
-    placed: "Módulo de infraestructura instalado",
-    placementFailed: "Fallo de instalación: presupuesto insuficiente u objetivo inválido",
-  },
-  logTriage: {
-    title: "Triaje de Logs — Causa Raíz",
-    investigateLogs: "Investigar Logs",
-    alreadySolved: "Causa Raíz Ya Identificada",
-    rootCauseConfirmed: "CAUSA RAÍZ CONFIRMADA",
-    rewardEarned: "CAUSA RAÍZ ENCONTRADA: -50% en costo de mitigación, MTTR reducido a la mitad",
-    incorrectLine: "NO ES LA CAUSA RAÍZ — SIGUE BUSCANDO",
-  },
-  achievements: {
-    header: "Logros",
-    unlockedToast: "Logro Desbloqueado",
-    prestigePoints: "Puntos de Prestigio",
-    owned: "Adquirido",
-    insufficientPrestige: "Puntos de prestigio insuficientes",
-  },
-  liveOps: {
-    title: "Operaciones en Vivo",
-    subtitle: "Panel de espectador de solo lectura — seguro para un segundo monitor",
-    activeAlerts: "Alertas Activas",
-    complianceWaterfall: "Línea de Tiempo de Cumplimiento",
-  },
-  scenarioBuilder: {
-    openBuilder: "Crear Escenario Personalizado",
-    title: "Constructor de Escenarios del Chaos Sandbox",
-    durationTicks: "Duración (ticks)",
-    hazardMultiplier: "Multiplicador de Riesgo",
-    budgetFloor: "Piso de Presupuesto ($)",
-    chaosInjections: "Inyecciones de Caos Programadas",
-    addInjection: "Agregar Inyección",
-    exportCode: "Copiar Código de Desafío",
-    importCode: "Importar",
-    importPlaceholder: "Pega un código de desafío…",
-    importSuccess: "Escenario importado",
-    importFailed: "Código de desafío inválido",
-    testScenario: "Probar Escenario",
-    testFailed: "Error al cargar el escenario personalizado",
-  },
-  workerQuips: {
-    idle: ["Monitoreando logs... nada explota por ahora.", "Acabo de rellenar el café. Envíen incidentes con moderación."],
-    panic: ["¿¿QUIÉN HIZO DEPLOY UN VIERNES?!", "¡SOCORRO, LA BASE DE DATOS SE INCENDIÓ!", "¡LES DIJE QUE ESCALARAN MÁS RÉPLICAS!"],
-    tired: ["Una hora más de guardia y me convierto en planta...", "¿Dónde está el café...? Zzz"],
-    happy: ["¡Deploy sin bugs! ¡Pellízquenme!", "SLA de vuelta al 99.9%, ronda de donas para el equipo."],
-  },
-  defcon: {
-    label: "DEFCON",
-    level5: "NOMINAL",
-    level4: "ELEVADO",
-    level3: "P1 ACTIVO",
-    level2: "MÚLTIPLES P1s",
-    level1: "COLAPSO INMINENTE",
-  },
-};
-
-export const TRANSLATIONS: Record<Language, Translations> = { en, "pt-BR": ptBR, es };

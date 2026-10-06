@@ -1,3 +1,4 @@
+import { memo } from "react";
 import IsoBox from "./IsoBox";
 
 interface GlassWallProps {
@@ -30,7 +31,7 @@ function spanFootprint(axis: "x" | "y", fixed: number, from: number, to: number)
 }
 
 // GLASS PARTITION WALL WITH ALUMINUM FRAME POSTS, OPTIONALLY SPLIT BY A DOORWAY GAP
-export default function GlassWall({ axis, fixed, from, to, height = 0.85, doorFrom, doorTo }: GlassWallProps) {
+function GlassWall({ axis, fixed, from, to, height = 0.85, doorFrom, doorTo }: GlassWallProps) {
   const spans: [number, number][] =
     doorFrom !== undefined && doorTo !== undefined
       ? [
@@ -57,3 +58,5 @@ export default function GlassWall({ axis, fixed, from, to, height = 0.85, doorFr
     </g>
   );
 }
+
+export default memo(GlassWall);

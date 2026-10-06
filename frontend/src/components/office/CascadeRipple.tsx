@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { memo } from "react";
+import { useGameStore } from "../../store/useGameStore";
 import { Service } from "../../types/game";
 import { project } from "./isoMath";
 import { rackGridPosition } from "./ServerRoom";
+import "./officeLife.css";
 
 interface CascadeRippleProps {
   services: Service[];
@@ -9,106 +12,59 @@ interface CascadeRippleProps {
   originY: number;
 }
 
-interface RippleEvent {
-  id: string;
-  screenX: number;
-  screenY: number;
-  color: string;
-  startedAt: number;
-}
+// durations / delays of the three expanding rings; the last one ends inside the `fail` run-animation's ttl
+const RINGS = [
+  { rx: 55, ry: 28, width: 3, dur: 0.9, delay: 0 },
+  { rx: 75, ry: 38, width: 2, dur: 1.15, delay: 0.15 },
+  { rx: 95, ry: 48, width: 1, dur: 1.4, delay: 0.3 },
+];
 
-// CASCADE FAILURE RIPPLE EFFECT
-// Detects when a service's status transitions to "down" and emits a radial shock-wave
-// ripple emanating from that rack's position, giving instant visual feedback that a
-// cascade has been triggered.
-export default function CascadeRipple({ services, originX, originY }: CascadeRippleProps) {
-  const prevStatuses = useRef<Map<string, string>>(new Map());
-  const [ripples, setRipples] = useState<RippleEvent[]>([]);
-  const seqRef = useRef(0);
-
-  useEffect(() => {
-    const newRipples: RippleEvent[] = [];
-    for (const svc of services) {
-      const prev = prevStatuses.current.get(svc.id);
-      if (prev && prev !== "down" && svc.status === "down") {
-        const pos = rackGridPosition(svc.id, services, originX, originY);
-        if (pos) {
-          const pt = project(pos.x + 0.35, pos.y + 0.15, 1.2);
-          newRipples.push({
-            id: `ripple-${seqRef.current++}`,
-            screenX: pt.x,
-            screenY: pt.y,
-            color: svc.tier === "critical" ? "#f43f5e" : "#f59e0b",
-            startedAt: Date.now(),
-          });
-        }
-      }
-      prevStatuses.current.set(svc.id, svc.status);
-    }
-
-    if (newRipples.length > 0) {
-      setRipples((prev) => [...prev, ...newRipples]);
-      // auto-clean ripples after animation completes (1.6s)
-      setTimeout(() => {
-        const ids = new Set(newRipples.map((r) => r.id));
-        setRipples((prev) => prev.filter((r) => !ids.has(r.id)));
-      }, 1700);
-    }
-  }, [services, originX, originY]);
-
-  if (ripples.length === 0) return null;
+// CASCADE FAILURE RIPPLE: A RADIAL SHOCK WAVE FROM A RACK THE MOMENT IT GOES DOWN. it renders for as long as
+// that service has a `fail` run-animation (emitted by useServiceTransitions and dismissed after its ttl).
+// the rings are plain CSS keyframes started when the element mounts -- the old SMIL <animate> elements
+// counted time from page load, so a ripple added minutes into a session had already "finished" and never showed.
+function CascadeRipple({ services, originX, originY }: CascadeRippleProps) {
+  const failKey = useGameStore((s) =>
+    s.runAnimations
+      .filter((a) => a.kind === "fail")
+      .map((a) => `${a.id}@${a.serviceId}`)
+      .join("|")
+  );
+  if (!failKey) return null;
 
   return (
     <g style={{ pointerEvents: "none" }}>
-      {ripples.map((ripple) => (
-        <g key={ripple.id} transform={`translate(${ripple.screenX}, ${ripple.screenY})`}>
-          {/* 3 expanding concentric rings */}
-          {[0, 1, 2].map((ring) => (
-            <ellipse
-              key={ring}
-              cx={0}
-              cy={0}
-              rx={0}
-              ry={0}
-              fill="none"
-              stroke={ripple.color}
-              strokeWidth={ring === 0 ? 3 : ring === 1 ? 2 : 1}
-              opacity={1}
-            >
-              <animate
-                attributeName="rx"
-                from="4"
-                to={55 + ring * 20}
-                dur={`${0.9 + ring * 0.35}s`}
-                begin={`${ring * 0.15}s`}
-                fill="freeze"
+      {failKey.split("|").map((entry) => {
+        const [id, serviceId] = entry.split("@");
+        const svc = services.find((s) => s.id === serviceId);
+        const pos = rackGridPosition(serviceId, services, originX, originY);
+        if (!svc || !pos) return null;
+        const pt = project(pos.x + 0.35, pos.y + 0.15, 1.2);
+        const color = svc.tier === "critical" ? "#f43f5e" : "#f59e0b";
+        return (
+          <g key={id} transform={`translate(${pt.x}, ${pt.y})`} className="motion-only">
+            {RINGS.map((ring, i) => (
+              <ellipse
+                key={i}
+                cx={0}
+                cy={0}
+                rx={ring.rx}
+                ry={ring.ry}
+                fill="none"
+                stroke={color}
+                strokeWidth={ring.width}
+                vectorEffect="non-scaling-stroke"
+                className="ol-ripple"
+                style={{ "--ol-ripple-dur": `${ring.dur}s`, "--ol-ripple-delay": `${ring.delay}s` } as CSSProperties}
               />
-              <animate
-                attributeName="ry"
-                from="2"
-                to={28 + ring * 10}
-                dur={`${0.9 + ring * 0.35}s`}
-                begin={`${ring * 0.15}s`}
-                fill="freeze"
-              />
-              <animate
-                attributeName="opacity"
-                from="0.85"
-                to="0"
-                dur={`${1.0 + ring * 0.35}s`}
-                begin={`${ring * 0.15}s`}
-                fill="freeze"
-              />
-            </ellipse>
-          ))}
-          {/* central impact flash */}
-          <ellipse cx={0} cy={0} rx={8} ry={4} fill={ripple.color} opacity={0}>
-            <animate attributeName="opacity" values="0;0.9;0" dur="0.4s" fill="freeze" />
-            <animate attributeName="rx" from="2" to="12" dur="0.4s" fill="freeze" />
-            <animate attributeName="ry" from="1" to="6" dur="0.4s" fill="freeze" />
-          </ellipse>
-        </g>
-      ))}
+            ))}
+            {/* central impact flash */}
+            <ellipse cx={0} cy={0} rx={12} ry={6} fill={color} className="ol-ripple-core" />
+          </g>
+        );
+      })}
     </g>
   );
 }
+
+export default memo(CascadeRipple);

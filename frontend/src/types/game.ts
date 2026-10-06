@@ -33,6 +33,8 @@ export interface Incident {
   acknowledged_tick: number | null;
   resolved_tick: number | null;
   triage_solved: boolean;
+  // 0..1 quality of the investigation, only present once triage is solved (drives the cost discount)
+  triage_accuracy?: number | null;
 }
 
 export interface AuditLogEntry {
@@ -181,6 +183,8 @@ export interface ScenarioObjective {
   id: string;
   description: string;
   done: boolean;
+  // set by the backend when the objective can no longer be met (timer ran out, budget lost...)
+  failed?: boolean;
 }
 
 export interface ActiveScenario {
@@ -249,6 +253,9 @@ export interface CustomScenarioConfig {
   hazard_multiplier: number;
   budget_floor: number;
   chaos_injections: ChaosInjectionConfig[];
+  // optional starting conditions; omitted = the difficulty default
+  starting_budget?: number;
+  starting_tech_debt?: number;
 }
 
 export interface TelemetryState {

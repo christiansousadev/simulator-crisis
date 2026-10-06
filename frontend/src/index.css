@@ -4,8 +4,8 @@
 
 @layer base {
   body {
-    background-color: #e2e8f0;
-    color: #0f172a;
+    background-color: #020617;
+    color: #e2e8f0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -15,7 +15,7 @@
      `transition` shorthand here -- utility classes like transition-colors already own that
      property elsewhere, and :active only holds while the pointer is down, so an instant snap
      in and out reads as a crisp click rather than needing an eased tween of its own. */
-  button:not(:disabled):active {
+  button:not(:disabled):not([data-stretched]):active {
     transform: scale(0.96);
   }
 
@@ -98,7 +98,14 @@
 
 /* radial cooldown sweep, progress driven by the --progress css variable (0 to 1). near-black so
    the "still on cooldown" wedge stays visible as it recedes even over the dark war-room cards. */
+@property --progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 .cooldown-ring {
+  /* registered custom property, so a change eases over one tick instead of stepping */
+  transition: --progress 1s linear;
   background: conic-gradient(
     rgba(2, 6, 23, 0.78) calc(var(--progress, 0) * 360deg),
     transparent calc(var(--progress, 0) * 360deg)
@@ -113,6 +120,8 @@
    previously this backdrop stayed a fixed daytime blue no matter the tick-driven time of day. */
 .office-sky {
   position: relative;
+  /* own stacking context, so the z-index:-1 sky layers stay behind the scene but above the page */
+  isolation: isolate;
   /* small crosshair cursor over the office canvas, for a more "game world" feel than a plain arrow */
   cursor:
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="none" stroke="%230f172a" stroke-width="1.5" opacity="0.6"/><line x1="10" y1="0" x2="10" y2="5" stroke="%230f172a" stroke-width="1.5"/><line x1="10" y1="15" x2="10" y2="20" stroke="%230f172a" stroke-width="1.5"/><line x1="0" y1="10" x2="5" y2="10" stroke="%230f172a" stroke-width="1.5"/><line x1="15" y1="10" x2="20" y2="10" stroke="%230f172a" stroke-width="1.5"/></svg>')
@@ -134,20 +143,51 @@
       transparent 46px
     );
   background-blend-mode: normal, multiply;
-  filter: brightness(1) saturate(1) hue-rotate(0deg);
-  transition: filter 4s ease-in-out;
 }
-.office-sky[data-day-phase="dawn"]::before {
-  filter: brightness(0.92) saturate(1.15) hue-rotate(-8deg);
+/* night and dusk are separate layers whose opacity follows the smoothed lighting variables
+   (--night / --twilight, written by LightingDriver), so the sky eases continuously through the day
+   instead of stepping between six phase filters. opacity only, so no repaint of the gradients. */
+.office-sky-night,
+.office-sky-dusk {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
-.office-sky[data-day-phase="afternoon"]::before {
-  filter: brightness(0.97) saturate(1.05) hue-rotate(6deg);
+.office-sky-night {
+  background: linear-gradient(to bottom, #020617 0%, #0b1530 55%, #172447 100%);
+  opacity: var(--night, 0);
 }
-.office-sky[data-day-phase="dusk"]::before {
-  filter: brightness(0.75) saturate(1.4) hue-rotate(28deg);
+.office-sky-dusk {
+  background: linear-gradient(to top, rgba(251, 146, 60, 0.75) 0%, rgba(244, 114, 182, 0.35) 40%, transparent 85%);
+  opacity: calc(var(--twilight, 0) * 0.7);
 }
-.office-sky[data-day-phase="night"]::before {
-  filter: brightness(0.3) saturate(0.75) hue-rotate(205deg);
+
+/* the office scene idles with a barely-there drift: translate only, on its own wrapper so the
+   camera transform stays untouched, and compositor-only (no repaint) */
+@keyframes office-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  33% {
+    transform: translate3d(2.5px, -1.5px, 0);
+  }
+  66% {
+    transform: translate3d(-2px, 1.5px, 0);
+  }
+}
+.office-drift {
+  animation: office-drift 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* everything in the office stops looping while the tab is hidden or the scene is off screen:
+   a few hundred running svg/css animations are pure waste when nobody can see them */
+.office-paused,
+.office-paused *,
+.office-paused *::before,
+.office-paused *::after {
+  animation-play-state: paused !important;
 }
 
 /* screen shake and full-viewport flash, applied to the app root by imperative class toggles */
@@ -208,42 +248,37 @@
   border-color: #fb923c !important;
 }
 
-/* accessibility: respect the OS-level "reduce motion" preference across the whole app in one
-   place, rather than auditing every animate-* utility/keyframe individually. this is the
-   standard blanket reset -- it neutralizes duration/iteration for every animation and transition
-   (including ones added by future components) instead of only the ones known today. critical
-   information itself must never depend solely on the animation this disables (see DefconMeter's
-   text label, StatusPill, SeverityBadge etc. -- all already convey state via color+text, animation
-   is additive polish only). */
+/* accessibility: reduced motion, driven either by the OS preference or by the in-game setting
+   (App.tsx stamps data-reduce-motion="on" | "off" on <html>; absent means "follow the OS").
+   Animations are switched OFF rather than shortened to 0.01ms: a 0.01ms animation with
+   fill-mode forwards jumps to its LAST keyframe, which for every fade-out toast is opacity 0, so
+   the messages (error reasons included) used to vanish entirely. With animation: none an element
+   simply shows its resting style, and components that mount/unmount on timers keep working.
+   Information must never depend solely on the animation this disables. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+  :root:not([data-reduce-motion="off"]) *,
+  :root:not([data-reduce-motion="off"]) *::before,
+  :root:not([data-reduce-motion="off"]) *::after {
+    animation: none !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
-
-@layer utilities {
-  /* shared microinteraction state tokens -- hover/press already handled globally (button:active
-     above) and per-file via tailwind utilities; these four cover the states that weren't
-     consistently expressed anywhere (selected/success/warning/critical), reusing the exact same
-     palette severityTone/StatusPill already use elsewhere rather than introducing new colors.
-     short, snappy transitions only -- no elastic/spring easing. */
-  .state-selected {
-    @apply border-sky-400/70 ring-1 ring-sky-400/40 transition-colors duration-150;
+:root[data-reduce-motion="on"] *,
+:root[data-reduce-motion="on"] *::before,
+:root[data-reduce-motion="on"] *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+/* decorative layers that would otherwise freeze as a solid block once their animation is off */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion="off"]) .motion-only {
+    display: none !important;
   }
-  .state-success {
-    @apply border-emerald-500/60 bg-emerald-500/10 text-emerald-300 transition-colors duration-150;
-  }
-  .state-warning {
-    @apply border-amber-500/60 bg-amber-500/10 text-amber-300 transition-colors duration-150;
-  }
-  .state-critical {
-    @apply border-rose-500/70 bg-rose-500/10 text-rose-300 transition-colors duration-200;
-  }
+}
+:root[data-reduce-motion="on"] .motion-only {
+  display: none !important;
 }
 
 /* DEFCON screen-edge vignette: a subtle, CONTINUOUS inset glow on the viewport's edges, distinct

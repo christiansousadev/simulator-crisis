@@ -44,9 +44,17 @@ export async function withCleanLocalStorage(page: Page): Promise<void> {
   });
 }
 
-// navigates in, dismisses the title screen via "Continue", and waits for the office HUD to render
+// the title screen's primary action: "Continue" when a run exists, otherwise "Start operation"
+// (its accessible name also carries the hint / run details, hence no anchors)
+export function titlePrimaryButton(page: Page) {
+  return page.getByRole("button", { name: /Continue|Start operation/i }).first();
+}
+
+// navigates in, dismisses the title screen via its primary button, waits for the title to be
+// gone (it plays a short exit, during which it ignores pointer events) and for the office HUD
 export async function enterOffice(page: Page): Promise<void> {
   await page.goto("/");
-  await page.getByRole("button", { name: /^Continue$/ }).click();
+  await titlePrimaryButton(page).click();
+  await page.getByTestId("title-screen").waitFor({ state: "detached" });
   await page.locator('[data-tour="office-canvas"]').waitFor({ state: "visible" });
 }
