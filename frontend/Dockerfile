@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 # vite inlines these at build time, so they must be available before `npm run build`
 ARG VITE_API_URL=http://localhost:8000
@@ -12,7 +12,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:26-alpine
 
 WORKDIR /app
 RUN npm install -g serve
