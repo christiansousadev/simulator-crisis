@@ -13,6 +13,7 @@ from app.api.v1 import (
     services,
     sessions,
     staff,
+    tutorial,
     upgrades,
     ws,
 )
@@ -30,6 +31,7 @@ api_router.include_router(dilemmas.router)
 api_router.include_router(staff.router)
 api_router.include_router(scenarios.router)
 api_router.include_router(infrastructure.router)
+api_router.include_router(tutorial.router)
 api_router.include_router(achievements.router)
 api_router.include_router(cosmetics.router)
 api_router.include_router(career.router)

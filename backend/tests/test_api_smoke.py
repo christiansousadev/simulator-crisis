@@ -48,7 +48,11 @@ def test_mitigation_rejects_unknown_service(client):
 
 
 def test_mitigation_cooldown_is_enforced_and_reflected_in_state(client):
-    first = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "srv-auth"})
+    # a runbook needs an open incident to act on: stage the tutorial incident on srv-notify
+    client.post("/api/session/reset")
+    client.post("/api/session/pause")
+    assert client.post("/api/tutorial/incident").status_code == 200
+    first = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "srv-notify"})
     assert first.status_code == 200
 
     # the frontend reads this map directly (telemetry.mitigation_cooldowns) rather than guessing
@@ -56,7 +60,7 @@ def test_mitigation_cooldown_is_enforced_and_reflected_in_state(client):
     state = client.get("/api/session/state").json()
     assert "rollback" in state["mitigation_cooldowns"]
 
-    second = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "srv-auth"})
+    second = client.post("/api/mitigations/execute", json={"action_id": "rollback", "service_id": "srv-notify"})
     assert second.status_code == 400
     assert "cooldown" in second.json()["detail"].lower()
 

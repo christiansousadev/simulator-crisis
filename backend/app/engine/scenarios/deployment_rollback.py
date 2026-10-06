@@ -35,6 +35,7 @@ class DeploymentRollbackScenario(ScenarioEngine):
     LEAK_LATENCY_GROWTH_PER_TICK = 6
     TECH_DEBT_GROWTH_PER_TICK = 2
     SECOND_WAVE_TICK = 20
+    ERROR_BUDGET_FLOOR = 0.20
     AFFECTED_SERVICES = {"srv-auth", "srv-search"}
 
     @classmethod
@@ -53,6 +54,8 @@ class DeploymentRollbackScenario(ScenarioEngine):
         super().__init__(engine)
         self._second_wave_triggered = False
         self._both_triaged_by: Optional[int] = None
+        # sticky: true once the error budget dipped to the protected floor at any point in the window
+        self._error_budget_breached = False
 
     def on_start(self) -> None:
         """Pre-degrade auth and search to simulate the bad deploy already deployed"""
@@ -76,6 +79,8 @@ class DeploymentRollbackScenario(ScenarioEngine):
 
     def on_tick(self) -> None:
         """APPLY LEAK GROWTH, TECH DEBT ACCUMULATION, OPTIONAL SECOND WAVE"""
+        if self.engine.error_budget_remaining_ratio <= self.ERROR_BUDGET_FLOOR:
+            self._error_budget_breached = True
         growth = self.LEAK_LATENCY_GROWTH_PER_TICK
         # automated_cicd upgrade halves growth
         if "automated_cicd" in self.engine.purchased_upgrade_ids:
@@ -139,6 +144,7 @@ class DeploymentRollbackScenario(ScenarioEngine):
                 "id": "protect_budget",
                 "description": "Keep error budget above 20% through the rollback window",
                 "done": budget_ok,
+                "failed": self._error_budget_breached or not budget_ok,
             },
         ]
 
@@ -167,8 +173,10 @@ class DeploymentRollbackScenario(ScenarioEngine):
         return {
             "second_wave_triggered": self._second_wave_triggered,
             "both_triaged_by": self._both_triaged_by,
+            "error_budget_breached": self._error_budget_breached,
         }
 
     def restore_extra(self, extra: Dict[str, Any]) -> None:
         self._second_wave_triggered = bool(extra.get("second_wave_triggered", False))
         self._both_triaged_by = extra.get("both_triaged_by")
+        self._error_budget_breached = bool(extra.get("error_budget_breached", False))

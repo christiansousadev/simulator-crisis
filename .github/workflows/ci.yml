@@ -12,10 +12,19 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
+# a newer push to the same ref supersedes the run still in flight
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend (ruff, pytest + coverage)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -41,6 +50,7 @@ jobs:
   frontend:
     name: Frontend (eslint, typecheck, unit tests + coverage, build)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -72,6 +82,7 @@ jobs:
   e2e:
     name: End-to-end (Playwright, real backend + frontend)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -112,5 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: frontend/playwright-report/
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
           retention-days: 7

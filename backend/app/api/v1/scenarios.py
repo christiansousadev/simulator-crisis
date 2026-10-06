@@ -1,4 +1,3 @@
-import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
@@ -31,7 +30,7 @@ async def get_scenario_catalog(
     result = []
     for cls in SCENARIO_REGISTRY.values():
         unlocked = cls.is_unlocked(records, achievements)
-        
+
         # Best record for this scenario
         matching_runs = [r for r in records if r.scenario_id == cls.scenario_id]
         best_run_dict = None

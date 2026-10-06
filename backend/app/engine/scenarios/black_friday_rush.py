@@ -23,11 +23,20 @@ class BlackFridayRushScenario(ScenarioEngine):
     ]
     unlock_requirement = None
 
+    # mirrors the engine's own BREACH_GRACE_TICKS: the rolling SLA is too noisy to judge earlier
+    SLA_GRACE_TICKS = 24
     TRAFFIC_MULTIPLIER = 4.0
     CLOUD_BURN_ACCELERATION = 2.5
 
+    def __init__(self, engine: Any):
+        super().__init__(engine)
+        # sticky: true once the rolling SLA dipped under the breach line at any point past the grace window
+        self._sla_violated = False
+
     def on_tick(self) -> None:
         """APPLY 4X QUERY LOAD, HAZARD PRESSURE, AND ACCELERATED CLOUD BURN"""
+        if self.elapsed_ticks > self.SLA_GRACE_TICKS and self.engine.sla_percentage < formulas.SLA_BREACH_THRESHOLD:
+            self._sla_violated = True
         for srv in self.engine.services:
             if srv["status"] == "healthy":
                 srv["latency_ms"] = int(srv["latency_ms"] * 1.02)
@@ -48,6 +57,8 @@ class BlackFridayRushScenario(ScenarioEngine):
                 "id": "maintain_sla",
                 "description": f"Keep SLA at or above {formulas.SLA_BREACH_THRESHOLD:.0f}% through the surge",
                 "done": self.engine.sla_percentage >= formulas.SLA_BREACH_THRESHOLD,
+                # "done" is instantaneous (true at tick 0); "failed" is what says the surge broke it
+                "failed": self._sla_violated,
             },
             {
                 "id": "survive_surge",
@@ -68,3 +79,9 @@ class BlackFridayRushScenario(ScenarioEngine):
             "net_runway_saved": round(self.engine.budget, 2),
             "compliant": compliant,
         }
+
+    def snapshot_extra(self) -> Dict[str, Any]:
+        return {"sla_violated": self._sla_violated}
+
+    def restore_extra(self, extra: Dict[str, Any]) -> None:
+        self._sla_violated = bool(extra.get("sla_violated", False))

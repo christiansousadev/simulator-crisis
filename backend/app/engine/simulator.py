@@ -89,6 +89,13 @@ BREACH_GRACE_TICKS = 24
 # rolling sample window used to derive the error budget burn rate
 ERROR_BUDGET_BURN_RATE_WINDOW = 10
 
+# a service counts as genuinely healthy for runbook purposes only below these readings: a scripted
+# scenario's pressure (black friday/ddos latency creep, third-party downstream bleed) leaves a
+# "healthy"-status service visibly sick, and a runbook there is a legitimate remediation. the
+# default topology tops out at 84ms / 0.0005 error rate, so there is wide headroom above baseline
+HEALTHY_LATENCY_CEILING_MS = 150
+HEALTHY_ERROR_RATE_CEILING = 0.01
+
 # advance warning window granted by the predictive anomaly detection upgrade
 PRE_ALERT_LEAD_TICKS = 5
 
@@ -521,7 +528,7 @@ class SimulationEngine:
                 # broadcast shape (see _evaluate_cab_dilemma) -- without re-queuing it here, a
                 # resumed dilemma would silently tick toward its (still correctly preserved)
                 # expiry with no way for the player to actually choose. flushed on the very next
-                # tick by the existing _flush_pending_broadcasts() call in _run_loop.
+                # tick by the existing flush_pending_broadcasts() call in _run_loop.
                 self._pending_broadcasts.append(
                     {
                         "type": "DILEMMA_OFFERED",
@@ -1099,25 +1106,31 @@ class SimulationEngine:
 
     async def broadcast_state(self):
         """BROADCAST CURRENT TELEMETRY STATE TO ALL SUBSCRIBED CLIENTS"""
+        if not self.active_websockets:
+            # nothing to serialize for: keeps the push-after-command path free with zero clients
+            return
         await self._broadcast_json(self.get_state_payload())
 
-    async def _flush_pending_broadcasts(self):
-        """SEND ANY OUT-OF-BAND EVENT FRAMES QUEUED DURING THE LAST TICK"""
+    async def flush_pending_broadcasts(self):
+        """SEND ANY OUT-OF-BAND EVENT FRAMES QUEUED SINCE THE LAST FLUSH (TICK OR COMMAND)"""
         queued, self._pending_broadcasts = self._pending_broadcasts, []
         for payload in queued:
             await self._broadcast_json(payload)
+
+    @staticmethod
+    def public_incident(inc: Dict[str, Any]) -> Dict[str, Any]:
+        """THE WIRE-SAFE VIEW OF ONE INCIDENT: NO ANSWER KEY (log_lines, root_cause_line_id), AND THE
+        ROOT CAUSE NARRATIVE WITHHELD UNTIL ITS INVESTIGATION IS SOLVED"""
+        entry = {k: v for k, v in inc.items() if k not in ("log_lines", "root_cause_line_id")}
+        if not inc["triage_solved"]:
+            entry["root_cause"] = None
+        return entry
 
     def public_incidents(self) -> List[Dict[str, Any]]:
         """STRIP THE TRIAGE ANSWER KEY (log_lines, root_cause_line_id) BEFORE ANY WIRE SERIALIZATION,
         AND WITHHOLD THE ROOT CAUSE NARRATIVE ITSELF UNTIL THE INCIDENT'S INVESTIGATION IS SOLVED --
         PREVIOUSLY THE REAL TEXT WAS ALWAYS SENT AND ONLY THE FRONTEND CHOSE NOT TO DISPLAY IT YET"""
-        public = []
-        for inc in self.incidents:
-            entry = {k: v for k, v in inc.items() if k not in ("log_lines", "root_cause_line_id")}
-            if not inc["triage_solved"]:
-                entry["root_cause"] = None
-            public.append(entry)
-        return public
+        return [self.public_incident(inc) for inc in self.incidents]
 
     def get_state_payload(self) -> Dict[str, Any]:
         """COMPOSE SERIALIZABLE STATE PAYLOAD"""
@@ -1153,6 +1166,8 @@ class SimulationEngine:
                     "duration_ticks": self.active_scenario.duration_ticks,
                     "completed": self.active_scenario.completed,
                     "outcome": self.active_scenario.outcome,
+                    # same recomputed-from-live-state objectives /api/scenarios/active serves, incl. "failed"
+                    "objectives": self.active_scenario.objectives(),
                 }
                 if self.active_scenario
                 else None
@@ -1265,7 +1280,7 @@ class SimulationEngine:
                 # _build_snapshot_kwargs/_persist_snapshot_data)
                 await asyncio.to_thread(self._persist_snapshot_data, *self._build_snapshot_kwargs())
                 await self.broadcast_state()
-                await self._flush_pending_broadcasts()
+                await self.flush_pending_broadcasts()
         except asyncio.CancelledError:
             # handle cooperative task cancellation on pause
             pass
@@ -1297,7 +1312,9 @@ class SimulationEngine:
         if not self.is_running:
             # the run just ended this tick (bankruptcy, a scenario's own conclusion, or the core
             # survival victory) -- every mechanic below assumes an ongoing game, so nothing
-            # further happens on this terminal tick
+            # further happens on this terminal tick, except unlocking whatever the final state earned
+            # (idempotent: the terminal branches already evaluated it before writing the career record)
+            self._evaluate_achievements()
             return
 
         self._evaluate_feature_freeze()
@@ -1510,9 +1527,9 @@ class SimulationEngine:
                 else:
                     self._trigger_service_failure(srv)
 
-    def _trigger_service_failure(self, srv: Dict[str, Any]):
-        """DEGRADE OR COLLAPSE A SERVICE AND RAISE INCIDENT"""
-        incident = build_incident(srv, self.current_tick)
+    def _trigger_service_failure(self, srv: Dict[str, Any], root_cause: Optional[str] = None) -> Dict[str, Any]:
+        """DEGRADE OR COLLAPSE A SERVICE AND RAISE INCIDENT (root_cause PINS THE NARRATIVE, E.G. FOR THE TUTORIAL)"""
+        incident = build_incident(srv, self.current_tick, root_cause=root_cause)
         # frozen at the moment the incident actually happened -- the postmortem pipeline reads
         # this instead of the session's *current* tech_debt so a report generated much later still
         # reflects the truth of what the debt level was when this incident was created
@@ -1545,6 +1562,7 @@ class SimulationEngine:
                 db.commit()
             finally:
                 db.close()
+        return incident
 
     def _queue_pre_alert(self, srv: Dict[str, Any]):
         """DELAY A HAZARD ROLL'S MATERIALIZATION, BROADCASTING AN ADVANCE WARNING FIRST"""
@@ -1589,6 +1607,8 @@ class SimulationEngine:
                     details={"final_tick": self.current_tick},
                     compliance_flag=False,
                 )
+                # before the record, so its prestige_earned already counts whatever this final tick unlocks
+                self._evaluate_achievements()
                 self._persist_career_record(outcome="bankrupted", scenario_outcome=None)
             self.is_running = False
             return
@@ -1615,6 +1635,9 @@ class SimulationEngine:
                 # actual monetary bankruptcy) is preserved in full in the persisted CareerRecord
                 # (see _persist_career_record) even though this live status field is coarser
                 self.status = "victory" if compliant else "bankrupted"
+                # the terminal tick is where the run-defining achievements (SOC-2, chaos survivor,
+                # ransomware repelled) become true; evaluated before the record so prestige_earned counts them
+                self._evaluate_achievements()
                 self._persist_career_record(
                     outcome="victory" if compliant else "scenario_defeat",
                     scenario_outcome=outcome,
@@ -1640,6 +1663,7 @@ class SimulationEngine:
                     details={"sla_percentage": round(self.sla_percentage, 2)},
                     compliance_flag=True,
                 )
+                self._evaluate_achievements()
                 self._persist_career_record(outcome="victory", scenario_outcome=None)
             self.is_running = False
             return
@@ -1970,6 +1994,27 @@ class SimulationEngine:
                 db.close()
         return {"success": True, "correct": correct}
 
+    def _service_needs_runbook(self, srv: Dict[str, Any]) -> bool:
+        """A RUNBOOK ONLY MAKES SENSE ON A SERVICE WITH AN OPEN INCIDENT, OR ONE ALREADY VISIBLY SICK
+        (SCENARIO-DRIVEN DEGRADATION CARRIES NO INCIDENT ROW), OR THE RANSOMWARE SCENARIO'S INFECTED
+        NODES (WHICH CAN LOOK HEALTHY WHILE STILL NEEDING THE CIRCUIT-BREAKER QUARANTINE)"""
+        if any(
+            inc["service_id"] == srv["id"] and inc["status"] in ("active", "acknowledged") for inc in self.incidents
+        ):
+            return True
+        if (
+            srv["status"] != "healthy"
+            or srv["latency_ms"] > HEALTHY_LATENCY_CEILING_MS
+            or srv["error_rate"] > HEALTHY_ERROR_RATE_CEILING
+        ):
+            return True
+        scenario = self.active_scenario
+        return bool(
+            scenario
+            and scenario.scenario_id == "ransomware_infiltration"
+            and srv["id"] in scenario.infected_service_ids
+        )
+
     def apply_mitigation(self, action_id: str, service_id: str) -> Dict[str, Any]:
         """EXECUTE SRE MITIGATION RUNBOOK, HEALING THE SERVICE FULLY WHEN THE CHOSEN RUNBOOK
         ACTUALLY FITS THE INCIDENT'S UNDERLYING CAUSE, OR ONLY PARTIALLY (AND AT AN EXTRA TECH
@@ -1990,6 +2035,16 @@ class SimulationEngine:
                     "success": False,
                     "error": f"Runbook on cooldown: {action['cooldown_ticks'] - elapsed} tick(s) remaining",
                 }
+
+        if self.active_scenario:
+            blocked_reason = self.active_scenario.mitigation_block_reason(action_id, service_id)
+            if blocked_reason:
+                return {"success": False, "error": blocked_reason}
+
+        if not self._service_needs_runbook(srv):
+            # without this the "no matching incident" path assumed an acute_defect cause, so a
+            # rollback/scale/circuit-breaker on a healthy service charged the cost and degraded it
+            return {"success": False, "error": "No open incident on this service"}
 
         if self.feature_freeze_active and action["category"] == "hotfix":
             # the freeze blocks *discretionary* risky changes -- it must never block remediating
@@ -2156,6 +2211,23 @@ class SimulationEngine:
                 db.close()
 
         return {"success": True, "service": srv, "budget": self.budget, "tech_debt": self.tech_debt}
+
+    TUTORIAL_SERVICE_ID = "srv-notify"
+    TUTORIAL_ROOT_CAUSE = "Memory leak in connection pooling thread"
+
+    def spawn_tutorial_incident(self) -> Dict[str, Any]:
+        """RAISE THE GUIDED TUTORIAL'S DETERMINISTIC P2 INCIDENT ON srv-notify THROUGH THE NORMAL
+        INCIDENT PIPELINE (LOG STREAM, AUDIT EVENT, PERSISTENCE). ITS ROOT CAUSE IS A deploy_regression,
+        SO A ROLLBACK FULLY RESOLVES IT. REFUSED WHILE ANY INCIDENT IS OPEN OR THE RUN HAS ENDED."""
+        if self.status in ("bankrupted", "victory"):
+            return {"success": False, "error": "The run has ended: reset before starting the tutorial incident"}
+        if any(inc["status"] in ("active", "acknowledged") for inc in self.incidents):
+            return {"success": False, "error": "An incident is already open: resolve it before the tutorial incident"}
+        srv = next((s for s in self.services if s["id"] == self.TUTORIAL_SERVICE_ID), None)
+        if srv is None or srv["status"] != "healthy":
+            return {"success": False, "error": f"{self.TUTORIAL_SERVICE_ID} is not healthy: cannot stage the tutorial incident"}
+        incident = self._trigger_service_failure(srv, root_cause=self.TUTORIAL_ROOT_CAUSE)
+        return {"success": True, "incident": self.public_incident(incident)}
 
     def purchase_upgrade(self, upgrade_id: str) -> Dict[str, Any]:
         """PURCHASE A PERMANENT UPGRADE, VALIDATING PREREQUISITES AND BUDGET"""

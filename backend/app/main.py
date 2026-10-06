@@ -8,6 +8,8 @@ from sqlalchemy.exc import OperationalError
 
 from alembic import command
 from app.api.router import api_router
+from app.core.state_push import PushStateAfterCommandMiddleware
+from app.core.version import get_app_version
 from app.engine.simulator import SimulationEngine
 
 # repo layout: backend/app/main.py -> alembic.ini lives one level up, in backend/
@@ -46,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="IncidentZero: SRE & IT Governance Simulator API",
-    version="1.0.0",
+    version=get_app_version(),
     description="Real-time crisis management simulation engine and audit telemetry pipeline",
     lifespan=lifespan,
 )
@@ -58,6 +60,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # lets the browser read the rate limiter's wait time across origins (dev: 5173 -> 8000)
+    expose_headers=["Retry-After"],
 )
+
+# every successful state-changing command re-broadcasts the engine state, also while paused
+app.add_middleware(PushStateAfterCommandMiddleware)
 
 app.include_router(api_router)

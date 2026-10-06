@@ -50,7 +50,7 @@ def _derive_next_challenge(
     won_scenarios = {
         r.scenario_id for r in records if r.outcome == "victory"
     }
-    
+
     if not records:
         return {
             "type": "first_run",

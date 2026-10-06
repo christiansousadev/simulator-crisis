@@ -1,6 +1,5 @@
 """DDoS Global scenario: volumetric attack overwhelms the API gateway and cascades"""
 
-import random
 from typing import Any, Dict, List, Optional
 
 from app.engine import formulas
@@ -48,6 +47,8 @@ class DdosGlobalScenario(ScenarioEngine):
         super().__init__(engine)
         self._api_gw_down_ticks = 0
         self._payment_incident_breach = False
+        # sticky: true once gateway uptime fell under the 80% line at any point in the window
+        self._gw_uptime_violated = False
 
     def _wave_multiplier(self) -> float:
         """6-tick sinusoidal surge wave — attack traffic is never constant"""
@@ -92,6 +93,8 @@ class DdosGlobalScenario(ScenarioEngine):
         gw = next((s for s in self.engine.services if s["id"] == "srv-api-gw"), None)
         if gw and gw["status"] == "down":
             self._api_gw_down_ticks += 1
+        if 100.0 * (1.0 - self._api_gw_down_ticks / max(1, self.elapsed_ticks)) < 80.0:
+            self._gw_uptime_violated = True
 
         # track payment breach: any active incident on srv-payment older than 6 ticks
         for inc in self.engine.incidents:
@@ -105,11 +108,13 @@ class DdosGlobalScenario(ScenarioEngine):
                 "id": "gw_uptime",
                 "description": "Keep API Gateway uptime above 80% across the attack window",
                 "done": gw_uptime_pct >= 80.0,
+                "failed": self._gw_uptime_violated,
             },
             {
                 "id": "payment_sla",
                 "description": "Resolve all Payment service incidents within 6 ticks of detection",
                 "done": not self._payment_incident_breach,
+                "failed": self._payment_incident_breach,
             },
             {
                 "id": "survive_attack",
@@ -140,8 +145,10 @@ class DdosGlobalScenario(ScenarioEngine):
         return {
             "api_gw_down_ticks": self._api_gw_down_ticks,
             "payment_incident_breach": self._payment_incident_breach,
+            "gw_uptime_violated": self._gw_uptime_violated,
         }
 
     def restore_extra(self, extra: Dict[str, Any]) -> None:
         self._api_gw_down_ticks = int(extra.get("api_gw_down_ticks", 0))
         self._payment_incident_breach = bool(extra.get("payment_incident_breach", False))
+        self._gw_uptime_violated = bool(extra.get("gw_uptime_violated", False))

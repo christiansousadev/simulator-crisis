@@ -1,4 +1,5 @@
-version: "3.8"
+# full stack: `docker compose up --build` -> UI on http://localhost:5173, API on http://localhost:8000
+# (the compose-spec ignores a top-level `version:` key, so it is intentionally omitted)
 
 services:
   backend:
@@ -10,22 +11,42 @@ services:
     environment:
       - PORT=8000
       - ENVIRONMENT=production
-      - DATABASE_URL=sqlite:///./incidentzero.db
+      # on the named volume below (NOT the container's working dir), so the save survives
+      # `docker compose down` / container recreation; alembic migrates it on every boot
+      - DATABASE_URL=sqlite:////app/data/incidentzero.db
+      # where the post-mortem template is read from and reports/interviews are written (bind mount below)
+      - AUDITS_DIR=/app/audits
     volumes:
       - ./audits:/app/audits
       - backend-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        # baked into the bundle at build time: these are the URLs the BROWSER uses to reach the
+        # backend, so they must be host-reachable (localhost), not compose service names
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
         VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000/ws/telemetry}
     ports:
       - "5173:5173"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
 
 volumes:
   backend-data:

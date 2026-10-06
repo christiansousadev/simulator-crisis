@@ -1,14 +1,10 @@
-import pytest
+from unittest.mock import patch
+
 from app.engine.scenarios import SCENARIO_REGISTRY
 from app.engine.scenarios.ddos_global import DdosGlobalScenario
 from app.engine.scenarios.deployment_rollback import DeploymentRollbackScenario
 from app.engine.scenarios.third_party_outage import ThirdPartyOutageScenario
 from app.engine.simulator import SimulationEngine
-
-
-from unittest.mock import patch
-from app.core.database import SessionLocal
-from app.models.session import GameSession
 
 SESSION_ID = "incidentzero-test-scenarios"
 

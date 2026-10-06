@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.version import get_app_version
 from app.engine.scenarios import SCENARIO_REGISTRY
 
 router = APIRouter(tags=["session"])
@@ -43,6 +44,7 @@ async def health_check(request: Request) -> Dict[str, Any]:
     engine = request.app.state.engine
     return {
         "status": "online",
+        "version": get_app_version(),
         "engine_active": engine.is_running,
         "current_tick": engine.current_tick,
         "active_clients": len(engine.active_websockets),

@@ -62,6 +62,8 @@ class ChaosEngineeringDrillScenario(ScenarioEngine):
                 "id": "zero_breach_flags",
                 "description": "Finish the drill with zero regulatory breach flags",
                 "done": self._breach_flags_in_window() == 0,
+                # breach flags are never removed from the audit trail, so once seen the objective stays failed
+                "failed": self._breach_flags_in_window() > 0,
             },
             {
                 "id": "survive_drill",

@@ -2,7 +2,7 @@
 
 import random
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from app.engine.log_generator import generate_incident_log_stream
 
@@ -73,8 +73,9 @@ def severity_for_tier(tier: str) -> str:
     return "P1_CRITICAL" if tier == "critical" else "P2_HIGH"
 
 
-def build_incident(service: Dict[str, Any], current_tick: int) -> Dict[str, Any]:
-    """CONSTRUCT A NEW INCIDENT RECORD FOR A FAILING SERVICE"""
+def build_incident(service: Dict[str, Any], current_tick: int, root_cause: Optional[str] = None) -> Dict[str, Any]:
+    """CONSTRUCT A NEW INCIDENT RECORD FOR A FAILING SERVICE. root_cause PINS THE NARRATIVE (THE
+    GUIDED TUTORIAL NEEDS A KNOWN, ROLLBACK-FIXABLE CAUSE); OMITTED = A RANDOM ONE FROM THE POOL"""
     severity = severity_for_tier(service["tier"])
     incident = {
         "id": generate_incident_id(),
@@ -82,7 +83,7 @@ def build_incident(service: Dict[str, Any], current_tick: int) -> Dict[str, Any]
         "service_id": service["id"],
         "severity": severity,
         "title": pick_incident_title(service["name"]),
-        "root_cause": pick_root_cause(),
+        "root_cause": root_cause or pick_root_cause(),
         "mtta_seconds": 0,
         "mttr_seconds": 0,
         "status": "active",

@@ -18,13 +18,22 @@ class ScenarioCatalogEntry(BaseModel):
     duration_ticks: int
 
 
+class ScenarioObjective(BaseModel):
+    id: str
+    description: str
+    # the condition holds right now (or the window completed)
+    done: bool
+    # optional: true once a maintenance-style objective was violated at any point in the window
+    failed: Optional[bool] = None
+
+
 class ActiveScenarioResponse(BaseModel):
     scenario_id: Optional[str] = None
     elapsed_ticks: Optional[int] = None
     duration_ticks: Optional[int] = None
     completed: Optional[bool] = None
     outcome: Optional[Dict[str, Any]] = None
-    objectives: Optional[List[Dict[str, Any]]] = None
+    objectives: Optional[List[ScenarioObjective]] = None
 
 
 class ChaosInjection(BaseModel):

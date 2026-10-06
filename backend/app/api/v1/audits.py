@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import re
 import time
 import uuid
 from collections import defaultdict
@@ -26,11 +28,26 @@ from app.schemas.interview import InterviewMessageRequest
 
 router = APIRouter(tags=["audits"])
 
+def _resolve_audits_dir() -> Path:
+    """LOCATE THE audits/ DIRECTORY: AUDITS_DIR OVERRIDE FIRST, THEN THE CHECKOUT LAYOUT
+    (backend/app/api/v1/audits.py -> repo root is four levels up), THEN THE CONTAINER LAYOUT
+    (/app/app/api/v1/audits.py -> /app/audits, three levels up, where docker-compose mounts it)"""
+    override = os.environ.get("AUDITS_DIR")
+    if override:
+        return Path(override)
+    here = Path(__file__).resolve()
+    for root in (here.parents[4], here.parents[3]):
+        if (root / "audits" / "templates").is_dir():
+            return root / "audits"
+    return here.parents[4] / "audits"
+
+
 # repo layout: backend/app/api/v1/audits.py -> repo root is four levels up
 REPO_ROOT = Path(__file__).resolve().parents[4]
-TEMPLATE_PATH = REPO_ROOT / "audits" / "templates" / "post_mortem_template.md"
-REPORTS_DIR = REPO_ROOT / "audits" / "reports"
-INTERVIEWS_DIR = REPO_ROOT / "audits" / "interviews"
+AUDITS_DIR = _resolve_audits_dir()
+TEMPLATE_PATH = AUDITS_DIR / "templates" / "post_mortem_template.md"
+REPORTS_DIR = AUDITS_DIR / "reports"
+INTERVIEWS_DIR = AUDITS_DIR / "interviews"
 
 # --- incident forensics: the single source of truth for "what actually happened" -----------
 #
@@ -105,9 +122,12 @@ def _check_interview_rate_limit(client_key: str) -> None:
         while calls and calls[0] < cutoff:
             calls.pop(0)
         if len(calls) >= _INTERVIEW_RATE_LIMIT_MAX_CALLS:
+            # seconds until the oldest call leaves the window, so a client can show a real countdown
+            retry_after = max(1, int(calls[0] + _INTERVIEW_RATE_LIMIT_WINDOW_SECONDS - now) + 1)
             raise HTTPException(
                 status_code=429,
                 detail="Too many interview turns in a short window; please slow down and try again shortly",
+                headers={"Retry-After": str(retry_after)},
             )
         calls.append(now)
 
@@ -599,10 +619,81 @@ async def conduct_interview(incident_id: str, payload: InterviewMessageRequest, 
             "reply": auditor_response["reply"],
             "verdict": auditor_response["verdict"],
             "regulatory_fine_adjustment": eligible_amount,
+            "adjustment_cap": _adjustment_cap(auditor_response["verdict"], incident.severity),
+            "applied": _verdict_already_applied(incident_id),
             "transcript_turn": len(transcript) // 2,
         }
     finally:
         db.close()
+
+
+# incident ids are "inc-" + hex (event_generator) -- the GET below builds a file path from the id, so
+# anything outside this conservative alphabet is rejected before it can reach the filesystem
+_INCIDENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _adjustment_cap(verdict: str, severity: str) -> float:
+    """MAGNITUDE OF THE BACKEND CEILING THAT APPLIES TO THIS VERDICT (0 WHEN NOTHING IS ELIGIBLE),
+    SO THE CLIENT CAN SHOW 'CAPPED AT X' WITHOUT DUPLICATING THE SEVERITY TABLE"""
+    if verdict == "NON_COMPLIANT":
+        return formulas.AUDIT_FINE_CEILING_BY_SEVERITY.get(severity, formulas.AUDIT_FINE_CEILING_BY_SEVERITY["P4_LOW"])
+    if verdict in ("VALID", "JUSTIFIED"):
+        return formulas.AUDIT_CREDIT_CEILING
+    return 0.0
+
+
+@router.get("/api/audits/postmortem/{incident_id}/interview")
+async def get_interview(incident_id: str) -> Dict[str, Any]:
+    """READ-ONLY: THE SAVED INTERVIEW TRANSCRIPT AND THE LATEST VERDICT STATE FOR AN INCIDENT, SO A
+    REOPENED POST-MORTEM CAN RESUME THE CONVERSATION. 404 WHEN THE ID IS MALFORMED, UNKNOWN, OR NO
+    INTERVIEW WAS EVER CONDUCTED. DOES NOT NEED THE LLM KEY AND NEVER CALLS THE LLM."""
+    if not _INCIDENT_ID_PATTERN.fullmatch(incident_id):
+        raise HTTPException(status_code=404, detail="No interview found for this incident")
+
+    db: OrmSession = SessionLocal()
+    try:
+        incident = db.get(Incident, incident_id)
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found in the compliance ledger")
+        severity = incident.severity
+    finally:
+        db.close()
+
+    try:
+        transcript = _load_or_init_transcript(incident_id)
+    except (OSError, ValueError):
+        transcript = []
+    if not isinstance(transcript, list) or not transcript:
+        raise HTTPException(status_code=404, detail="No interview found for this incident")
+
+    turns = [
+        {"role": "auditor" if t.get("role") == "auditor" else "player", "content": str(t.get("content", ""))}
+        for t in transcript
+        if isinstance(t, dict)
+    ]
+
+    try:
+        verdict_meta = _load_latest_verdict(incident_id) or {}
+    except (OSError, ValueError):
+        verdict_meta = {}
+    verdict = verdict_meta.get("verdict", "PENDING")
+    if verdict not in _ALLOWED_AUDITOR_VERDICTS:
+        verdict = "PENDING"
+    proposed = verdict_meta.get("proposed_amount", verdict_meta.get("regulatory_fine_adjustment", 0.0))
+    try:
+        eligible_amount = formulas.eligible_audit_adjustment(verdict, float(proposed), severity)
+    except (TypeError, ValueError):
+        eligible_amount = 0.0
+
+    return {
+        "incident_id": incident_id,
+        "turns": turns,
+        "verdict": verdict,
+        "regulatory_fine_adjustment": eligible_amount,
+        "adjustment_cap": _adjustment_cap(verdict, severity),
+        "applied": bool(verdict_meta.get("applied")) or _verdict_already_applied(incident_id),
+        "transcript_turn": len(turns) // 2,
+    }
 
 
 def _verdict_already_applied(incident_id: str) -> bool:
@@ -693,7 +784,13 @@ async def apply_interview_verdict(incident_id: str, request: Request) -> Dict[st
     verdict_path = INTERVIEWS_DIR / f"{incident_id}.verdict.json"
     verdict_path.write_text(json.dumps(verdict_meta), encoding="utf-8")
 
-    return {"success": True, "budget": engine.budget}
+    # applied_amount is the backend-clamped figure actually charged (positive fine, negative credit)
+    return {
+        "success": True,
+        "budget": engine.budget,
+        "verdict": verdict_meta["verdict"],
+        "applied_amount": round(eligible_amount, 2),
+    }
 
 
 def _compile_interview_context(db: OrmSession, incident: Incident, session: Optional[GameSession]) -> Dict[str, Any]:

@@ -17,6 +17,19 @@ class CustomScenario(ScenarioEngine):
         super().__init__(engine)
         self.config = config
         self.duration_ticks = config["duration_ticks"]
+        # indices into config["chaos_injections"] that already fired, persisted via snapshot_extra so
+        # a restored run neither re-fires a past injection nor skips a future one
+        self._fired: set = set()
+
+    def _fire_injections(self, tick: int) -> None:
+        """FIRE EVERY NOT-YET-FIRED INJECTION SCHEDULED AT `tick` ON ITS TARGET SERVICE, IF STILL HEALTHY"""
+        for index, injection in enumerate(self.config["chaos_injections"]):
+            if injection["at_tick"] != tick or index in self._fired:
+                continue
+            self._fired.add(index)
+            srv = next((s for s in self.engine.services if s["id"] == injection["service_id"]), None)
+            if srv and srv["status"] == "healthy":
+                self.engine._trigger_service_failure(srv)
 
     def on_start(self) -> None:
         """APPLY THE OPTIONAL starting_budget/starting_tech_debt OVERRIDES FROM THE PLAYER-SUPPLIED
@@ -28,20 +41,26 @@ class CustomScenario(ScenarioEngine):
             self.engine.budget = float(self.config["starting_budget"])
         if self.config.get("starting_tech_debt") is not None:
             self.engine.tech_debt = formulas.clamp_tech_debt(self.config["starting_tech_debt"])
+        # the tick-driven clock is bumped BEFORE on_tick, so the first on_tick already sees
+        # elapsed_ticks == 1: an at_tick == 0 injection can only fire here, once, at run start.
+        # at_tick N >= 1 fires on the N-th simulated tick of the scenario (see on_tick)
+        self.engine._scenario_hazard_multiplier = self.config["hazard_multiplier"]
+        self._fire_injections(0)
 
     def on_tick(self) -> None:
-        """APPLY THE CONFIGURED HAZARD MULTIPLIER AND FIRE ANY SCHEDULED CHAOS INJECTIONS"""
+        """APPLY THE CONFIGURED HAZARD MULTIPLIER AND FIRE ANY CHAOS INJECTION SCHEDULED FOR THE
+        N-th SIMULATED TICK OF THE SCENARIO (elapsed_ticks IS ALREADY N HERE)"""
         self.engine._scenario_hazard_multiplier = self.config["hazard_multiplier"]
-        for injection in self.config["chaos_injections"]:
-            if injection["at_tick"] == self.elapsed_ticks:
-                srv = next((s for s in self.engine.services if s["id"] == injection["service_id"]), None)
-                if srv and srv["status"] == "healthy":
-                    self.engine._trigger_service_failure(srv)
+        self._fire_injections(self.elapsed_ticks)
 
     def snapshot_extra(self) -> Dict[str, Any]:
-        """PERSIST THE PLAYER-SUPPLIED CONFIG ITSELF -- restore_extra() IS NOT USED HERE SINCE
-        CustomScenario NEEDS config AT CONSTRUCTION TIME; SEE SimulationEngine._try_restore_from_snapshot"""
-        return {"config": self.config}
+        """PERSIST THE PLAYER-SUPPLIED CONFIG ITSELF (NEEDED AT CONSTRUCTION TIME, SEE
+        SimulationEngine._try_restore_from_snapshot) PLUS WHICH INJECTIONS ALREADY FIRED"""
+        return {"config": self.config, "fired": sorted(self._fired)}
+
+    def restore_extra(self, extra: Dict[str, Any]) -> None:
+        """REHYDRATE THE FIRED-INJECTION SET (config ITSELF WAS ALREADY USED TO CONSTRUCT THIS)"""
+        self._fired = {int(i) for i in extra.get("fired", []) if isinstance(i, (int, float))}
 
     def objectives(self) -> List[Dict[str, Any]]:
         """TWO CONCRETE OBJECTIVES DERIVED DIRECTLY FROM THE VALIDATED CONFIG AND CURRENT ENGINE

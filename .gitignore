@@ -24,8 +24,12 @@ wheels/
 venv/
 ENV/
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
@@ -63,6 +67,7 @@ Thumbs.db
 # GENERATED AUDIT REPORTS
 audits/reports/*.md
 !audits/reports/.gitkeep
+audits/interviews/
 
 # PLAYWRIGHT E2E
 frontend/test-results/

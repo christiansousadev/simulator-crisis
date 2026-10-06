@@ -153,6 +153,8 @@ def test_apply_mitigation_enforces_server_side_cooldown():
     # scripted client could fire the same runbook every tick
     engine = _fresh_engine()
     engine.budget = 100000.0
+    # a runbook now needs something to fix (see test_runbook_requires_an_open_incident...)
+    engine._trigger_service_failure(next(s for s in engine.services if s["id"] == "srv-auth"))
 
     first = engine.apply_mitigation("rollback", "srv-auth")
     assert first["success"] is True
@@ -163,6 +165,7 @@ def test_apply_mitigation_enforces_server_side_cooldown():
 
     # advancing past the catalog's declared cooldown window allows it again
     engine.current_tick += formulas.find_mitigation("rollback")["cooldown_ticks"]
+    engine._trigger_service_failure(next(s for s in engine.services if s["id"] == "srv-auth"))
     after_cooldown = engine.apply_mitigation("rollback", "srv-auth")
     assert after_cooldown["success"] is True
 
