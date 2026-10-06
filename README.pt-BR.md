@@ -36,13 +36,13 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 <td align="center"><sub>Terminal CRT de Log Triage</sub></td>
 </tr>
 <tr>
-<td width="33%"><img src="./docs/screenshots/scenario-briefing-pt.png" alt="Briefing de cenário roteirizado com objetivos dinâmicos"></td>
-<td width="33%"><img src="./docs/screenshots/critical-crisis-pt.png" alt="Estado crítico de crise: DEFCON 1, violação de SLA e congelamento"></td>
+<td width="33%"><img src="./docs/screenshots/tutorial-pt.png" alt="Tutorial interativo destacando o rack em falha"></td>
+<td width="33%"><img src="./docs/screenshots/upgrades-tree-pt.png" alt="Árvore de upgrades: três ramos lado a lado"></td>
 <td width="33%"><img src="./docs/screenshots/post-match-debrief-pt.png" alt="Debrief pós-partida com métricas, objetivos e carreira"></td>
 </tr>
 <tr>
-<td align="center"><sub>Briefing de Cenário</sub></td>
-<td align="center"><sub>Crise Crítica (DEFCON 1)</sub></td>
+<td align="center"><sub>Tutorial Interativo</sub></td>
+<td align="center"><sub>Árvore de Upgrades</sub></td>
 <td align="center"><sub>Debrief Pós-Partida</sub></td>
 </tr>
 </table>
@@ -53,7 +53,7 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 
 ### 1. Operação e Simulação de Falhas em Cascata
 - **Microsserviços Interdependentes:** Grafo de dependências central de 5 microsserviços com nós de infraestrutura dinâmicos, onde a degradação de serviços upstream propaga latência e falhas para componentes dependentes.
-- **Ciclo de Vida de Incidentes (P1 a P4):** Severidades geram penalidades crescentes de MTTA/MTTR, sobretaxas financeiras e erosão na satisfação do usuário (moral / user happiness).
+- **Ciclo de Vida de Incidentes (P1 e P2):** Serviços críticos geram incidentes P1 e serviços padrão geram P2. A severidade define sobretaxas financeiras, penalidades de MTTA e a erosão da satisfação do usuário (moral / user happiness).
 - **Investigação com Causa Raiz Oculta:** A causa raiz do problema permanece sob sigilo (névoa operacional) até que a equipe realize a triagem de logs ou aloque engenheiros para investigação.
 - **Log Triage Interativo:** Gaveta retrô de terminal CRT com streaming de logs contendo timestamps e filtros por nível (ERROR, WARN, INFO); selecionar uma linha com evidência concreta confirma a causa raiz e libera mitigações de alta eficácia.
 - **Catálogo de Runbooks Contextuais:** Ações de mitigação com custo financeiro, eficácia determinística baseada na compatibilidade com a causa raiz (`formulas.MITIGATION_EFFECTIVENESS` com limiar de 0.70 para resolução completa), variação de Dívida Técnica (TDI), tempo de cooldown e restrições operacionais.
@@ -70,17 +70,20 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 - **Rotação de Turnos e Fadiga:** Alterne turnos de plantão; incidentes contínuos consomem energia (stamina) e elevam o estresse, aumentando a chance de erros operacionais e lentidão de resposta.
 
 ### 4. Infraestrutura e Árvore Tecnológica
-- **Upgrades da Tech Tree:** Desbloqueie melhorias divididas em três ramos:
-  - *Observabilidade:* Rastreamento Distribuído (APM), Detecção Preditiva de Anomalias, Real User Monitoring (RUM).
-  - *Resiliência:* Failover Multi-AZ, Clusters com Auto-Scaling, Circuit Breakers, Automação de Caos.
-  - *Instalações:* Geradores de Backup, Estações Ergonômicas, Máquinas de Café (recuperação de moral).
-- **Modo Construção:** Posicionamento modular de nós e expansão de racks diretamente no chão do datacenter.
+- **Upgrades da Tech Tree:** Seis compras únicas divididas em três ramos:
+  - *Observabilidade:* Rastreamento Distribuído (APM), Detecção Preditiva de Anomalias (aviso 5 ticks antes).
+  - *Resiliência:* Clusters Multi-AZ, Pipelines de CI/CD Automatizados.
+  - *Instalações:* Máquina de Espresso Comercial (queda de moral mais lenta), Cadeiras Ergonômicas (fadiga de plantão mais lenta).
+- **Modo Construção:** Posicione caches Redis, filas Kafka, réplicas de leitura e balanceadores NGINX contra um serviço, direto nas prateleiras da sala de servidores; cada nó muda o perfil de risco ou de latência daquele serviço.
 
 ### 5. Cenários Roteirizados e Modos de Jogo
 - **Modo Sandbox:** Simulação livre com configurações ajustáveis de dificuldade (Estagiário, Padrão, Caos Total).
-- **Black Friday Rush:** Pico extremo de tráfego de usuários e saturação de conexões de banco de dados sob rigorosos requisitos de SLA.
-- **Chaos Engineering Drill:** Injeções programadas de falhas automatizadas testando a resiliência arquitetural e failovers.
-- **Infiltração de Ransomware:** Crise de segurança exigindo isolamento de tráfego lateral suspeito, análise forense de logs e restauração limpa de snapshots.
+- **Black Friday Rush:** Pico extremo de tráfego sob rigorosos requisitos de SLA; só runbooks de capacidade valem contra a sobrecarga.
+- **Chaos Engineering Drill:** Injeções aleatórias de falhas; vença terminando sem nenhuma violação regulatória.
+- **Infiltração de Ransomware:** Movimento lateral a partir de um serviço de borda comprometido; ponha os nós infectados em quarentena antes que o banco principal caia.
+- **DDoS Global Attack:** Inundação de tráfego em ondas; mantenha o gateway da API acima de 80% de disponibilidade e os incidentes de pagamento curtos.
+- **Deployment Rollback Emergency:** Um canary defeituoso vaza memória em dois serviços; faça a triagem dos dois e restaure-os antes do fim do tempo.
+- **Third-Party Provider Outage:** Os provedores de pagamento e de notificação caem e não têm conserto interno; limite o raio de impacto até a volta deles.
 - **Cenários Customizados:** Editor e carregador integrado de cenários com validação estrita de schema JSON para definição de multiplicadores de risco, regras de falha e eventos roteirizados.
 
 ### 6. Dossiê de Pós-Incidente, Auditoria e Auditor IA
@@ -98,12 +101,30 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 
 ## War Room Tático e Game Feel
 
-- **Escritório Isométrico Dinâmico:** Visualização vetorial/canvas isométrica com zoom, pan suave e foco contextual/sob comando (botões "Focar Rack" e "Centralizar na Crise", além de click-to-focus no rack de servidores sob alerta).
-- **Estados Visuais dos Racks:** Racks com iluminação dinâmica refletindo seu estado (saudável, degradado, down, investigando, mitigando), telemetria em LED e sinalizador visual de alarme pulsante.
-- **Feedback de Crise e Severidade:** Níveis DEFCON (1 a 5) acionam variações na iluminação ambiente, vinheta de emergência pulsante e breaking news no ticker corporativo.
-- **HUD Tático:** Medidores animados de SLA, Error Budget, Caixa, Dívida Técnica e Moral, complementados por texto flutuante de combate exibindo impactos de MTTR e custos.
-- **Fluxo de Modais Integrado:** Briefing de Cenário, Detalhe Tri-Bloco do Incidente, Terminal CRT de Logs, Banner de Resolução de Incidente e Debrief de Pós-Partida.
-- **Áudio Procedural e Acessibilidade:** Sintetizador sonoro via Web Audio API gerando timbres característicos para alarmes DEFCON, execução de runbooks, cliques de interface e ruído de servidores, com suporte a `prefers-reduced-motion` e paleta segura para daltonismo.
+- **Escritório Isométrico Vivo:** Diorama isométrico em SVG com câmera de mola (zoom em direção ao cursor, arrasto com inércia, teclas de seta, `+`, `-` e `Home`), voo de "Centralizar na Crise" até o rack mais grave e minimapa com moldura de visualização arrastável.
+- **Luz Contínua:** O céu e a iluminação do escritório acompanham a hora do jogo de forma suave, e o DEFCON define o clima: poça âmbar no DEFCON 4, giroflex âmbar no 3 e alerta vermelho encenado (cintilação, giroflex, varredura) do 2 para baixo.
+- **Racks que Reagem:** Racks saudáveis, degradados e fora do ar mudam de tom, padrão de LED e efeitos com transições encenadas, um tremor único na falha e uma sequência de recuperação (faixa de varredura, LEDs ficando verdes, selo "RESTAURADO").
+- **Equipe de Verdade no Escritório:** As mesas ficam vagas até você contratar. Os novos engenheiros entram pela recepção até a mesa, correm à sala de servidores quando o serviço deles tem incidente e vão à copa quando descansam.
+- **HUD Legível:** Os números contam suavemente até o novo valor, os gastos saem do contador de caixa como chips com rótulo ("-US$ 1.800 · Rollback"), o custo fixo aparece como uma tendência discreta, os medidores piscam ao cruzar uma faixa e o cooldown dos runbooks varre suave e brilha quando fica pronto.
+- **Listas com Memória:** Os incidentes se ordenam por urgência e trazem a trilha Novo → Reconhecido → Investigado → Mitigando → Resolvido, com a próxima ação sempre visível; novas linhas do ledger ganham destaque; cards resolvidos recebem um carimbo antes de sumir.
+- **Tutorial Interativo:** Um guia com destaques que aponta o rack, o card, os botões e os runbooks reais, espera você agir e cria um incidente de treino garantido. Reveja quando quiser pelo botão de ajuda ou pelo menu de pausa.
+- **Menus com Movimento:** Tela de título viva sobre o escritório em funcionamento, transições em varredura entre telas, debrief encenado (carimbo, métricas contando, nota, objetivos, prestígio), decisão do CAB com barra de prazo que esvazia e card de resultado, e terminal de triagem com seleção pelo teclado.
+- **Áudio Procedural:** Um único grafo Web Audio com barramentos separados de efeitos, interface e música, tema calmo de menu que se funde com a trilha do jogo conforme a tensão, música abafada na pausa e sons de interface para hover, confirmação, carimbo, martelo e mais. Os alarmes só tocam com o jogo rodando.
+- **Acessibilidade:** Ajuste de Movimento (sistema, reduzido, completo) que troca a animação decorativa por estados estáticos sem esconder nenhuma mensagem, modos de alto contraste e seguro para daltonismo, diálogos com foco preso e pilha de Esc, regiões ao vivo para avisos e listas alcançáveis pelo teclado.
+
+### Atalhos de Teclado
+
+| Tecla | Ação |
+|---|---|
+| `Espaço` | Pausar ou retomar |
+| `1` `2` `5` | Velocidade do jogo |
+| `I` `M` `C` `U` `R` `A` `G` | Abas do dock: incidentes, diretivas, conformidade, upgrades, equipe, conquistas, métricas |
+| `[` `]` | Incidente aberto anterior ou seguinte |
+| `B` | Modo construção |
+| Setas, `+` `-`, `Home` | Mover, aproximar e redefinir a câmera |
+| `Esc` | Fecha o diálogo do topo ou abre o menu de pausa |
+
+Os atalhos ficam mudos enquanto houver um diálogo aberto.
 
 ---
 
@@ -121,8 +142,8 @@ O IncidentZero adota **Arquitetura Autoritativa no Servidor**:
 - **Backend:** Python 3.12, FastAPI, motor de ticks determinístico (1 tick = 1 hora no jogo), SQLAlchemy, SQLite, Pydantic v2. Testado com pytest.
 - **Migrações de Banco de Dados:** O [Alembic](https://alembic.sqlalchemy.org/) controla o versionamento do schema e aplica migrações automaticamente na inicialização (`alembic upgrade head`).
 - **Stream de Telemetria:** Canal bidirecional WebSocket (`/ws/telemetry`) transmitindo deltas de tick, estados dos racks, métricas operacionais e alertas.
-- **Ledger de Compliance:** Log imutável de auditoria persistido no SQLite rastreando 29 tipos distintos de eventos operacionais e de governança.
-- **Integração com IA (Opcional):** Módulo desacoplado de auditoria de conformidade compatível com OpenAI, Anthropic ou fallback determinístico offline.
+- **Ledger de Compliance:** Log de auditoria somente de inserção, persistido no SQLite, rastreando 34 tipos distintos de eventos operacionais e de governança.
+- **Integração com IA (Opcional):** A entrevista do auditor no post-mortem fala com qualquer endpoint chat-completions compatível com OpenAI (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`). Sem chave, a rota da entrevista responde 503; não há modo offline.
 
 Consulte o [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) para diagramas técnicos completos, fórmulas matemáticas e schemas do banco de dados.
 
@@ -140,13 +161,15 @@ Consulte o [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) para diagramas téc
 ./start.sh
 ```
 
-Ambos os scripts verificam os pré-requisitos, criam o ambiente virtual do backend, instalam as dependências de Python e Node e iniciam simultaneamente os servidores de desenvolvimento do FastAPI e do Vite.
+Ambos os scripts verificam os pré-requisitos, criam o ambiente virtual do backend, instalam as dependências de Python e Node e iniciam simultaneamente os servidores de desenvolvimento do FastAPI e do Vite. Se a porta 8000 estiver ocupada, o backend passa automaticamente para a 8010 e o frontend é apontado para ela; os scripts exibem as URLs da API e da interface ao iniciar (`./start.sh <porta_backend> <porta_frontend>` / `.\start.ps1 -Port <n> -FrontendPort <n>` escolhem as portas explicitamente).
 
 ### Opção B — Docker Compose
 
 ```bash
 docker compose up --build
 ```
+
+A interface fica em `http://localhost:5173` e a API em `http://localhost:8000`. O save SQLite fica no volume nomeado `backend-data` (`/app/data/incidentzero.db`), então sobrevive a `docker compose down` e a rebuilds do container (`docker compose down -v` apaga tudo). Os relatórios e entrevistas de post-mortem são gravados na pasta `./audits/` montada do host. O backend expõe um healthcheck em `/api/health` e o container do frontend só sobe depois que ele estiver saudável.
 
 ### Opção C — Manual (Dois Terminais)
 
@@ -170,6 +193,7 @@ npm run dev
 
 - Acesse `http://localhost:5173` para entrar na War Room.
 - A documentação interativa da API do backend (Swagger UI) fica disponível em `http://localhost:8000/docs`.
+- Todo comando REST que muda o estado também empurra um quadro novo de telemetria pelo WebSocket, então a tela atualiza na hora mesmo com o jogo pausado.
 
 ---
 
@@ -203,6 +227,9 @@ npm run build          # Build do pacote de produção
 
 # Suíte End-to-End — a partir de frontend/ com o backend acessível
 npm run test:e2e       # Suíte Playwright E2E contra servidores reais e WebSocket
+
+# Tudo o que o CI executa, em um comando — a partir da raiz do repositório
+make check             # lint + tsc + testes unitários + build + e2e (também: make lint | test | build | e2e)
 ```
 
 A suíte Playwright (`frontend/e2e/`) valida os fluxos reais da interface contra instâncias ativas do backend e WebSocket sem uso de mocks. O pipeline de CI valida linting, testes unitários, checagem de tipos e testes end-to-end a cada pull request (`.github/workflows/ci.yml`).
@@ -211,7 +238,7 @@ A suíte Playwright (`frontend/e2e/`) valida os fluxos reais da interface contra
 
 ## Principais Endpoints da API
 
-O backend disponibiliza mais de 30 endpoints REST em 13 roteadores de domínio, além do canal WebSocket. A documentação interativa pode ser explorada em `http://localhost:8000/docs`.
+O backend disponibiliza mais de 35 endpoints REST em 14 roteadores de domínio, além do canal WebSocket. A documentação interativa pode ser explorada em `http://localhost:8000/docs`.
 
 | Roteador | Caminho Base | Descrição |
 |---|---|---|
@@ -228,6 +255,7 @@ O backend disponibiliza mais de 30 endpoints REST em 13 roteadores de domínio, 
 | Conquistas | `/api/achievements/*` | Catálogo e validação de conquistas operacionais |
 | Cosméticos | `/api/cosmetics/*` | Catálogo de cosméticos visuais do escritório e compras por prestígio |
 | Carreira | `/api/career/*` | Hall da Fama, resumo de carreira, recordes pessoais e recomendação de desafio |
+| Tutorial | `/api/tutorial/incident` | Cria um incidente de treino determinístico para o tutorial interativo |
 | Telemetria | `/ws/telemetry` | Canal WebSocket em tempo real para transmissão de ticks e telemetria |
 
 ---
@@ -241,6 +269,7 @@ Para especificações detalhadas de engenharia e blueprints de arquitetura, cons
 - [`audits/docs/03_GOVERNANCE_AND_COMPLIANCE_CONTROLS.md`](./audits/docs/03_GOVERNANCE_AND_COMPLIANCE_CONTROLS.md) — Auditoria, conformidade SOX-404 / SOC2 e segurança do auditor IA.
 - [`audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md`](./audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md) — Catálogo de runbooks e matriz de efeitos de mitigação.
 - [`audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`](./audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md) — Procedimento padrão de post-mortem, dossiês e checksums em PDF.
+- [`audits/docs/implementations/10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md`](./audits/docs/implementations/10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md) (em inglês) — Camada de interação e movimento da UX: tokens, movimento reduzido, regras de diálogo/foco, HUD, tutorial, áudio, carregamento de i18n, contratos de teste e limitações conhecidas.
 
 ---
 

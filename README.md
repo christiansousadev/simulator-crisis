@@ -35,13 +35,13 @@ The core gameplay loop mirrors production incident lifecycle:
 </tr>
 <tr>
 <td width="33%"><img src="./docs/screenshots/active-incident.png" alt="Active incident floor highlights, alarm beacon, and HUD cards"></td>
-<td width="33%"><img src="./docs/screenshots/critical-crisis.png" alt="Critical crisis state: DEFCON 1, breached SLA, and feature freeze"></td>
-<td width="33%"><img src="./docs/screenshots/onboarding.png" alt="The guided onboarding tutorial"></td>
+<td width="33%"><img src="./docs/screenshots/upgrades-tree.png" alt="Tech tree: three branches of upgrades side by side"></td>
+<td width="33%"><img src="./docs/screenshots/tutorial.png" alt="Interactive tutorial spotlighting the failing rack"></td>
 </tr>
 <tr>
 <td align="center"><sub>Active Incident on Floor</sub></td>
-<td align="center"><sub>Critical Crisis (DEFCON 1)</sub></td>
-<td align="center"><sub>Guided Onboarding</sub></td>
+<td align="center"><sub>Tech Tree Upgrades</sub></td>
+<td align="center"><sub>Interactive Tutorial</sub></td>
 </tr>
 </table>
 
@@ -51,7 +51,7 @@ The core gameplay loop mirrors production incident lifecycle:
 
 ### 1. Operations & Cascade Simulation
 - **Interdependent Microservices:** Core 5-microservice dependency graph with dynamic infrastructure nodes, where upstream service degradation cascades to downstream dependencies based on latency and failure thresholds.
-- **Incident Lifecycle (P1 to P4):** Severities drive MTTA/MTTR penalties, incident surcharges, and customer satisfaction / team morale (`user_happiness`) erosion.
+- **Incident Lifecycle (P1 and P2):** Critical-tier services raise P1 incidents and standard-tier services raise P2. Severity drives incident surcharges, MTTA penalties, and customer satisfaction / team morale (`user_happiness`) erosion.
 - **Root-Cause Investigation:** Root causes remain masked under operational fog-of-war until an operator conducts log triage or assigns engineering investigation.
 - **Interactive Log Triage:** Retro CRT terminal drawer streaming timestamped logs with ERROR/WARN/INFO filters; selecting actionable log evidence confirms the root cause and unlocks high-confidence mitigations.
 - **Context-Aware Runbooks:** Mitigations feature execution costs, deterministic mitigation effectiveness based on cause compatibility (`formulas.MITIGATION_EFFECTIVENESS` with a 0.70 threshold for full resolution), technical debt index (TDI) deltas, cooldown periods, and operational restrictions.
@@ -68,17 +68,20 @@ The core gameplay loop mirrors production incident lifecycle:
 - **On-Call Rotations & Fatigue:** Balance active shifts and rest cycles; sustained incident handling depletes stamina and elevates stress, causing operational mistakes and slower MTTR.
 
 ### 4. Infrastructure & Tech Tree Upgrades
-- **Tech Tree Upgrades:** Unlock and deploy capabilities across three branches:
-  - *Observability:* APM Distributed Tracing, Predictive Anomaly Detection, Real User Monitoring (RUM).
-  - *Resilience:* Multi-AZ Failover, Auto-Scaling Clusters, Circuit Breakers, Chaos Automation.
-  - *Facilities:* Backup Generators, Ergonomic Workstations, Coffee Stations (morale regeneration).
-- **Build Mode:** Modular infrastructure placement and server rack scaling directly on the office floor.
+- **Tech Tree Upgrades:** Six one-time purchases across three branches:
+  - *Observability:* APM Distributed Tracing, Predictive Anomaly Detection (5-tick advance warning).
+  - *Resilience:* Multi-AZ Compute Clusters, Automated CI/CD Pipelines.
+  - *Facilities:* Commercial Espresso Machine (slower morale decline), Ergonomic Chairs (slower on-call fatigue).
+- **Build Mode:** Place Redis caches, Kafka queues, database read replicas, and NGINX load balancers against a service directly on the server-room shelves; each node reshapes that service's hazard or latency profile.
 
 ### 5. Scripted Scenarios & Game Modes
 - **Sandbox Mode:** Unconstrained freeform simulation with customizable difficulty presets (Intern / Standard / Chaos).
-- **Black Friday Rush:** Extreme consumer traffic spikes and database connection exhaustion under tight SLA constraints.
-- **Chaos Engineering Drill:** Scheduled automated failure injections testing multi-AZ failover and architectural resilience.
-- **Ransomware Infiltration:** Cyber crisis requiring fast outbound lateral movement isolation, forensic log analysis, and clean snapshot restoration.
+- **Black Friday Rush:** Extreme consumer traffic spikes under tight SLA constraints; only capacity runbooks are allowed against overload.
+- **Chaos Engineering Drill:** Random automated failure injections; win by finishing with zero regulatory breach flags.
+- **Ransomware Infiltration:** Lateral movement from a compromised edge service; quarantine infected nodes before the master database falls.
+- **DDoS Global Attack:** Multi-wave traffic flood; keep the API gateway above 80% uptime and payment incidents short.
+- **Deployment Rollback Emergency:** A defective canary leaks memory on two services; triage both and restore them before time runs out.
+- **Third-Party Provider Outage:** Payment and notification providers go dark and cannot be fixed internally; limit the blast radius until they recover.
 - **Custom Chaos Scenarios:** Built-in scenario loader and editor supporting validated JSON configurations for custom hazard rates, failure rules, and scripted chaos events.
 
 ### 6. Post-Incident Dossier, Audit & AI Auditor
@@ -96,12 +99,30 @@ The core gameplay loop mirrors production incident lifecycle:
 
 ## Tactical War Room & Game Feel
 
-- **Living Isometric Office:** Rendered canvas/SVG isometric perspective with smooth zoom, pan, and contextual on-demand focus ("Focus Rack" and "Center on Crisis" controls, plus click-to-focus on affected service racks).
-- **Dynamic Server Rack States:** Real-time rack visualization reflecting operational status (healthy, degraded, down, investigating, mitigating) with LED telemetry and pulsating emergency alarm beacons.
-- **Visual Severity & Crisis Feedback:** DEFCON alert levels (1 to 5) triggering room lighting transitions, emergency vignette pulsations, and corporate breaking news ticker updates.
-- **Tactile HUD:** Real-time animated gauges for SLA, Error Budget, Cash Runway, Technical Debt, and Team Morale, paired with floating combat text indicating MTTR and cost adjustments.
-- **In-Game Flow Modals:** Integrated Scenario Briefing, Tri-Block Incident Details, CRT Log Terminal Drawer, Incident Resolution Summary banners, and Post-Match Debrief modals.
-- **Procedural Audio & Accessibility:** Web Audio API sound synthesis generating distinct tones for DEFCON transitions, runbook executions, alarm hums, and UI feedback, with comprehensive support for `prefers-reduced-motion` and high-contrast colorblind modes.
+- **Living Isometric Office:** SVG isometric diorama with a spring-damped camera (zoom toward the cursor, drag with inertia, arrow/`+`/`-`/`Home` keys), a "Center on Crisis" flight to the worst failing rack, and a minimap with a draggable viewport frame.
+- **Continuous Light:** Sky and office lighting follow the game hour smoothly, and DEFCON drives the mood: an amber pool at DEFCON 4, slow amber beacons at 3, and a staged red alert (flicker, beacons, sweep) at 2 or worse.
+- **Racks That React:** Healthy, degraded and down racks change tint, LED pattern and effects with staged transitions, a one-shot failure shake, and a recovery sequence (scan bar, LEDs turning green, a "RESTORED" chip).
+- **A Real Team on the Floor:** Desks stay vacant until you hire. New engineers walk in from reception to their desk, run to the server room when their service has an incident, and head to the lounge when resting.
+- **Readable HUD:** Numbers count smoothly toward their new value, spends fly off the cash counter as labelled chips ("-$1,800 · Rollback"), the passive burn shows as a calm trend, meters flash when they cross a band, and runbook cooldowns sweep smoothly and flash when ready.
+- **Lists With Memory:** Incidents sort by urgency and carry a New → Acknowledged → Investigated → Mitigating → Resolved track with the next action always visible; new ledger rows highlight; resolved cards stamp before they collapse.
+- **Interactive Tutorial:** A coach-mark tour that spotlights the real rack, card, buttons and runbooks, waits for you to act, and spawns a guaranteed practice incident. Replay it any time from the help button or the pause menu.
+- **Menus With Motion:** A living title screen over the running office, wipe transitions between screens, a staged post-match debrief (stamp, counting metrics, grade, objectives, prestige), a timed CAB decision with a draining deadline bar and outcome card, and a log-triage terminal with keyboard selection.
+- **Procedural Audio:** One shared Web Audio graph with separate effects, UI and music buses, a calm menu theme that crossfades into a tension-aware in-game bed, muffled music while paused, and UI sounds for hover, confirm, stamp, gavel and more. Alarms only sound while the game is running.
+- **Accessibility:** A Motion setting (system, reduced, full) that turns decorative animation into static states without hiding any message, high-contrast and colorblind-safe modes, dialogs with focus traps and an Escape stack, live regions for toasts, and keyboard-reachable lists.
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|---|---|
+| `Space` | Pause or resume |
+| `1` `2` `5` | Game speed |
+| `I` `M` `C` `U` `R` `A` `G` | Dock tabs: incidents, directives, compliance, upgrades, roster, achievements, metrics |
+| `[` `]` | Previous or next open incident |
+| `B` | Build mode |
+| Arrows, `+` `-`, `Home` | Pan, zoom and reset the camera |
+| `Esc` | Close the top-most dialog, or open the pause menu |
+
+Shortcuts stay quiet while a dialog is open.
 
 ---
 
@@ -119,8 +140,8 @@ IncidentZero enforces a **Server-Authoritative Architecture**:
 - **Backend:** Python 3.12, FastAPI, deterministic tick loop engine (1 tick = 1 virtual hour), SQLAlchemy, SQLite, Pydantic v2. Tested via pytest.
 - **Database Migrations:** [Alembic](https://alembic.sqlalchemy.org/) manages schema versions and runs automatic migrations on startup (`alembic upgrade head`).
 - **Telemetry Stream:** Bidirectional WebSocket (`/ws/telemetry`) streaming live tick deltas, rack states, metrics, and incident notifications.
-- **Compliance Audit Ledger:** Immutable SQLite event log tracking 29 distinct governance and operational event types.
-- **AI Integration (Optional):** Pluggable compliance auditor supporting OpenAI, Anthropic, or an offline deterministic fallback engine.
+- **Compliance Audit Ledger:** Append-only SQLite event log tracking 34 distinct governance and operational event types.
+- **AI Integration (Optional):** The post-mortem auditor interview talks to any OpenAI-compatible chat-completions endpoint (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`). Without a key the interview route answers 503; there is no offline fallback.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete technical blueprints, mathematical formulas, and database schemas.
 
@@ -138,13 +159,15 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete technical blueprints, math
 ./start.sh
 ```
 
-Both scripts verify prerequisites, set up the backend virtual environment, install Python and Node dependencies, and concurrently launch the FastAPI and Vite development servers.
+Both scripts verify prerequisites, set up the backend virtual environment, install Python and Node dependencies, and concurrently launch the FastAPI and Vite development servers. If port 8000 is busy the backend automatically moves to 8010 and the frontend is pointed at it; the scripts print the API and UI URLs on start (`./start.sh <backend_port> <frontend_port>` / `.\start.ps1 -Port <n> -FrontendPort <n>` choose ports explicitly).
 
 ### Option B — Docker Compose
 
 ```bash
 docker compose up --build
 ```
+
+The UI is served on `http://localhost:5173` and the API on `http://localhost:8000`. The SQLite save lives on the `backend-data` named volume (`/app/data/incidentzero.db`), so it survives `docker compose down` and container rebuilds (`docker compose down -v` wipes it). Post-mortem reports and interviews are written to the bind-mounted `./audits/` folder. The backend exposes a healthcheck on `/api/health` and the frontend container starts only once it is healthy.
 
 ### Option C — Manual Setup (Two Terminals)
 
@@ -168,6 +191,7 @@ npm run dev
 
 - Open `http://localhost:5173` to access the War Room.
 - Interactive backend API documentation (Swagger UI) is available at `http://localhost:8000/docs`.
+- Every state-changing REST command also pushes a fresh telemetry frame over the WebSocket, so the screen updates immediately even while the game is paused.
 
 ---
 
@@ -201,6 +225,9 @@ npm run build          # Production bundle build
 
 # End-to-End Suite — from frontend/ with backend virtualenv available
 npm run test:e2e       # Playwright E2E suite driving live servers and WebSocket
+
+# Everything CI runs, in one command — from the repo root
+make check             # lint + tsc + unit tests + build + e2e (also: make lint | test | build | e2e)
 ```
 
 The Playwright test suite (`frontend/e2e/`) verifies real browser interactions against live backend and WebSocket instances without mocking. CI executes all linting, unit tests, type checks, and E2E suites on every pull request (`.github/workflows/ci.yml`).
@@ -209,7 +236,7 @@ The Playwright test suite (`frontend/e2e/`) verifies real browser interactions a
 
 ## Key API Endpoints
 
-The backend provides 30+ REST endpoints across 13 domain routers in addition to the live WebSocket stream. Explore the interactive documentation at `http://localhost:8000/docs`.
+The backend provides 35+ REST endpoints across 14 domain routers in addition to the live WebSocket stream. Explore the interactive documentation at `http://localhost:8000/docs`.
 
 | Router | Base Path | Description |
 |---|---|---|
@@ -226,6 +253,7 @@ The backend provides 30+ REST endpoints across 13 domain routers in addition to 
 | Achievements | `/api/achievements/*` | Achievement catalog, unlock evaluations |
 | Cosmetics | `/api/cosmetics/*` | Office cosmetic catalog and prestige-point purchases |
 | Career | `/api/career/*` | Hall of Fame records, career summary, personal bests, next challenges |
+| Tutorial | `/api/tutorial/incident` | Spawns a deterministic practice incident for the interactive tutorial |
 | Telemetry | `/ws/telemetry` | Real-time WebSocket stream for simulation ticks and telemetry |
 
 ---
@@ -239,6 +267,7 @@ For comprehensive technical specifications and architecture blueprints, refer to
 - [`audits/docs/03_GOVERNANCE_AND_COMPLIANCE_CONTROLS.md`](./audits/docs/03_GOVERNANCE_AND_COMPLIANCE_CONTROLS.md) — Audit logging, SOX-404 / SOC2 controls, and AI interview safety.
 - [`audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md`](./audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md) — SRE runbook mitigation catalog and effect matrix.
 - [`audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md`](./audits/docs/05_POST_MORTEM_STANDARD_OPERATING_PROCEDURE.md) — Post-mortem generation SOP, dossiers, and PDF checksums.
+- [`audits/docs/implementations/10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md`](./audits/docs/implementations/10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md) — UX interaction and motion layer: tokens, reduced motion, dialog/focus rules, HUD, tutorial, audio, i18n loading, test contracts, known limitations.
 
 ---
 

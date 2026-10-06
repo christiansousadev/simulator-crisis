@@ -2,32 +2,48 @@
 
 **Document ID:** IZ-COMM-03  
 **Classification:** Technical Specification / LiveOps & Real-Time Observer Telemetry  
-**Status:** Implementado  
-**Source of Truth:** `frontend/src/components/office/BoardRoom.tsx`, `frontend/src/components/office/BoardroomMetricsDisplay.tsx`, `frontend/src/components/live-ops/LiveOpsView.tsx`, `frontend/src/store/useGameStore.ts`
+**Status:** Implementado e verificado contra o código (Outubro 2026)  
+**Last Updated:** Outubro 2026  
+**Source of Truth:** `frontend/src/components/office/BoardRoom.tsx`, `frontend/src/components/office/BoardroomMetricsDisplay.tsx`, `frontend/src/components/live-ops/LiveOpsView.tsx`, `frontend/src/components/dock/MetricsPanel.tsx`, `frontend/src/components/common/LiveSparkline.tsx`, `frontend/src/store/useGameStore.ts`, `frontend/src/main.tsx`
 
 ---
 
 ## 1. System Objective
 
-Give the boardroom's existing `KpiDisplay` wall panel real, moving data instead of static decorative bars, and give the game a second-monitor-friendly spectator surface. Both are pure presentation layers over data the client already receives every tick — no new backend endpoint, table, or WebSocket field is required.
+Give the boardroom's wall panel real, moving data instead of static decorative bars, give the cockpit HUD a metrics dock, and give the game a second-monitor-friendly spectator surface. All three are presentation layers over data the client already receives every tick — no new backend endpoint, table, or WebSocket field is required.
 
 ## 2. Rolling Metrics History (Client-Side)
 
-`useGameStore.ts`'s `setTelemetry` gains one additive derived-state append: a capped 60-entry `metricsHistory` array, each entry `{tick, avgLatencyMs, errorRatePct, throughputProxy}`, computed from the just-received `telemetry.services` array (`avgLatencyMs` = mean of `latency_ms` across services, `errorRatePct` = mean `error_rate * 100`, `throughputProxy` = a synthetic but telemetry-derived figure: count of `healthy` services times a fixed nominal RPS constant, so it visibly drops when services degrade). This requires no backend cooperation because every `TICK_BROADCAST` frame already carries the full `services` array the computation needs.
+`useGameStore.ts`'s `setTelemetry` appends one `MetricsSample` per frame to a capped `metricsHistory` array (`METRICS_HISTORY_LIMIT = 60` entries):
 
-## 3. In-Game Presentation Display
+| Field | Definition |
+|---|---|
+| `tick` | `telemetry.tick` of the frame |
+| `avgLatencyMs` | mean of `latency_ms` across `telemetry.services` (0 when there are none) |
+| `errorRatePct` | mean of `error_rate * 100` across services |
+| `throughputProxy` | a synthetic but telemetry-derived figure: number of `healthy` services times `NOMINAL_RPS_PER_HEALTHY_SERVICE` (220), so it drops visibly when services degrade |
+| `sla` | `telemetry.sla_percentage` of the frame (the real rolling SLA series) |
 
-`BoardRoom.tsx`'s existing `<KpiDisplay>` call is replaced by a new `components/office/BoardroomMetricsDisplay.tsx`, an SVG sparkline panel drawing three polylines (latency, throughput, error rate) from `metricsHistory`, each normalized to its own panel-local min/max so all three read clearly on one small wall-mounted screen regardless of absolute scale. When `hasP1` (an existing derived boolean already computed in `IsometricOffice.tsx` and threaded down) is true, the panel's background rect pulses red using the same `animate-beacon-flash` keyframe already defined in `tailwind.config.js` for the server-room emergency beacon — reusing an existing animation rather than defining a new one.
+This needs no backend cooperation because every `TICK_BROADCAST` frame already carries the full `services` array and `sla_percentage`. The `sla` field was added so the dock can plot the real availability series; previously the "SLA" card plotted the throughput proxy under the SLA name.
+
+## 3. In-Game Presentation Display (`BoardroomMetricsDisplay.tsx`)
+
+`BoardRoom.tsx` mounts `BoardroomMetricsDisplay` as the wall-mounted TV. It is an SVG panel drawing three polylines from `metricsHistory` — average latency (blue), the throughput proxy (green) and error rate (red) — each normalized to its **own** min/max so all three read clearly on one small screen regardless of absolute scale (a series with fewer than two samples draws nothing). Because of that per-series normalization the panel is a trend illustration, not a calibrated chart; it has no axes or numbers.
+
+The panel's `hasP1` prop receives the boardroom's `redAlert` flag (`useRedAlert()`: the session `status` is `breached`, or a `critical`-tier service is `down`). While it is true the background rect pulses red using the `animate-beacon-flash` keyframe already defined for the server-room emergency beacon.
 
 ## 4. Standalone Observer Route — `/live-ops`
 
-No routing library is introduced (the project has no `react-router-dom` dependency and none is added, keeping the bundle minimal). `main.tsx` performs one additive, dependency-free branch on `window.location.pathname` before mounting: `"/live-ops"` mounts a new `LiveOpsView` component instead of `App`; every other path mounts `App` exactly as before, so the existing single-page game entry point is completely unaffected.
+No routing library is used. `main.tsx` picks the root component with a single dependency-free check, `window.location.pathname === "/live-ops" ? LiveOpsView : App`; every other path mounts `App`. (The language dictionary is fetched before the first render for both.)
 
-`components/live-ops/LiveOpsView.tsx` is a self-contained full-screen dashboard: it calls `useSimulationSocket()` itself (the hook is reusable — it only depends on the Zustand store, not on `App`'s component tree) to receive the same live telemetry, then renders large-format gauges (SLA, budget, tech debt, error budget — reusing the existing `ShieldGauge`/`CreditCounter`/`TechDebtMeter`/`ErrorBudgetMeter` components verbatim), an active-alert feed (reusing `IncidentsPanel`'s card layout), and a compliance "audit waterfall" — a vertical scrolling list of `recent_audits` entries color-coded by `compliance_flag`. Nothing in this route can mutate simulation state; it contains no buttons that call a mutating endpoint, making it safe to leave open indefinitely on a second monitor.
+`components/live-ops/LiveOpsView.tsx` is a self-contained full-screen dashboard: it calls `useSimulationSocket()` itself to receive the same live telemetry, then renders, in a four-column grid, the existing `ShieldGauge` (SLA), `ErrorBudgetMeter`, `CreditCounter` and `TechDebtMeter` components; an "Active Alerts" column that embeds `IncidentsPanel`; and a "Compliance Waterfall", a newest-first list of the `recent_audits` entries colour-coded by `compliance_flag`, labelled with the localized event names. The header shows the connection state.
+
+**Read-only observer.** The header carries an `Observer mode — read only` badge. The "Active Alerts" column renders `<IncidentsPanel readOnly />`: the cards keep severity, service, age, impact, lifecycle track and the regulatory countdown, but are plain status cards, with no briefing-opening button, no `IncidentActionButton` (it also accepts `readOnly` and renders nothing) and no resolved-stamp sound. The route mounts only display components (gauges, meters, the incident list, the audit feed) plus the telemetry socket, which only receives; it does not mount `useGameShortcuts` (that is called from `App.tsx`, which this route never renders) or any modal host, so no key press or click can send a command (`LiveOpsView.test.tsx` asserts there are no buttons on the page).
 
 ## 5. In-Game HUD Telemetry Dock — `MetricsPanel.tsx` & `LiveSparkline.tsx`
 
-While `/live-ops` serves external monitor observers and `BoardroomMetricsDisplay` provides decorative in-world flavor, active operators require direct in-game analytics inside the cockpit HUD:
-- **Dedicated Bottom Dock Tab (`dockTab === "metrics"`, Hotkey `[G]`):** Added to `BottomDock.tsx` alongside incidents, directives, and upgrades.
-- **`MetricsPanel.tsx` Quad SLO View:** Displays four live Datadog/Grafana-style cards: (1) Availability SLA %, (2) Average Mesh Latency (ms), (3) Systemic Error Rate %, (4) Simulated Traffic Query Throughput (req/s).
-- **Interactive Rolling Window (`LiveSparkline.tsx`):** Lightweight SVG polyline charts featuring smooth gradient fills, head-marker pulses, minimum/maximum range calibration, and dynamic status-based coloration (emerald, amber, rose, cyan).
+While `/live-ops` serves external monitor observers and `BoardroomMetricsDisplay` provides in-world flavor, active operators get direct analytics inside the cockpit HUD:
+
+- **Dedicated Bottom Dock Tab (`metrics`, hotkey `[G]`):** one of the seven dock tabs (it sits behind the dock's "More" menu).
+- **`MetricsPanel.tsx`:** three live metric cards plus a per-service table. The cards are (1) **Availability SLA %**, plotting the real `sla` series of `metricsHistory` on a fixed 95–100 range, with tone and state label from the live value (emerald/"nominal" at >= 99.9, amber/"degraded" at >= 99.0, rose/"breach risk" below); (2) **Average mesh latency** in ms (cyan below 100, amber below 300, rose above); (3) **Systemic error rate** in % (emerald below 1, amber below 5, rose above). The throughput proxy is intentionally not shown in the dock. The table lists every service with its status pill, latency and error rate, headed by the current tick. With no services and no history the panel shows an empty state.
+- **`LiveSparkline.tsx`:** a lightweight SVG polyline chart with an optional gradient area fill, a head-marker pulse, min/max calibration and tone-based colouring (emerald, amber, rose, cyan), shared by the cards above.

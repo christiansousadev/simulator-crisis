@@ -4,7 +4,8 @@
 **Classification:** Internal Architectural Reference / Compliance Package Exhibit B  
 **Source of truth:** `backend/app/engine/formulas.py` (pure functions, no I/O), consumed by `backend/app/engine/simulator.py`  
 **Status:** Implementado (Revisão Técnica Atualizada)  
-**Last Updated:** Setembro 2026  
+**Last Updated:** Outubro 2026  
+**Verification note (Outubro 2026):** every constant, formula and ordering in this document was re-read against `backend/app/engine/formulas.py`, `backend/app/engine/infrastructure.py`, `backend/app/engine/simulator.py` and the scenario modules. Formulas are not re-executed here; the unit tests under `backend/tests/` are the executable check.  
 
 ---
 
@@ -25,8 +26,8 @@ All formulas below are implemented exactly as written in `formulas.py` and `simu
 | $T_{fatigue\_start}$ | `ALERT_FATIGUE_START_TICK` | 5 | Tick at which alert fatigue starts draining happiness |
 | $T_{fatigue\_end}$ | `ALERT_FATIGUE_END_TICK` | 11 | Tick at which alert fatigue drain window ends |
 | $\Delta H_{fatigue}$ | `ALERT_FATIGUE_HAPPINESS_PENALTY` | 1.5 | Per-tick happiness drain during alert fatigue window |
-| $T_{breach}$ | `UNATTENDED_BREACH_TICK` | 12 | Tick at which unattended alert triggers regulatory fine |
-| $F_{breach}$ | `UNATTENDED_BREACH_FINE` | \$4,500.00 | Per-tick fine for unacknowledged incidents beyond tick 12 |
+| $T_{breach}$ | `UNATTENDED_BREACH_TICK` | 12 | Effective MTTA (ticks) at which an unacknowledged incident starts drawing the regulatory fine |
+| $F_{breach}$ | `UNATTENDED_BREACH_FINE` | \$4,500.00 | Fine charged on every tick an `active` (unacknowledged) incident's effective MTTA is $\ge 12$ |
 | $g$ | `SURCHARGE_GROWTH_RATE` | 0.08 | Incident surcharge growth coefficient |
 | $\gamma$ | `SURCHARGE_EXPONENT` | 1.3 | Incident surcharge non-linear exponent |
 | $B_{cloud}$ | `PASSIVE_CLOUD_BURN` | \$200.00 / tick | Baseline cloud infrastructure operational burn |
@@ -42,6 +43,10 @@ All formulas below are implemented exactly as written in `formulas.py` and `simu
 | $W_{eb}$ | `ERROR_BUDGET_BURN_RATE_WINDOW` | 10 | Sample window size for error budget burn rate |
 | $\Theta_{mitigation}$ | `MITIGATION_FULL_RESOLUTION_THRESHOLD` | 0.70 | Effectiveness threshold required for full resolution |
 | $\Psi_{tax}$ | `MISMATCH_TECH_DEBT_TAX_SCALE` | 6.0 | Maximum TDI penalty scalar for mismatched runbooks |
+| $H_{decay}$ | `HAPPINESS_DEGRADED_DECAY_PER_TICK` | 0.7 | Happiness lost per tick while any service is not `healthy` |
+| $H_{floor}$ | `HAPPINESS_FLOOR_WHILE_DEGRADED` | 5.0 | Floor of the outage drift (alert-fatigue penalties can still reach 0) |
+| $H_{rec}$ | `HAPPINESS_RECOVERY_PER_TICK` | 0.2 | Happiness regained per tick while every service is `healthy` and happiness is below 98.0 (`HAPPINESS_RECOVERY_CEILING_TRIGGER`) |
+| $C_{hire}$ | `HIRING_COST` | \$15,000.00 | Flat engineer signing cost |
 
 Severity base surcharge table (`SEVERITY_BASE_SURCHARGE`):
 
@@ -51,6 +56,8 @@ Severity base surcharge table (`SEVERITY_BASE_SURCHARGE`):
 | `P2_HIGH` | 250.00 |
 | `P3_MEDIUM` | 100.00 |
 | `P4_LOW` | 40.00 |
+
+**Effective MTTA for the breach rule.** The raw `mtta_seconds` counter of an `active` incident advances by one per tick. The value tested against $T_{breach}$ (and against the alert-fatigue window of § 4.4, which uses the raw counter) is adjusted in `_progress_incidents()`: $MTTA_{eff} = \max(0, MTTA - 2)$ when `apm_tracing` is owned, then a further $-1$ when the assigned engineer's specialist quality is $\ge 0.70$. The dossier's `compliance_status` (Document 05) uses the raw counter.
 
 ---
 
@@ -114,6 +121,7 @@ The platform strictly separates availability measurement, operational change man
      $$
      \text{RemainingRatio}(t) = \text{clamp\_ratio}(1.0 - \text{BurnRatio}(t)) \in [0.0, 1.0]
      $$
+   - The displayed burn rate is $(\text{BurnRatio}_{last} - \text{BurnRatio}_{first}) / (n - 1)$ over the last $n \le 10$ samples (`ERROR_BUDGET_BURN_RATE_WINDOW`).
 4. **Feature Freeze (Operational Change Freeze):**
    - When $\text{RemainingRatio}(t) \le 0.0$ (i.e. rolling SLA $< 99.90\%$), the engine activates `feature_freeze_active = True`, logging `FEATURE_FREEZE_ENGAGED`.
    - **Operational Rule:** Feature freeze blocks discretionary, high-risk runbooks (`emergency_patch`).
@@ -121,7 +129,7 @@ The platform strictly separates availability measurement, operational change man
    - When rolling SLA recovers such that $\text{RemainingRatio}(t) > 0.0$, `FEATURE_FREEZE_LIFTED` is emitted.
 5. **Regulatory Breach (Compliance Sanction):**
    - Evaluated strictly against the rolling window SLA $SLA_{rolling}(t)$ only after the initial grace period (`current_tick > 24`, defined by `BREACH_GRACE_TICKS = 24`).
-   - If $SLA_{rolling}(t) < 99.00\%$ (`SLA_BREACH_THRESHOLD`), status flips to `breached`, logging `SLA_BREACH_EMERGENCY_SANCTION` with a \$15,000 regulatory sanction.
+   - If $SLA_{rolling}(t) < 99.00\%$ (`SLA_BREACH_THRESHOLD`), status flips to `breached` and `SLA_BREACH_EMERGENCY_SANCTION` is logged (`actor=AUDIT_SYSTEM`, `compliance_flag=False`). **No money is debited by this branch**: the "sanction" is the `breached` status and the non-compliant ledger entry (which also counts against zero-breach scenario objectives). This check runs only when the tick did not already end the run (bankruptcy, scenario outcome or sandbox victory take priority).
    - If rolling SLA recovers to $\ge 99.00\%$, status reverts to `running`.
    - **Critical Semantic Distinction:** Regulatory breach never depends on an all-time cumulative availability from tick 0; it reflects exclusively the 720-sample rolling window once the 24-tick grace period has elapsed.
 
@@ -153,6 +161,7 @@ $$
 
 Inside `SimulationEngine._evaluate_random_failures()`, the effective failure hazard $P_{failure}(i)$ compounds through the following exact sequence:
 
+0. **Eligibility.** Only services whose status is `healthy` are rolled, and only while fewer than 4 incidents are open (`MAX_CONCURRENT_INCIDENTS`). Upstream statuses of any `kafka_queue`-decoupled producer are removed before $P_{raw}$ is computed.
 1. **Raw Hazard:** $P_1 = P_{raw}(i)$
 2. **Dependent Blast Radius Exposure:**
    $$
@@ -167,13 +176,15 @@ Inside `SimulationEngine._evaluate_random_failures()`, the effective failure haz
    $$
    P_4 = P_3 \times M_{temp\_decision}
    $$
+   (product of every unexpired CAB risk window, e.g. $1.25$ for 20 ticks after accepting the vendor lock-in discount).
 5. **Multi-AZ Clusters Upgrade:**
    If `multi_az_clusters` is purchased: $P_5 = P_4 \times 0.60$ (otherwise $P_4$).
-6. **Infrastructure Nodes:**
-   - If `db_read_replica` is placed for service: $P_6 = P_5 \times 0.75$.
-   - If `nginx_lb` is placed for service: $P_6 = P_5 \times 0.85$.
+6. **Infrastructure Nodes** (each independently, and they stack; several nodes of the same type targeting the same service do not):
+   - If a `db_read_replica` targets the service: $\times 0.40$ (`DB_READ_REPLICA_HAZARD_MULTIPLIER`).
+   - If an `nginx_lb` targets the service: $\times 0.80$ (`NGINX_LB_HAZARD_MULTIPLIER`).
+   - Result: $P_6$.
 7. **Scenario Hazard Multiplier:**
-   $P_7 = P_6 \times M_{scenario}$ (e.g., $1.0$ baseline, $1.4$ in chaos scenarios).
+   $P_7 = P_6 \times M_{scenario}$, where $M_{scenario} = 1.0$ in the sandbox and in the scenarios that never set it (`chaos_engineering_drill`, `deployment_rollback`, `ransomware_infiltration`, `third_party_outage`); `black_friday_rush` sets $2.0$ (`TRAFFIC_MULTIPLIER/4 + 1`); `ddos_global` sets $1 + 0.18 \times F_{flood}$ every tick, with $F_{flood} = 8.0 \times (1 + 0.45\sin(2\pi\,t_{scn}/6)) \times (0.60\text{ if } predictive\_anomaly\_detection)$; a `custom` scenario sets its configured `hazard_multiplier` (0 to 20).
 8. **Difficulty Multiplier:**
    $P_8 = P_7 \times M_{diff}$ (`intern`: $0.7$, `standard`: $1.0$, `chaos`: $1.4$).
 9. **Governance Reputation Multiplier:**
@@ -185,6 +196,7 @@ Inside `SimulationEngine._evaluate_random_failures()`, the effective failure haz
     P_{failure}(i) = \text{clamp\_probability}(P_9) = \text{clamp}(P_9,\; 0.0,\; 0.65)
     $$
     The clamp to `MAX_FAILURE_PROBABILITY` ($0.65$) occurs **strictly after all multipliers are applied**. Any non-finite input is safely pinned to $0.0$.
+11. **Outcome.** `random.random() < P_failure(i)` triggers the failure: immediately (`_trigger_service_failure`), or, when `predictive_anomaly_detection` is owned, as a `PRE_ALERT_WARNING` followed by the same failure 5 ticks later if the service is still `healthy`. A new incident is `P1_CRITICAL` (service `down`) for critical-tier services and `P2_HIGH` (service `degraded`) for standard-tier ones.
 
 ---
 
@@ -212,17 +224,21 @@ The compatibility matrix (`formulas.MITIGATION_EFFECTIVENESS`) defines the basel
 Implemented in `formulas.mitigation_effectiveness(action_id, cause_category, resolve_speed_multiplier)`:
 
 $$
-\text{Effectiveness} = \min\!\left(1.0,\; \text{Base} \times \left(0.85 + 0.15 \cdot \frac{\text{resolve\_speed\_multiplier}}{2.0}\right)\right)
+\text{Effectiveness} = \min\!\left(1.0,\; \min\!\left(1.0,\; \text{Base} \times \left(0.85 + 0.15 \cdot \frac{\text{resolve\_speed\_multiplier}}{2.0}\right)\right) + 0.12 \cdot Q_{specialist} + 0.15 \cdot A_{triage}\right)
 $$
 
+where $Q_{specialist} \in [0, 1]$ is `specialist_quality` of the engineer assigned to the target service (§ 5.1) and $A_{triage} \in [0, 1]$ is the incident's `triage_accuracy` (0 if the root cause was not confirmed, § 5.3). Both bonuses are additive. With no matching incident, the cause category defaults to `acute_defect`; an unknown (action, category) pair falls back to a base of $0.50$.
+
 - **Full Resolution ($\text{Effectiveness} \ge 0.70$):**
-  The service transitions to `healthy` ($latency\_ms = 25$, $error\_rate = 0.0$), the incident transitions to `resolved`, and active surcharge bleed stops.
+  The service transitions to `healthy` ($latency\_ms$ drawn uniformly from $[25, 60]$, $error\_rate = 0.0001$), every `active`/`acknowledged` incident on that service transitions to `resolved`, and active surcharge bleed stops.
 - **Partial Recovery / Degraded ($\text{Effectiveness} < 0.70$):**
   The service transitions to `degraded`. Metrics recover partially proportional to effectiveness:
   $$
-  v_{new} = \text{interpolate\_partial\_recovery}(v_{current},\; v_{healthy},\; \text{Effectiveness}) = v_{current} - (v_{current} - v_{target}) \times \text{Effectiveness}
+  v_{new} = \text{interpolate\_partial\_recovery}(v_{current},\; v_{target},\; \text{Effectiveness}) = v_{current} - (v_{current} - v_{target}) \times \text{Effectiveness}
   $$
-  The incident remains open until a compatible runbook is executed.
+  with $v_{target} = 45\text{ ms}$ for latency (never below 45) and $0.0001$ for error rate (never below it). The incident remains open until a compatible runbook is executed.
+- **Scripted scenarios.** While any registered scripted scenario is active (`black_friday_rush`, `chaos_engineering_drill`, `ddos_global`, `deployment_rollback`, `ransomware_infiltration`, `third_party_outage`), effectiveness is fixed at $1.0$: their difficulty comes from bespoke rules (see Document 04, § 4.2) rather than from diagnosis. The matrix applies in the sandbox and in the `custom` scenario.
+- **Runbook cost.** $\text{Cost} = \text{BaseCost} \times (0.50\text{ if } rollback \text{ and } automated\_cicd) \times (1 - 0.50 \cdot \text{TriageAccuracy})$.
 - **Mismatch Tech Debt Tax:**
   Applying a poorly fitted runbook adds a technical debt penalty:
   $$
@@ -241,19 +257,21 @@ $$
 B_{eff}(t) = \begin{cases} B_{base} \times M_{churn} = \$650.00 \times 1.5 = \$975.00/\text{tick} & user\_happiness < 40.0\% \\ B_{base} = \$650.00/\text{tick} & user\_happiness \ge 40.0\% \end{cases}
 $$
 
+The passive burn is debited every tick as an `operational_expense` ledger entry (no audit row). No upgrade or difficulty preset changes it; the `black_friday_rush` scenario adds a second `operational_expense` of $B_{cloud} \times (2.5 - 1) = \$300.00$ per tick while it runs.
+
 ### 4.2 Incident Surcharge Growth
 
-Implemented in `formulas.incident_surcharge(severity, elapsed_ticks)`:
+Implemented in `formulas.incident_surcharge(severity, elapsed_ticks)`, evaluated by `SimulationEngine._apply_budget_burn()`:
 
 $$
-Surcharge(severity, t) = SeverityBase(severity) \times (1 + 0.08 \cdot t)^{1.3}
+Surcharge(severity, t_{eff}) = SeverityBase(severity) \times (1 + 0.08 \cdot t_{eff})^{1.3}, \qquad t_{eff} = MTTR_{ticks} \times M_{burn}(Quality)
 $$
 
-The surcharge accumulates per active or acknowledged incident for every tick until resolved.
+where $M_{burn}$ is the specialist recovery multiplier of § 5.2 (it is $1.0$ with no on-duty engineer assigned, so unstaffed incidents use raw MTTR). The surcharge is charged for every `active` or `acknowledged` incident on every tick until resolved, as an `incident_surcharge` ledger entry, and its running total is stored in `Incident.accrued_surcharge`.
 
 ### 4.3 Central Financial Mutation and Audit Adjustments
 
-All financial mutations pass through `simulator._apply_financial_event(category, amount, details)`.
+All financial mutations pass through `simulator._apply_financial_event(category, amount, reference, audit_event_type, audit_details, actor, compliance_flag, db)`. The balance is floored at zero (`max(0, budget + amount)`); a zero balance is picked up by the next `_evaluate_session_status()` pass as bankruptcy.
 
 **Persistence Topology of Financial State:**
 - **Current Session Balance:** Stored durably as a single scalar in `GameSession.budget`.
@@ -273,7 +291,18 @@ All financial mutations pass through `simulator._apply_financial_event(category,
   $$
   Credit = \text{clamp}(proposed,\; -\$2000.0,\; 0.0)
   $$
-- Non-finite or malformed values fail-safe to \$0.00 adjustment.
+- Non-finite or malformed values fail-safe to \$0.00 adjustment; a `PENDING` verdict is never eligible for any adjustment.
+- The eligible amount is applied at most once per cached verdict via `apply_interview_verdict`, with `compliance_flag = (verdict != "NON_COMPLIANT")`.
+
+### 4.4 User Happiness Drift
+
+Implemented in `formulas.happiness_after_outage_drift` and `formulas.happiness_after_alert_fatigue`, evaluated by `_apply_happiness_drift()` once per tick, with dampener $d = 0.75$ if `espresso_machine` is owned, else $1.0$:
+
+- If any service is not `healthy`: $H \leftarrow \max(5.0,\; H - 0.7 \cdot d)$.
+- Otherwise, if $H < 98.0$: $H \leftarrow \min(100.0,\; H + 0.2)$.
+- For every `active` (unacknowledged) incident whose `mtta_seconds` is in $[5, 11]$ (`ALERT_FATIGUE_START_TICK`..`ALERT_FATIGUE_END_TICK`, inclusive): $H \leftarrow \max(0.0,\; H - 1.5 \cdot d)$.
+
+CAB dilemma choices and the `third_party_outage` morale drain ($1.6$ per tick, $0.8$ with `espresso_machine`) apply further adjustments outside `formulas.py`.
 
 ---
 
@@ -290,7 +319,7 @@ Quality = \begin{cases}
 \end{cases}
 $$
 
-Where $Base = 1.0$ if $competency == service\_specialty$, else $0.45$.
+Where $Base = 1.0$ if $competency == service\_specialty$, else $0.45$. The specialty map (`staff.SERVICE_COMPETENCY_MAP`) is `srv-auth` → `auth`, `srv-payment` → `payments`, and `srv-api-gw`, `srv-search`, `srv-notify` → `gateway`; the hireable `db` competency matches no service today. The engineer assigned to a service is the first roster entry whose `assigned_service_id` equals it. `stress` is the engineer's `stress_index` (0-100).
 
 ### 5.2 Specialist Operational Multipliers
 
@@ -306,6 +335,8 @@ Where $Base = 1.0$ if $competency == service\_specialty$, else $0.45$.
    $$
    \Delta Stress = 1.5 \times SeverityWeight \times \left(1 + \frac{stress}{100.0}\right)^{1.15} \times \begin{cases} 0.7 & \text{competency matched} \\ 1.3 & \text{mismatched} \end{cases}
    $$
+   with $SeverityWeight = 2.0$ for `P1_CRITICAL` and $1.0$ otherwise, applied once per `active` (unacknowledged) incident on the engineer's assigned service for every tick the engineer is on duty, multiplied by $0.80$ when `ergonomic_chairs` is owned, and clamped to $[0, 100]$.
+4. **Stamina and Rotation (`_progress_staff_fatigue`, `rotate_shift`):** an on-duty engineer loses $0.5$ stamina per tick; an `off_duty` or `resting` engineer loses $2.0$ stress and regains $3.0$ stamina per tick (`resting` lasts exactly one tick, then becomes `off_duty`). Rotating an on-duty engineer makes them `resting`; returning to `on_duty` requires stamina $\ge 40$. A hire costs a flat \$15,000 (`HIRING_COST`).
 
 ### 5.3 Investigation and Log Triage Math
 
@@ -315,8 +346,8 @@ $$
 \text{Accuracy} = \max\!\left(0.15,\; 1.0 - 0.22 \times wrong\_attempts\right)
 $$
 
-- Each wrong triage attempt inflicts $+3.0$ stress (`TRIAGE_WRONG_ATTEMPT_STRESS`) on the assigned engineer.
-- A confirmed root cause grants:
-  - Runbook cost discount: $\text{Accuracy} \times 50\%$.
-  - Runbook effectiveness bonus: $\text{Accuracy} \times 15\%$.
+- Each wrong triage attempt inflicts $+3.0$ stress (`TRIAGE_WRONG_ATTEMPT_STRESS`) on the engineer assigned to the incident's service (if any).
+- A confirmed root cause stamps the incident's `triage_accuracy` and grants, on the next runbook targeting that service:
+  - Runbook cost discount: $\text{Accuracy} \times 50\%$ (`TRIAGE_COST_DISCOUNT_MAX`), in every mode.
+  - Runbook effectiveness bonus: $+0.15 \times \text{Accuracy}$, additive (`TRIAGE_EFFECTIVENESS_BONUS_MAX`), only where the effectiveness matrix applies (§ 3.2).
 - **Invariant:** MTTA and MTTR values are strictly elapsed historical tick counts and **never** decrease retroactively upon triage completion.

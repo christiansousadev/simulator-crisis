@@ -2,9 +2,9 @@
 
 **Document ID:** IZ-IMPL-03  
 **Classification:** Implementation Contract / Technical Architecture Specification  
-**Status:** Implementado  
-**Last Updated:** Setembro 2026  
-**Integration baseline:** `backend/app/engine/simulator.py`, `backend/app/engine/staff.py`, `backend/app/engine/formulas.py`, `backend/app/models/engineer.py`, `frontend/src/components/office/OfficeWorker.tsx`, `frontend/src/components/office/WanderingEmployee.tsx`, `frontend/src/components/office/EngineerDesk.tsx`
+**Status:** Implementado e verificado contra o código (Outubro 2026); ver § 4.3.2 para o fluxo de contratação com atribuição de serviço  
+**Last Updated:** Outubro 2026  
+**Integration baseline:** `backend/app/engine/simulator.py`, `backend/app/engine/staff.py`, `backend/app/engine/formulas.py`, `backend/app/models/engineer.py`, `backend/app/api/v1/staff.py`, `frontend/src/components/dock/EngineerRosterPanel.tsx`, `frontend/src/components/office/{OfficeWorker,PathfindingEmployee,EngineerDesk,RosterDirector,RosterWalkers}.tsx`, `frontend/src/components/office/{rosterPlan,rosterStage,waypointGraph,engineerMood}.ts`
 
 ---
 
@@ -16,7 +16,7 @@ Staff state directly modulates simulation behavior:
 1. **Hazard Discount:** High specialist quality provides up to a 35% discount on cascading failure probability (`formulas.specialist_hazard_discount`).
 2. **Dynamic Burn Multiplier:** Replaces binary MTTR penalties with a continuous curve from 0.65× (high quality) up to 1.30× (mismatched/stressed) via `formulas.specialist_burn_multiplier`.
 3. **Investigation & Mitigation Boosts:** Quality boosts runbook effectiveness and triage accuracy.
-4. **Visual Synchronization:** Engineer desk positioning and office workers visually reflect real runtime states (investigating, mitigating, stressed, resting).
+4. **Visual Synchronization:** The office scene is roster-driven: desks stay vacant until someone is hired, and hired engineers are walking sprites whose position and mood reflect real runtime state (at desk, at the rack during an incident, in the lounge while resting or off duty, stressed, tired).
 
 ---
 
@@ -28,13 +28,13 @@ Each engineer is represented on `SimulationEngine` and persisted to SQLite via `
 
 | Field | Type | Range | Description |
 |---|---|---|---|
-| `id` | string | — | `f"eng-{uuid.uuid4().hex[:6]}"`. |
+| `id` | string | — | `f"eng-{uuid.uuid4().hex[:6]}"` (`staff.build_engineer`). |
 | `session_id` | string | — | Standard session-scoping field. |
 | `name` | string | — | Drawn from fixed 12-name pool (`ENGINEER_NAME_POOL` in `staff.py`). |
 | `assigned_service_id` | string \| `null` | — | Assigned service from `CANONICAL_SERVICE_IDS`, or `null` (standby/reserve). |
-| `core_competency` | string enum | `"auth"` \| `"payments"` \| `"gateway"` \| `"db"` | Service specialization label matching `staff.SERVICE_COMPETENCY_MAP`. |
-| `stress_index` | integer | `0`–`100` | Primary fatigue metric. |
-| `stamina` | integer | `0`–`100` | Energy/endurance capacity metric. |
+| `core_competency` | string enum | `"auth"` \| `"payments"` \| `"gateway"` \| `"db"` | Service specialization label matching `staff.SERVICE_COMPETENCY_MAP`; the hireable set is `staff.CORE_COMPETENCIES`. |
+| `stress_index` | number | `0`–`100` | Primary fatigue metric (starts at `0`; compounding gains are fractional and clamped with `clamp_percentage`). |
+| `stamina` | number | `0`–`100` | Energy/endurance capacity metric (starts at `100`). |
 | `on_call_status` | string enum | `"on_duty"` \| `"off_duty"` \| `"resting"` | Shift rotation state. |
 | `hired_at_tick` | integer | — | Provenance tick count. |
 
@@ -49,7 +49,14 @@ OFF_DUTY_STRESS_RECOVERY_PER_TICK = 2.0
 OFF_DUTY_STAMINA_RECOVERY_PER_TICK = 3.0
 ON_DUTY_STAMINA_DRAIN_PER_TICK = 0.5
 HIRING_COST = 15000.0
+STRESS_MTTR_DOUBLE_THRESHOLD = 75   # legacy: defined but no longer read by the engine
+SPECIALIST_MISMATCH_BASE_QUALITY = 0.45
+SPECIALIST_QUALITY_STRESS_EROSION = 0.70
+SPECIALIST_QUALITY_FLOOR = 0.30
+TRIAGE_WRONG_ATTEMPT_STRESS = 3.0   # see commercial/02 (Log Triage)
 ```
+
+`STRESS_BASE_GAIN_PER_TICK` is the base of the per-alarm gain below (it is not a flat per-tick gain). `STRESS_MTTR_DOUBLE_THRESHOLD` belonged to the original binary "stress above 75 doubles MTTR burn" rule that the continuous burn multiplier replaced; the constant remains in `formulas.py` but nothing reads it.
 
 1. **Specialist Quality Score (`formulas.specialist_quality`):**
    $$
@@ -77,6 +84,7 @@ HIRING_COST = 15000.0
    $$
    \Delta Stress = 1.5 \times SeverityWeight \times \left(1 + \frac{stress}{100}\right)^{1.15} \times \begin{cases} 0.7 & \text{competency matched} \\ 1.3 & \text{mismatched} \end{cases}
    $$
+   `SeverityWeight` is `2.0` for `P1_CRITICAL` and `1.0` for every other severity. The `ergonomic_chairs` upgrade multiplies the final gain by `0.80` (Document 01). The gain is applied once per tick per *unacknowledged* (`active`) incident on the engineer's assigned service; an acknowledged incident stops adding stress.
 
 ### 2.3 On-Call Shift Rotation
 
@@ -84,31 +92,29 @@ HIRING_COST = 15000.0
 def _progress_staff_fatigue(self):
     """ADVANCE PER-ENGINEER STRESS AND STAMINA EACH TICK BASED ON DUTY STATUS AND ALARM STATE"""
     for eng in self.engineers:
-        if eng["on_call_status"] == "off_duty":
-            eng["stress_index"] = max(0, eng["stress_index"] - formulas.OFF_DUTY_STRESS_RECOVERY_PER_TICK)
-            eng["stamina"] = min(100, eng["stamina"] + formulas.OFF_DUTY_STAMINA_RECOVERY_PER_TICK)
-        elif eng["on_call_status"] == "resting":
-            eng["stress_index"] = max(0, eng["stress_index"] - formulas.OFF_DUTY_STRESS_RECOVERY_PER_TICK)
-            eng["stamina"] = min(100, eng["stamina"] + formulas.OFF_DUTY_STAMINA_RECOVERY_PER_TICK)
-            eng["on_call_status"] = "off_duty"  # exactly one resting tick, then fully off-duty
-        else:  # on_duty
-            eng["stamina"] = max(0, eng["stamina"] - formulas.ON_DUTY_STAMINA_DRAIN_PER_TICK)
-            unacked = [
-                inc for inc in self.incidents
-                if inc["service_id"] == eng["assigned_service_id"] and inc["status"] == "active"
-            ]
-            for inc in unacked:
-                gain = formulas.stress_gain_for_unacked_alarm(eng["stress_index"], inc["severity"])
-                eng["stress_index"] = min(100, eng["stress_index"] + gain)
+        if eng["on_call_status"] in ("off_duty", "resting"):
+            eng["stress_index"] = clamp_percentage(eng["stress_index"] - OFF_DUTY_STRESS_RECOVERY_PER_TICK)
+            eng["stamina"] = clamp_percentage(eng["stamina"] + OFF_DUTY_STAMINA_RECOVERY_PER_TICK)
+            if eng["on_call_status"] == "resting":
+                eng["on_call_status"] = "off_duty"   # exactly one resting tick, then fully off duty
+            continue
+        eng["stamina"] = clamp_percentage(eng["stamina"] - ON_DUTY_STAMINA_DRAIN_PER_TICK)
+        # for each active (unacknowledged) incident on the assigned service:
+        #   gain = stress_gain_for_unacked_alarm(stress, severity)
+        #         * specialist_stress_gain_multiplier(matched)   (0.7 / 1.3)
+        #         * (0.80 if "ergonomic_chairs" owned)
+        #   stress = clamp_percentage(stress + gain)
 ```
 
-This step is appended to `_update_simulation_tick`, after `_progress_incidents()` (so it reads the current tick's freshly-advanced `mtta_seconds`/`status` values) and before `_apply_quiet_period_refactor()` — an additive insertion into the existing sequential call chain, matching the integration pattern already established in `02_ERROR_BUDGET_AND_CAB_GOVERNANCE_SPEC.md` § 3.1.
+**Duty-state machine.** `rotate_shift` moves `on_duty` -> `resting`. The next tick's `_progress_staff_fatigue` applies the recovery and moves `resting` -> `off_duty`, so `resting` lasts exactly **one tick**. An `off_duty` engineer then keeps recovering (-2.0 stress, +3.0 stamina per tick) and **stays off duty until the player rotates them back** (allowed only at `stamina >= 40`). Off-duty and resting engineers provide no coverage (`specialist_quality` is `0.0`).
+
+This step runs inside `_update_simulation_tick` after `_evaluate_feature_freeze()` and before `_progress_pre_alerts()`/`_evaluate_cab_dilemma()`; like those steps it is skipped on a terminal tick.
 
 The literal "reduces stress by 2.0 per tick off-duty" requirement is satisfied exactly by `OFF_DUTY_STRESS_RECOVERY_PER_TICK = 2.0`.
 
 ### 2.4 Competency Match and Assignment
 
-`core_competency` is matched against service identity via a fixed lookup table (not a database join, consistent with the project's existing preference for small fixed dictionaries over relational joins where the topology itself is fixed, Document 01 § Component Inventory's five-service, hardcoded-at-boot topology):
+`core_competency` is matched against service identity via a fixed lookup table (not a database join, consistent with the project's existing preference for small fixed dictionaries over relational joins where the topology itself is fixed — the five canonical services are `simulator.CANONICAL_SERVICE_IDS`):
 
 ```python
 SERVICE_COMPETENCY_MAP = {
@@ -133,7 +139,7 @@ An engineer may be `assigned_service_id`-bound to any service regardless of comp
 
 ### 3.1 SQL Schema — `engineers`
 
-New file: `backend/app/models/engineer.py`:
+File: `backend/app/models/engineer.py` (the table is created by the initial Alembic revision, `8907816f55ab_initial_schema.py`; later revisions never altered it):
 
 ```python
 from sqlalchemy import Column, String, Integer, ForeignKey
@@ -166,12 +172,12 @@ class Engineer(Base):
 | `name` | `VARCHAR(100)` | No | From the fixed name pool. |
 | `assigned_service_id` | `VARCHAR(36)` FK, `ON DELETE SET NULL` | Yes | Deliberately `SET NULL` rather than `CASCADE` — deleting a `Service` row (which never actually happens in current gameplay; the five-service topology is fixed for the life of a session, Document 01) should orphan the engineer to bench status rather than delete the engineer record, since an engineer's employment is not conceptually dependent on a specific service's row existing. |
 | `core_competency` | `VARCHAR(20)` | No | One of `auth`/`payments`/`gateway`/`db`. `db` is included in the enum for forward compatibility even though no current service maps to it in `SERVICE_COMPETENCY_MAP` — reserved for a future dedicated database-tier service. |
-| `stress_level` | `INTEGER` | No, default `0` | Column name is `stress_level` (matching the exact column name given in the task's own `engineers` table specification), while the in-memory dict field and formula parameter names are `stress_index` — this naming divergence is intentional and documented here explicitly rather than silently: the persistence layer's column name is fixed by this specification's literal data contract, while the runtime/formula naming favors `stress_index` for consistency with how `sla_percentage`/`tech_debt` are named as "indices" elsewhere in `formulas.py`'s vocabulary. The ORM mapping layer (`_persist_engineer`, § 3.3) is the single translation point between the two names. |
+| `stress_level` | `INTEGER` | No, default `0` | The column is named `stress_level` while the in-memory dict field, the broadcast payload and the formula parameters are `stress_index`. The divergence is intentional and documented here: `_persist_engineer` (write) and the snapshot restore (read) are the only translation points between the two names. Because the column is an integer, a persisted stress value is rounded; the live in-memory value is fractional. |
 | `stamina` | `INTEGER` | No, default `100` | |
 | `on_call_status` | `VARCHAR(20)` | No, default `"on_duty"` | One of `on_duty`/`off_duty`/`resting`. |
 | `hired_at_tick` | `INTEGER` | No | |
 
-**Required additive edit to `GameSession`:** `engineers = relationship("Engineer", back_populates="session", cascade="all, delete-orphan")`, plus the corresponding `models/__init__.py` export — same pattern as every prior spec in this directory.
+`GameSession` carries the matching `engineers = relationship("Engineer", back_populates="session", cascade="all, delete-orphan")` and `models/__init__.py` exports the model. The roster is rebuilt from this table by `_try_restore_from_snapshot()` after a restart (the DB column `stress_level` is mapped back to the in-memory `stress_index`).
 
 ### 3.2 In-Memory Engine State
 
@@ -184,7 +190,7 @@ No default engineers are auto-created on session bootstrap. This is a deliberate
 
 ### 3.3 REST Endpoints
 
-New file: `backend/app/api/v1/staff.py`:
+File: `backend/app/api/v1/staff.py`:
 
 ```python
 @router.post("/api/staff/hire")
@@ -207,31 +213,33 @@ async def rotate_shift(engineer_id: str, request: Request) -> Dict[str, Any]:
     return result
 ```
 
-`HireEngineerRequest` (`backend/app/schemas/staff.py`): `{"core_competency": str, "assigned_service_id": Optional[str]}`.
+`HireEngineerRequest` (`backend/app/schemas/staff.py`): `{"core_competency": Literal["auth","payments","gateway","db"], "assigned_service_id": Optional[str] = None}`. An unrecognized competency is rejected at the schema layer (HTTP 422) before the engine check runs.
 
 ```python
-HIRING_COST = 15000.0  # flat one-time signing cost, added to formulas.py
+HIRING_COST = 15000.0  # flat one-time signing cost, in formulas.py
 
 def hire_engineer(self, core_competency: str, assigned_service_id: Optional[str]) -> Dict[str, Any]:
     """HIRE A NEW ENGINEER, DEDUCTING A FLAT SIGNING COST FROM RUNWAY BUDGET"""
     if self.budget < formulas.HIRING_COST:
         return {"success": False, "error": "Insufficient budget runway"}
-    if core_competency not in ("auth", "payments", "gateway", "db"):
+    if core_competency not in staff.CORE_COMPETENCIES:
         return {"success": False, "error": "Unknown core competency"}
-    engineer = build_engineer(self.session_id, core_competency, assigned_service_id, self.current_tick)
-    self.budget -= formulas.HIRING_COST
+    if assigned_service_id is not None and not any(s["id"] == assigned_service_id for s in self.services):
+        return {"success": False, "error": "Assigned service not found"}
+    engineer = staff.build_engineer(self.session_id, core_competency, assigned_service_id, self.current_tick)
     self.engineers.append(engineer)
     self._persist_engineer(engineer)
-    self._log_audit_event(
-        event_type="ENGINEER_HIRED",
-        actor="VP_OF_INFRA",
-        details={"engineer_id": engineer["id"], "core_competency": core_competency, "cost": formulas.HIRING_COST},
-        compliance_flag=True,
+    self._apply_financial_event(
+        category="hiring_cost",
+        amount=-formulas.HIRING_COST,
+        reference=engineer["id"],
+        audit_event_type="ENGINEER_HIRED",
+        audit_details={"engineer_id": engineer["id"], "core_competency": core_competency, "cost": formulas.HIRING_COST},
     )
     return {"success": True, "engineer": engineer, "budget": self.budget}
 ```
 
-`rotate_shift` toggles `on_duty` → `resting` (immediately, at player request — this is the mechanism the spec's `POST /api/staff/{id}/rotate-shift` names) or `off_duty`/`resting` → `on_duty` (only permitted once `stamina >= 40`, a floor preventing a player from cycling an exhausted engineer immediately back onto the floor — returned as `{"success": false, "error": "Stamina too low to return to duty"}` if violated):
+`rotate_shift` toggles `on_duty` → `resting` (immediately, at player request) or `off_duty`/`resting` → `on_duty` (only permitted once `stamina >= 40`, a floor preventing a player from cycling an exhausted engineer immediately back onto the floor — returned as `{"success": false, "error": "Stamina too low to return to duty"}` if violated). The REST route maps **every** failed rotation (unknown engineer or low stamina) to HTTP 404 with the engine's error text as `detail`:
 
 ```python
 def rotate_shift(self, engineer_id: str) -> Dict[str, Any]:
@@ -255,7 +263,7 @@ def rotate_shift(self, engineer_id: str) -> Dict[str, Any]:
     return {"success": True, "engineer": eng}
 ```
 
-Two additive audit event types:
+Both calls trigger an immediate state push to WebSocket clients (`app/core/state_push.py`). Audit event types:
 
 | `event_type` | Trigger | Actor | `compliance_flag` | Payload |
 |---|---|---|---|---|
@@ -268,7 +276,7 @@ Two additive audit event types:
 "engineers": self.engineers,
 ```
 
-One additive key, appended after `purchased_upgrades` (if `01_TECH_TREE_AND_OFFICE_UPGRADES_SPEC.md` is implemented first) or after `recent_audits` otherwise — ordering among additive keys is immaterial since all consumers key-access by name (§ 5.1 of Document `01_...`).
+The key is part of `get_state_payload()`; ordering among keys is immaterial since all consumers key-access by name (§ 5.1 of Document `01_...`). The client type is `Engineer` in `frontend/src/types/game.ts` (fields `stress_index`, `stamina`, `on_call_status`, `assigned_service_id`, `hired_at_tick`, ...).
 
 ---
 
@@ -276,37 +284,65 @@ One additive key, appended after `purchased_upgrades` (if `01_TECH_TREE_AND_OFFI
 
 ### 4.1 Extending `OfficeWorker`'s `WorkerMood` Enum
 
-`frontend/src/components/office/OfficeWorker.tsx` already defines `export type WorkerMood = "idle" | "panic" | "running" | "tired" | "happy"` with a fully keyed `HAND_POSE` and `BODY_ANIMATION` record per mood (`OfficeWorker.tsx:3, 29-46`). The specification's required sprite states map onto this existing enum with **zero new moods required** for the core cases, since the enum was already designed with fatigue and urgency states in mind:
+`frontend/src/components/office/OfficeWorker.tsx` defines `export type WorkerMood = "idle" | "panic" | "running" | "tired" | "happy" | "recovering"` with a fully keyed `HAND_POSE` and `BODY_ANIMATION` record per mood. The required sprite states map onto it as follows (`recovering` is the one mood this specification added):
 
 | Required sprite state | Existing `WorkerMood` mapping | Notes |
 |---|---|---|
 | Slumped over desk ("Zzz") | `"tired"` | Already renders the exact "z z z" text glyph (`OfficeWorker.tsx:177-181`) and the slumped-posture transform (`OfficeWorker.tsx:90, 101`: `slumped = mood === "tired"`, applying `translateY(2px) scaleY(0.94)`). Triggered when `stamina < 25`. |
-| Panic sweat drops | `"panic"` | Already renders the red exclamation badge and animated sweat-drop paths (`OfficeWorker.tsx:157-174`). Triggered when `stress_index > 75` (the same `STRESS_MTTR_DOUBLE_THRESHOLD` constant from § 2.2 — one threshold, two consuming systems: the MTTR-doubling formula and the visual panic state, kept in sync by referencing the same named constant rather than duplicating the literal `75`). |
-| Running between desks and server room | `"running"` | Already has a dedicated hand pose and `animate-sprint-bounce` body animation (`OfficeWorker.tsx:33, 43`). Triggered for the tick immediately following an engineer's `assigned_service_id` incident transitioning to `active` — a brief (1–2 tick) "responding to alarm" animation state layered on top of the waypoint system described in `05_DAY_NIGHT_CYCLE_AND_DYNAMIC_OFFICE_VISUALS_SPEC.md` § 3, before the engineer's mood settles into whatever `stress_index`/`stamina` dictates for the incident's duration. |
-| Holding an ice pack | **New mood required: `"recovering"`** | Not covered by the existing five moods. This is the only net-new `WorkerMood` variant this specification requires. Added as: `export type WorkerMood = "idle" \| "panic" \| "running" \| "tired" \| "happy" \| "recovering"`, with a new `HAND_POSE.recovering` (one hand raised to the head/temple, e.g. `{ left: [-5, -30], right: [5, -15] }`) and `BODY_ANIMATION.recovering = ""` (static, no bounce — a deliberately subdued animation conveying rest, contrasting with `"tired"`'s slump). A new conditional render block, structurally identical to the existing `mood === "panic"` and `mood === "tired"` blocks (`OfficeWorker.tsx:157-181`), renders a small blue ice-pack rectangle held against the temple when `mood === "recovering"`. Triggered during the `"resting"` `on_call_status` tick (§ 2.3) — the one-tick transitional recovery animation distinct from the sustained `"off_duty"` state, which uses the plain `"idle"` mood once fully off the floor. |
+| Panic sweat drops | `"panic"` | Already renders the red exclamation badge and animated sweat-drop paths (`OfficeWorker.tsx:157-174`). Triggered when `stress_index > 75` (`PANIC_STRESS_THRESHOLD` in `engineerMood.ts`; the roster panel's `HIGH_STRESS` badge uses the same 75). This is a frontend constant: the backend's `STRESS_MTTR_DOUBLE_THRESHOLD` is legacy and is no longer read. |
+| Running between desks and server room | `"running"` | Has a dedicated hand pose and `animate-sprint-bounce` body animation. Shown while the engineer's assigned service has an incident, or while the player is investigating (log triage) or mitigating that service (`isInvestigating` / `isMitigating` arguments of `deriveWorkerMood`); the actual walk to the rack is the roster stage's job (§ 4.3.1). |
+| Holding an ice pack | `"recovering"` (added by this spec) | One hand raised to the head, a static body animation (no bounce — a subdued state contrasting with `"tired"`'s slump) and a small ice-pack glyph held against the temple. Derived while `on_call_status === "resting"` (§ 2.3), the one-tick transitional state distinct from the sustained `"off_duty"` state, which uses the plain `"idle"` mood. |
 
-This is a fully additive change to `OfficeWorker.tsx`: the existing `HAND_POSE` and `BODY_ANIMATION` records gain one new key each; no existing key's value changes, and the component's prop contract (`OfficeWorkerProps`) is unchanged — `mood` already accepts any `WorkerMood` string, so widening the union type is the only interface change, and it is additive by TypeScript's structural typing rules (existing call sites passing `"idle"`/`"panic"`/etc. remain valid).
+`OfficeWorkerProps` is unchanged: `mood` accepts any `WorkerMood`, and existing call sites passing the original five moods remain valid.
 
 ### 4.2 Mood Derivation Function
 
-A new pure function, `deriveWorkerMood(engineer: Engineer, hasActiveAlarmOnAssignedService: boolean): WorkerMood`, added to a new `frontend/src/components/office/engineerMood.ts` module (kept separate from `OfficeWorker.tsx` itself to preserve that component's existing pure-presentational responsibility, mirroring the project's established separation between `formulas.py` and `simulator.py` on the backend):
+`deriveWorkerMood` is a pure function in `frontend/src/components/office/engineerMood.ts` (kept separate from `OfficeWorker.tsx` to preserve that component's presentational role, mirroring the `formulas.py` / `simulator.py` split):
 
 ```typescript
-export function deriveWorkerMood(engineer: Engineer, hasActiveAlarmOnAssignedService: boolean): WorkerMood {
+export function deriveWorkerMood(
+  engineer: Engineer,
+  hasActiveAlarmOnAssignedService: boolean,
+  isInvestigating = false,
+  isMitigating = false
+): WorkerMood {
   if (engineer.on_call_status === "off_duty") return "idle";
   if (engineer.on_call_status === "resting") return "recovering";
-  if (engineer.stress_level > 75) return "panic";
+  if (engineer.stress_index > 75) return "panic";
   if (engineer.stamina < 25) return "tired";
+  if (isMitigating || isInvestigating) return "running";
   if (hasActiveAlarmOnAssignedService) return "running";
   return "idle";
 }
 ```
 
-Precedence order matters and is deliberate: duty status is checked first (an off-duty engineer is never shown panicking, regardless of stale stress readings from before their shift ended), then acute stress (panic overrides mere tiredness — a stressed-but-not-yet-exhausted engineer still reads as panicked, since stress is the more urgent signal), then stamina, then transient alarm-response motion, falling back to calm idle animation.
+Precedence is deliberate: duty status first (an off-duty engineer is never shown panicking from stale stress), then acute stress, then stamina, then activity, then calm idle.
 
-### 4.3 New `EngineerRoster` Panel
+### 4.3 `EngineerRosterPanel`
 
-New component `frontend/src/components/dock/EngineerRosterPanel.tsx`, wired as a further additive `DockTab` entry (`"roster"`) in `BottomDock.tsx`, following the exact extension pattern already specified in `01_TECH_TREE_AND_OFFICE_UPGRADES_SPEC.md` § 6.1 (`type DockTab = "incidents" | "directives" | "compliance" | "upgrades" | "roster"`). Each roster row shows the engineer's name, competency badge, a stress bar (green/amber/red, thresholds at 50/75, matching the panic threshold), a stamina bar, current duty status, and a "Rotate Shift" button calling `api.rotateShift(engineerId)`; a "Hire Engineer" call-to-action at the panel's footer opens a small competency-selection sub-form calling `api.hireEngineer(...)`.
+`frontend/src/components/dock/EngineerRosterPanel.tsx` is the dock's `"roster"` tab (hotkey `R`; its badge flags stressed engineers). Each roster row shows the engineer's name, competency badge, a stress bar and a stamina bar (tone thresholds at 50 and 75; stress is "high = bad", stamina is inverted), the duty status, a high-stress alert chip at `stress_index >= 75`, and a rotate-shift button calling `api.rotateShift(engineerId)` (a rejected rotation surfaces the server's error as a danger toast). A "Hire Engineer" call-to-action (`$15,000`, disabled when `budget < 15000` or while a hire is pending) opens the hire form (specialty and covered service, see § 4.3.2) that calls `api.hireEngineer(competency, serviceId)`; the control stays pending until the new engineer appears in telemetry, so a double click cannot double-hire. The panel shows an empty state until someone is hired.
+
+### 4.3.1 Roster-Driven Office Scene
+
+The scene no longer fakes occupants: **a desk shows a quiet "vacant" marker until an engineer is assigned to its service**, and every hired engineer is a walking sprite (`PathfindingEmployee`) driven by three small modules:
+
+- `rosterPlan.ts` (pure rules): `deriveIntent` maps each engineer to `desk`, `incident` or `lounge` — `resting`/`off_duty` staff go to the lounge, staff whose assigned service has an `acknowledged` or `mitigated` incident go to that rack in the server room, everyone else sits at their desk. `assignSeats` gives the oldest hire the desk of their assigned service (`DESK_ORDER`: auth, payment, api-gw, search, notify); extra, unassigned or duplicate engineers take one of the three **reserve desks** in hire order; with no seat left they wait in the lounge. Lounge spots fill in order (coffee, two sofas, table, middle).
+- `waypointGraph.ts`: a corridor graph with A* pathfinding, authored along the aisles, hallways and doorways so a sprite never clips through furniture (a unit test samples every edge against the furniture footprints).
+- `rosterStage.ts` + `RosterDirector.tsx`: `RosterDirector` re-plans only when roster membership, duty status or the set of worked services changes (never on a plain tick) and feeds `RosterChoreographer`, which advances each sprite hop by hop on plain JS timers (so walking continues while the simulation is paused). **A new hire (hired within the last 2 ticks) enters at the reception door, pauses at the reception desk (about 1.1 s) and then walks to its desk**; everyone else is placed directly at their target. Reduced motion teleports instead of walking.
+
+Mood, glow and pose come from live telemetry through `deriveWorkerMood`. Because rotation sends an engineer to the lounge for `resting` and then `off_duty`, the sprite stays in the lounge until the player rotates them back on duty, at which point they walk back to the desk. `WanderingEmployee` remains in use only for the decorative ambient staff.
+
+### 4.3.2 Hire Flow — Service Assignment
+
+The roster panel's hire form now sends `assigned_service_id`, so a UI hire takes effect on a specific service (hazard discount, specialist quality, burn multiplier, stress rules) and sits at that service's desk in `rosterPlan.assignSeats`. The form (`EngineerRosterPanel.tsx`, pure rules in `utils/staffCoverage.ts`) has three parts:
+
+- **Specialty:** four toggle buttons (`auth`, `payments`, `gateway`, `db`; `aria-pressed`).
+- **Covers service:** a `<select>` of the five canonical services with their friendly names. An option is tagged `recommended` when its competency matches the selected specialty (`SERVICE_COMPETENCY_MAP`: auth→auth, payment→payments, api-gw/search/notify→gateway; `db` matches no service) and `no coverage` when no engineer is assigned to it.
+- **Default:** the first service with no assigned engineer whose competency matches (`defaultHireTarget`); with every service covered it falls back to `srv-auth`. Choosing another service re-aligns the specialty to its match; the specialty can then be changed deliberately.
+
+A `role="status"` line states the consequence before the player pays: `Specialist: full effect` for a match, `Off-specialty: 0.45 quality` otherwise (`SPECIALIST_MISMATCH_BASE_QUALITY`, further eroded by stress). The hire button keeps the in-flight guard (pending until the new engineer appears in telemetry) and a Cancel button, and is disabled with a readable reason (`aria-describedby`) when cash is below the $15,000 signing cost. Each roster row shows the service it covers (or `Reserve desk (no service)`), and a footer line lists services with no assigned engineer. New copy lives in the `uiGaps` i18n namespace (`en`, `pt-BR`, `es`).
+
+**No reassignment.** `assigned_service_id` is set only at hire time: the backend has no endpoint to change it later (`POST /api/staff/{id}/rotate-shift` only toggles duty status), so picking the wrong service is permanent for that engineer. Engineers created through the REST API without a service remain valid and unassigned (reserve desk, no per-service effect).
 
 ### 4.4 i18n Extension
 
@@ -319,6 +355,8 @@ staff: {
   hireEngineer: string;
   insufficientStamina: string;
   hiringCost: (amount: string) => string;
+  stress: string;
+  stamina: string;
 };
 ```
 
@@ -333,6 +371,8 @@ staff: {
   hireEngineer: "Hire Engineer",
   insufficientStamina: "Stamina too low to return to duty",
   hiringCost: (amount) => `Signing cost: ${amount}`,
+  stress: "Stress",
+  stamina: "Stamina",
 },
 ```
 
@@ -342,10 +382,10 @@ staff: {
 
 ## 5. Non-Breaking Compliance Checklist
 
-- [x] `formulas.py`'s existing exported functions are unmodified; `stress_gain_for_unacked_alarm` and the six new named constants are pure additions.
-- [x] `apply_mitigation`'s instantaneous-healing contract (Document 04 § 2) is unchanged; the MTTR-doubling effect is scoped strictly to the financial surcharge computed inside `_apply_budget_burn`, not to incident resolution mechanics or any post-mortem field.
+- [x] `stress_gain_for_unacked_alarm`, the specialist functions and their named constants are pure additions to `formulas.py`; the staff-related constants are listed in § 2.2.
+- [x] The specialist burn multiplier (0.65x–1.30x) is scoped to the financial surcharge computed inside `_apply_budget_burn`; specialist quality additionally scales mitigation effectiveness in `apply_mitigation` (§ 2.4) and the MTTA breach window in `_progress_incidents`, and never rewrites a stored MTTA/MTTR counter or post-mortem field.
 - [x] `self.engineers` defaults to an empty list — a session with no hired staff is behaviorally and numerically identical to the current baseline; every mechanic in this spec is gated on the roster being non-empty.
-- [x] `TICK_BROADCAST` gains one additive `engineers` key; no existing key changes shape.
-- [x] `OfficeWorker.tsx`'s `WorkerMood` union gains exactly one new member (`"recovering"`); all five existing moods, their hand poses, and their body animations are untouched.
-- [x] Two new audit event types (`ENGINEER_HIRED`, `SHIFT_ROTATED`) are additive rows in the enumerated event-type set; no existing event type's schema changes.
-- [x] The new `engineers` table follows the identical `Base.metadata.create_all` auto-registration and cascade-delete conventions as every other child table.
+- [x] `TICK_BROADCAST` carries the `engineers` list; no other key changes shape.
+- [x] `OfficeWorker.tsx`'s `WorkerMood` union gained exactly one member (`"recovering"`); the five original moods, their hand poses and body animations are untouched.
+- [x] `ENGINEER_HIRED` and `SHIFT_ROTATED` are catalogued in the Audit Ledger Data Dictionary; `ENGINEER_HIRED` is a financial event reconstructed on restore.
+- [x] The `engineers` table is created by the initial Alembic revision and follows the same cascade-delete conventions as every other child table.

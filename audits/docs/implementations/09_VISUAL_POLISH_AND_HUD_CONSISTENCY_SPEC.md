@@ -2,152 +2,148 @@
 
 **Document ID:** IZ-IMPL-09
 **Classification:** Implementation Contract
-**Status:** Implemented, additive only, non-breaking
-**Integration baseline:** `frontend/src/components/modals/*.tsx`, `frontend/src/components/common/*Meter.tsx`, `frontend/src/components/common/CreditCounter.tsx`, `frontend/src/components/office/IsometricOffice.tsx`, `frontend/src/components/office/ServerRack.tsx`, `frontend/src/index.css`, `frontend/tailwind.config.js`
+**Status:** Implementado (atualizado para o código atual; sem medição de FPS nem teste auditivo)
+**Last Updated:** Outubro 2026
+**Source of Truth:** `frontend/src/components/common/*`, `frontend/src/components/modals/*`, `frontend/src/components/layout/*`, `frontend/src/components/dock/*`, `frontend/src/components/office/*`, `frontend/src/index.css`, `frontend/tailwind.config.js`
+
+> **Scope of this revision.** This spec started as a visual audit of the first polish passes. The UX overhaul replaced several of the mechanisms it described (modal exit handling, the sky filter, the red-alert grade, the toast stack, the dock badges). Each section below states what the code does **now**; replaced designs are kept only as short **Superseded** notes. The shared interaction and motion rules (tokens, reduced-motion model, primitives, state and performance rules, tutorial, audio, i18n loading, test contracts) live in `10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md` (IZ-IMPL-10); the lighting and walking systems in `05_DAY_NIGHT_CYCLE_AND_DYNAMIC_OFFICE_VISUALS_SPEC.md` (IZ-IMPL-05).
 
 ---
 
 ## 1. System Objective
 
-A visual/UI audit of the running app (not a design review from mockups — a direct read of the rendering code, `frontend/src/components/office/*`, `frontend/src/components/common/*`, `frontend/src/components/modals/*`, `index.css`, `tailwind.config.js`) surfaced eight concrete, verifiable gaps between what the app already does well in isolated spots and what it does inconsistently or not at all elsewhere. This document covers the eight fixes made in response, plus one deliberate **non-fix**: two screens the audit initially flagged as an inconsistency turned out, on closer reading, to be a coherent design already, not a bug — see § 2.
+Keep one coherent look and one set of feedback rules across the HUD, the dialogs and the office diorama: a dark "tactical war room" register, named layers and motion tokens instead of ad hoc values, and transient feedback that is readable, keyboard-reachable and switchable off. This document records the visual decisions; IZ-IMPL-10 records the mechanisms.
 
 ---
 
-## 2. HUD/Modal Palette — Unified Where It Was Actually Inconsistent, Left Alone Where It Wasn't
+## 2. HUD/Modal Palette
 
-The audit found the app's dialogs split across a dark register (`bg-slate-900`, most gameplay dialogs) and a light one (`bg-white`, four others), with no stated rule. On inspection, this split resolves into two groups, not one bug:
+The dark register (`bg-slate-900`, `border-slate-700`, `slate-100/300` text tiers, heading font `font-heading`) is the rule for every gameplay dialog. Dialogs are built on the shared `Modal` shell (`components/common/Modal.tsx`), whose panel is `bg-slate-900` with a `border-slate-700` frame and a `bg-slate-950/75 backdrop-blur-sm` backdrop.
 
-- **`PostMortemModal.tsx` and `IncidentDetailModal.tsx`** were genuinely arbitrary outliers — plain informational dialogs with no reason to differ from the dark HUD register every other gameplay dialog uses. Both were recolored to match it: `bg-slate-950/80` backdrop, `bg-slate-900`/`border-slate-700` card, `slate-100`/`slate-300` text tiers, accent colors (rose for incident severity, sky for actions) kept but moved to their `/15`-opacity dark-mode equivalents.
-- **`VictoryScreen.tsx` and `LiquidationScreen.tsx`** were originally styled as an "official letter" (`bg-white`, `rounded-sm`, a rotated stamp/grade badge in the corner, the same header/stat-grid/footer structure). In the current architecture, these stand as unmounted legacy/fallback templates, superseded by the unified dark-tactical `PostMatchDebriefModal.tsx` as the primary match-end lifecycle experience.
-- **`LogTriageTerminal.tsx`**'s `bg-black`/`font-mono`/green-on-black terminal look is likewise an intentional third register (a log terminal reads like log terminal), also left as-is.
+- `PostMortemModal.tsx` and `IncidentDetailModal.tsx` use that register (they were the original light-mode outliers).
+- `LogTriageTerminal.tsx` keeps a deliberate third register: black, monospace, green-on-black terminal.
+- `VictoryScreen.tsx` and `LiquidationScreen.tsx` still exist as the old "official letter" light templates but are **not mounted anywhere** (a search of `frontend/src` finds no importer); the match end is the staged `PostMatchDebriefModal.tsx`. They are dead code kept only for reference.
+- The topbar, dock, toasts, minimap and camera panel all use the same dark glass vocabulary (`slate-950/80–90` + `backdrop-blur`, one accent colour per tone).
+- Two accessibility remaps sit on top of the palette in `index.css`: `[data-high-contrast]` (stronger borders and an amber focus ring) and `[data-colorblind-safe]` (emerald → blue, rose → orange on the `bg-/text-/border-` utilities); both attributes are stamped by `App.tsx`.
 
-Net effect: coherent visual styling across dark HUD dialogs, terminal drawers, and the comprehensive debrief modal.
-
----
-
-## 3. Meter and Counter Animation
-
-`ReputationMeter`, `MoraleMeter`, and `TechDebtMeter` had no `transition` class on their fill-bar `<div>`s — every value change was an instant width snap, unlike `ErrorBudgetMeter`, which already used `transition-all duration-500`. All three gained the same class, for a consistent smooth fill across every topbar meter.
-
-`CreditCounter.tsx` — the runway/budget readout, one of the most-watched numbers in the HUD — displayed `budget` verbatim with no animation at all, snapping on every passive-burn tick and every spend. A new reusable hook, `useAnimatedNumber(target, durationMs = 450)` (`frontend/src/hooks/useAnimatedNumber.ts`), tweens a displayed value toward `target` via `requestAnimationFrame` with an ease-out cubic curve, cancelling and re-tweening from wherever the display currently sits if `target` changes again mid-animation. `CreditCounter` now renders `Math.round(displayBudget)` instead of `budget` directly. `ShieldGauge`'s discrete 16-segment design (each segment already independently `transition-colors`-ing) was left as-is — a segmented shield lighting up progressively is itself a reasonable metaphor, not an instant-snap bug like the other three were.
+**Type scale:** `tailwind.config.js` defines `text-micro` (10 px) and `text-caption` (11 px); the HUD does not use anything smaller than `micro`.
 
 ---
 
-## 4. Modal Enter Transitions
+## 3. Meters and Counters
 
-Every modal in the app rendered via a plain `if (!open) return null`, appearing and disappearing with no transition. A true mount **and** unmount transition (keeping a closing dialog mounted long enough to animate out) was considered but rejected for the object-driven dialogs (`CABDilemmaModal`, `PostMortemModal`, `IncidentDetailModal`, `IncidentReplayModal`) specifically because their content is keyed off a store value (`activeDilemma`, `postMortem`, `selectedIncident`, `replayIncidentId`) that goes `null` the instant the dialog closes — animating the exit would require caching the last non-null value somewhere just to have something to render during the fade, which is real added state-management surface for a cosmetic-only win.
+- **Shared chrome.** Every topbar meter renders through `MeterShell.tsx` (icon + label row, value row, KPI chips, one-shot band-crossing flash). KPI thresholds ("bands") and tone classes come from one module, `utils/kpiBands.ts`, so meters, status dots and the store's band-crossing logic cannot disagree.
+- **Fills.** Reputation, Error Budget and the other bar meters animate width with `transition-[width] duration-slow ease-out-expo` (tokens, not one-off values); `ShieldGauge` keeps its discrete 16-segment design.
+- **Numbers.** `CreditCounter.tsx` uses `useAnimatedNumber(budget)` (`hooks/useAnimatedNumber.ts`): an ease-out-cubic tween whose default duration is about 95% of one tick of game time (clamped 120–1000 ms, from `tick_rate_seconds`), so the number is always gliding toward the next value at 1x and still finishes at 5x; reduced motion shows the value immediately. The text node stays a single `$212,450` string.
+- **Cash in the HUD.** Cash is part of the **primary** status cluster (DEFCON, SLA, Error Budget, Cash share one elevated container in `Topbar.tsx`, `data-tour="topbar-kpis"`). Next to it a calm "−650/tick" trend (`budgetTrend` in the store) replaces a per-tick chip; real spends and audited cash movements fly off the counter as KPI chips (`KpiChips.tsx`, `utils/kpiEvents.ts`). Red is reserved for the low-runway alarm (`LOW_RUNWAY_THRESHOLD = 20000`).
+- **Secondary indicators.** Tech Debt, Morale and Reputation are inline at ≥ 1720 px and otherwise live in an "Indicators" `HudPopover` whose trigger shows three status dots, so a red value is visible without opening it. Only one copy is ever mounted.
 
-Instead, two new pure-CSS keyframe animations were added to `tailwind.config.js`: `backdrop-in` (a plain opacity fade, 150ms) and `modal-in` (fade + scale from 0.96 → 1, 180ms, ease-out — deliberately more subdued than the existing bouncy `pop-in` keyframe, which suits a toast/badge but reads as too playful for a settings dialog or a CAB dilemma). `animate-backdrop-in` was applied to every modal's outer `fixed inset-0` overlay and `animate-modal-in` to every inner card, across all eleven dialog components plus `VictoryScreen`/`LiquidationScreen`. Since these are plain CSS animations triggered on mount (not JS-driven, not gated on any lifecycle state), they carry zero risk to existing open/close logic — a dialog that has no explicit exit transition still just disappears instantly on close, exactly as before, but now visibly settles into place on open instead of appearing fully-formed on the very first frame.
+> **Superseded:** the earlier note that cash was a "secondary metric" with responsive folding, and the plain `transition-all duration-500` fills.
 
 ---
 
-## 5. Night Sky Now Tracks the Day/Night Cycle
+## 4. Modal Enter **and Exit** Transitions
 
-The isometric office's SVG interior already color-grades per tick-derived day phase (a `feColorMatrix` filter, animated over 4s — Document `05_DAY_NIGHT_CYCLE_AND_DYNAMIC_OFFICE_VISUALS_SPEC.md`), and `SkylineBackdrop` already lights its building windows only at dusk/night. The CSS backdrop behind both (`.office-sky` in `index.css`) did not: it was a single fixed daytime-blue gradient, so the sky stayed bright at midnight while everything painted on top of it correctly darkened.
+Dialogs now animate in **and out**. The earlier text deliberately skipped exits because object-driven dialogs lose their content the instant the store value becomes `null`; that reasoning is superseded by `usePresence` (`hooks/usePresence.ts`), which caches the last non-null value inside the hook (not in the store) and keeps the dialog mounted for the exit duration (default 160 ms).
 
-`IsometricOffice.tsx`'s root container now carries `data-day-phase={dayPhase}` alongside its existing `office-sky` class. The gradient itself was moved off the container's own `background` and onto a new `.office-sky::before` pseudo-element, specifically so a CSS `filter` can retint it per phase — `filter` processes an element's entire rendered subtree as one unit, and a `::before` has no descendants, so filtering it can never also reprocess the real SVG scene or `SkylineBackdrop` painted on top (which already carry their own, separately-correct treatments and must not be double-graded). Each `[data-day-phase="…"]::before` rule sets a different `brightness()`/`saturate()`/`hue-rotate()` combination (dawn: warm and slightly dim; dusk: darker and orange-shifted; night: very dim and blue-shifted); the base rule's `transition: filter 4s ease-in-out` gives a smooth crossfade matching the interior's own 4s grade transition, since `filter` — unlike `background-image` — is natively animatable by the browser.
+- `Modal` uses `usePresenceFlag(open, 160)` and swaps `animate-backdrop-in` / `animate-modal-in` for `animate-backdrop-out` / `animate-modal-out` while closing; the closing backdrop gets `pointer-events-none`.
+- Object-driven dialogs (`CABDilemmaModal`, `PostMortemModal`, `IncidentDetailModal`, `IncidentReplayModal`, `LogTriageTerminal`, `ScenarioBriefingModal`) call `usePresence(storeValue)` and render from the held `data` while `closing`.
+- Under reduced motion `usePresence` unmounts immediately.
+- Keyframes live in `tailwind.config.js`: `modal-in` (0.96 → 1, 180 ms), `modal-out` (1 → 0.97, 160 ms), `backdrop-in/out`; `pop-in` stays for badges and toasts, where a bounce fits.
+
+---
+
+## 5. Sky Follows the Day/Night Cycle
+
+The CSS backdrop behind the SVG scene is `.office-sky` (`index.css`): a daytime gradient on `::before`, plus two overlay layers (`.office-sky-night`, `.office-sky-dusk`, rendered by `SkyLayers.tsx`) whose **opacity** follows the smoothed `--night` / `--twilight` variables written by `LightingDriver`. The sky therefore eases continuously with the clock; there is no per-phase `filter` and no `data-day-phase` attribute any more. Full model: IZ-IMPL-05 §2.
+
+> **Superseded:** the `[data-day-phase]` `filter: brightness()/saturate()/hue-rotate()` retint on `.office-sky::before` with a 4 s transition.
 
 ---
 
 ## 6. Empty and Loading States
 
-`IncidentsPanel`'s "no active incidents" state (a centered `CheckCircle2` icon over a line of text) was the one empty state in the app with real visual treatment; `AuditTicker`, `EngineerRosterPanel`, and `HallOfFameModal` all rendered a bare line of gray text instead. All three now pair an icon (`ScrollText`, `Users`, `Trophy` respectively) with their existing copy, matching `IncidentsPanel`'s pattern.
-
-Separately, the only loading indicator anywhere in the app was a literal ellipsis character (`ScenarioSelectModal.tsx`, shown while the scenario catalog fetches); `HallOfFameModal` showed nothing at all during its fetch. A small reusable `Spinner` component (`frontend/src/components/common/Spinner.tsx`, a `Loader2` icon with `animate-spin` and an optional label) now covers both.
-
----
-
-## 7. Iconography Consistency
-
-`ServerRack.tsx` used a raw `🔧` emoji as its "mitigation in progress" overlay, the one place in the entire frontend mixing emoji with the otherwise-universal `lucide-react` icon set (35 files, zero other exceptions). Replaced with lucide's `Wrench` icon (the same icon `TechDebtMeter` already uses for the conceptually related "office mess" stat), rendered inside the existing `foreignObject` wrapper and `animate-wrench-turn` keyframe unchanged.
+- `EmptyState.tsx` is the one empty-state shape for the dock panels (icon, short title, optional hint, optional tone for a "good" empty such as all-clear).
+- `Spinner.tsx` (`Loader2` + optional label) is the loading indicator; `LazyModalHost` shows it inside a small skeleton dialog while a lazy dialog's chunk arrives, and the catalogs (`hooks/useCatalogs.ts`) are cached so a dock tab does not flash empty.
 
 ---
 
-## 8. Heading Font Reach
+## 7. Iconography
 
-`Rajdhani` (the project's one piece of distinctive "ops console" typography, loaded alongside `Inter` since the project's inception) was applied in only three places — the topbar title, the title screen, and the credits modal — leaving every dialog title and panel header on plain `Inter` bold. `font-heading` was added to the title element of every remaining dialog: `SettingsModal`, `HallOfFameModal`, `CABDilemmaModal`, `ScenarioSelectModal` (both its main title and each scenario card's name), `ScenarioBuilderModal`, `OnboardingModal`, `IncidentReplayModal`, `IncidentDetailModal`, and `PostMortemModal` (the latter two picked it up as part of § 2's dark-palette conversion). `VictoryScreen`/`LiquidationScreen` were deliberately excluded — their "official letter" register (§ 2) calls for a traditional, not a sci-fi-condensed, typeface.
+One icon set (`lucide-react`). The rack "mitigation in progress" overlay in `ServerRack.tsx` uses lucide's `Wrench` rather than an emoji. The Feature Freeze banner text still carries a literal "⚠" glyph in `IsometricOffice.tsx` (a known exception).
+
+---
+
+## 8. Heading Font
+
+`Rajdhani` (`font-heading`) is applied to the topbar identity, the title screen, dock tab labels, every `ModalHeader` title and the incident-detail section headings. `VictoryScreen` / `LiquidationScreen` were excluded (unmounted, §2).
 
 ---
 
 ## 9. Global Button Press Feedback
 
-Every button in the app previously had only a `transition-colors` hover state; none had any press/active feedback. Rather than touching every call site (there is no shared `<Button>` component in this codebase to change centrally), a single base-layer rule in `index.css` — `button:not(:disabled):active { transform: scale(0.96); }` — covers every button in the app at once. It carries no `transition` of its own by design: `:active` only holds while the pointer is down, so the scale-in and scale-out both happen instantly on press/release, reading as a crisp click rather than needing an eased tween; this also sidesteps any cascade interaction with existing `transition-colors`-style utility classes, which set `transition-property` to a list that does not include `transform` and would otherwise contest which properties are considered "transitioning" on the same element.
+`index.css` carries one base-layer rule:
+
+```css
+button:not(:disabled):not([data-stretched]):active { transform: scale(0.96); }
+```
+
+It has no transition of its own: `:active` only holds while the pointer is down, so the squash reads as a crisp click.
+
+**The `data-stretched` exemption (a regression lesson).** A transform on a button makes that button the containing block of its own `::after`. The incident card's "stretched button" pattern (`after:absolute after:inset-0`, in `IncidentsPanel.tsx` and `IncidentAlertStack.tsx`) relies on the pseudo-element covering the whole card, so while the button was pressed it shrank to the button's own box and the card lost its click area. Buttons that use the pattern therefore carry `data-stretched="true"` and are excluded from the global squash; `e2e/incident-card-click.spec.ts` guards the behaviour.
+
+A few components also set their own `active:scale-95` (camera panel buttons, `IncidentActionButton`).
 
 ---
 
-## 10. Phase 2 — Tactical War Room & Game-Feel Overhaul (As-Implemented)
+## 10. Tactical War Room (as implemented)
 
-A second, larger revision pass followed the polish pass documented in §§ 2–9 above, with an explicit brief to eliminate every remaining light-mode/corporate-dashboard surface and establish a coherent **Tactical War Room** register across the dock, the office diorama, transient feedback text, the skyline, the camera-control affordances, and the emergency-lighting model. All six changes below are additive/restyling only: no `TICK_BROADCAST` field, REST route, or store action signature was altered, and `npx tsc --noEmit`, the Vitest suite, and `npm run build` all remained clean throughout (§ 11 re-confirms this for the combined batch).
-
-1. **Bottom Dock Migration (Light Theme Elimination).** `BottomDock.tsx` and every panel it hosts (`IncidentsPanel.tsx`, `MitigationsPanel.tsx`, `AuditTicker.tsx`, `EngineerRosterPanel.tsx`, `UpgradesPanel.tsx`, `AchievementsPanel.tsx`) were converted from the light `bg-white` / `bg-slate-100` / `border-slate-200` register to a dark tactical palette: `bg-slate-950/90 backdrop-blur-md` on the dock shell, `bg-slate-900/80 border-slate-800` on individual cards, cyan-neon (`text-cyan-400`, `border-cyan-500/40`, a matching `shadow-[0_0_12px_rgba(6,182,212,0.25)]`) for the active-tab state, a pulsing rose badge (`animate-pulse`) for the open-incident count, and per-severity card glow on `IncidentsPanel` (`border-rose-500/60` + a rose shadow for `P1_CRITICAL`, `border-amber-500/50` + an amber shadow for `P2_HIGH`). The `.cooldown-ring` conic-gradient sweep used by `CooldownButton` (§ 6 below) was recalibrated as part of this pass, not left at its original light-mode tuning.
-2. **Structural 3D Foundation (Physical Diorama).** `IsometricOffice.tsx` gained two new render primitives, `FoundationBlock` and `MasterGroundShadow`, both drawn immediately before `PerimeterWalls`/`ParquetFloor` in the paint order. `FoundationBlock` is an `IsoBox` spanning `z=-0.65` to `z=0` across the full floor footprint, rendered in a dark structural-concrete tone (`#1e293b`) with a grid of vertical divider lines drawn across its two visible faces to read as cast support pilasters, rather than a flat, featureless slab. `MasterGroundShadow` is a single wide, soft ellipse (reusing the existing `groundShadowGradient` radial gradient already shared by every prop's individual `GroundShadow`) positioned beneath the foundation's base. Together these eliminate the previous "thin floating slice" impression: the office now reads as a physically-grounded architectural cutaway model.
-3. **Arcade Combat Text.** `FloatingCombatText.tsx` was converted from light-mode toast pills (`bg-rose-50`, `bg-emerald-50`, etc.) to dark, glass-panel arcade chips: a shared `bg-slate-950/85` base per tone, with a colored border and a matching `box-shadow` glow (`border-rose-500/60` + rose glow for `danger`, `border-amber-500/60` + amber glow for `warning`, `border-emerald-500/60` + emerald glow for `success`, `border-sky-500/60` + sky glow for `info`, and `border-yellow-400/70` + a stronger yellow glow for a new `gold` tone, added to the `FloatingTextTone` union alongside this pass for climactic positive events such as a survived `MONTHLY_AUDIT_CYCLE_SURVIVED` audit cycle or a positive CAB dilemma budget delta — Document `02_ERROR_BUDGET_AND_CAB_GOVERNANCE_SPEC.md` § 3 documents the dilemma-resolution flow that is one of this tone's triggers). Typography moved to `font-mono font-black uppercase tracking-wider` for a readout/HUD feel rather than a notification-banner feel. The shared `combat-text-pop` keyframe (`tailwind.config.js`) gained an added mid-flight step — `translateY(-8px) scale(1.05)` at 55% — producing a slight elastic overshoot before the chip continues its rise and fades out sharply in the animation's final 15%.
-4. **Atmospheric Skyline and Aerial Signaling.** `SkylineBackdrop.tsx` gained a dedicated deep-atmosphere background gradient (`#030712` at the top to `#0f172a` at the horizon, full opacity at dusk/night and a faint 0.22-opacity vignette during the day so the existing daylight CSS gradient behind it still shows through), plus a ground-hugging horizon-haze band (`rgba(15,23,42,0.85)` fading to transparent) where the skyline silhouette meets the office floor. The tallest ("near"-depth-band) towers' rooftop antennas gained a small blinking red aviation-warning beacon (`animate-pulse`). Window-pane tones were softened from a flat, fully-opaque amber (`#fbbf24` at `opacity: 0.9`) to a warmer, per-cell-intensity-varied pair (`#fef08a` warm-white / `#7dd3fc` soft cyan, intensity cycling `0.55`–`0.91` per cell via a deterministic hash of row/column) so the building faces no longer read as a wall of identical solid squares.
-5. **Unified Camera-Control Panel.** The two previously independent, separately-positioned floating buttons — "Center on Crisis" (`top-3 left-3`) and the build-mode toggle (`top-3 left-[17.5rem]`) — were consolidated into a single cockpit-style container (`bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-lg`, `top-3 left-3`) in `IsometricOffice.tsx`, so the two camera/mode affordances read as one control cluster rather than two unrelated floating elements. Each button kept its own state-driven styling (a rose glow for the crisis-recenter action, a cyan glow for an armed build mode) inside the shared shell.
-6. **Refined Red-Alert Emergency Lighting.** The prior red-alert treatment applied a flat, translucent brick-red overlay (`#7f1d1d` at `opacity: 0.22`) on top of the ordinary day/night color grade, which visually washed the whole scene toward pink/salmon rather than reading as an emergency blackout. This was replaced with a dedicated `feColorMatrix` grade (`RED_ALERT_GRADE_MATRIX`) that overrides the day-phase matrix entirely whenever `redAlert` is true (a live `P1_CRITICAL` incident, or `status === "breached"`) — heavily desaturating and darkening the scene toward a cool navy, with a fast 0.8s transition rather than the day/night cycle's 4s one. The `RedAlertOverlay` vignette itself was retuned from the red wash to a near-black (`#020617`, `opacity: 0.4`) darkening layer, so red now reads only from the rotating `EmergencyBeacon` cones and the racks' own status glow — light cutting through darkness, not a uniform tint. See Document `05_DAY_NIGHT_CYCLE_AND_DYNAMIC_OFFICE_VISUALS_SPEC.md` § 2.4 for the full as-implemented lighting-model detail.
-7. **`.cooldown-ring` High-Contrast Calibration.** The radial cooldown sweep's conic-gradient color (`index.css`, consumed by `CooldownButton.tsx` and used throughout `MitigationsPanel.tsx`'s runbook cards) was recalibrated from `rgba(15,23,42,0.7)` to `rgba(2,6,23,0.78)` — a near-black rather than a mid-navy — specifically because the original value, tuned against the pre-Phase-2 light `bg-white` runbook cards, became visually indistinguishable from the new dark `bg-slate-900/80` card background it now sweeps over. The recalibrated value preserves the "wedge recedes to reveal the button" affordance against both the current dark cards and any future light-mode surface reusing the same shared class.
-8. **Comprehensive HUD, Audio & Tactical Controls:**
-   - **Reorganized HUD:** Critical indicators (Cash runway, SLA %, Error Budget) prioritized in topbar, with secondary indicators (Reputation, Tech Debt, User Morale) cleanly positioned with responsive folding.
-   - **Unified Status & Severity Tokens (`StatusPill.tsx`, `severity.ts`):** Canonical color-coding applied across incidents, server racks, and modals (`P1_CRITICAL` rose-500, `P2_HIGH` amber-500, `P3_MEDIUM` sky-500, `P4_LOW` slate-400).
-   - **Tri-Block Incident Modal (`IncidentDetailModal.tsx`):** Structured into three functional zones: (1) Diagnosis & Service Topology, (2) Investigation Terminal & Log Triage, (3) Mitigation Execution & Runbook Matrix.
-   - **Interactive Office Diorama:** Real-time rack states (`healthy`, `degraded`, `down`, `investigating`, `mitigating`) with volumetric smoke, sparks, and cooling LED patterns. Engineer sprites seated at desks depict idle, working, panic/alarm, investigation, mitigation, stress, and resting states driven by real staff telemetry.
-   - **Tactical Audio Synthesizer (`sound.ts`):** Built entirely with the Web Audio API (zero external audio file dependencies). Generates procedural alert chirps, terminal keystrokes, runbook execution rumbles, and victory/defeat stingers, governed by volume and mute toggles.
-   - **Accessibility & Reduced Motion:** Respects OS-level `prefers-reduced-motion: reduce` preference: global CSS rule in `index.css` clamps all animation and transition durations to `0.01ms` (disabling UI pulsing, spins, and backdrop fades) while forcing `scroll-behavior: auto`, and `App.tsx` explicitly bypasses imperative screen shake classes (`screen-shake-light`, `screen-shake-heavy`).
-   - **Match End Lifecycle:** Consolidated under `PostMatchDebriefModal.tsx` displaying full match debrief, personal best comparisons, unlock triggers, and operational ranks.
+1. **Bottom dock.** `BottomDock.tsx` hosts seven tabs (Incidents, Directives, Compliance on the bar; Upgrades, Roster, Achievements, Metrics behind a "More" `HudPopover` portalled to `<body>` so the strip's `overflow` cannot clip it). Hotkeys I, M, C, U, R, A, G and D (collapse) are shown as `kbd` chips and exposed through `aria-keyshortcuts`. A 1 px cyan indicator slides under the active tab (transform only, no animation on first placement). The panel animates open/closed through a `grid-template-rows` 0fr↔1fr transition and stays mounted until the collapse ends (`usePresenceFlag`, 340 ms); the active panel enters with `animate-panel-in`. The dock publishes its own height as `--dock-height` so the toast stack always sits right above it.
+   - **Badges** (`hooks/useDockBadges.ts`): open incidents, stressed engineers, affordable upgrades, unseen achievements. A badge **bumps once** when its count changes (`useChangeSeq` + `animate-badge-bump`); it no longer pulses forever. The "More" button sums the hidden tabs' badges.
+   - The pre-existing note that cards use `slate-900/80` with per-severity glow still holds for `IncidentsPanel`.
+2. **Structural 3D foundation.** `FoundationBlock` and `MasterGroundShadow` in `IsometricOffice.tsx` (concrete pedestal below the floor plus a soft contact shadow). Part of `StaticFloor`, which is `memo`ed.
+3. **Toasts.** `FloatingCombatText.tsx` is now one **toast region**: a polite live region (`role="status"`, `aria-live="polite"`) above the dock, newest last, errors never merged, hover pauses every timer, click dismisses. Dark glass chips per tone (`danger`, `warning`, `success`, `info`, `gold`) with an icon; on-screen time depends on tone (3.5 s danger, 2.8 s warning/gold, 2.2 s success, 2.0 s info) plus extra reading time for long text; entry `animate-slide-up-in`, exit `animate-item-out`. Test hook: `data-testid="floating-text"` and `data-tone`. (`combat-text-pop` remains in the Tailwind config but this component no longer uses it.)
+4. **Skyline.** Depth bands, windows lit by night intensity, haze and aviation beacons: IZ-IMPL-05 §2.4.
+5. **Camera panel.** One cockpit container at the top-left of the canvas holds "Focus rack" (when a rack is selected), "Center on Crisis" (when a crisis exists or DEFCON ≤ 3, flies to the worst failing rack) and the build-mode toggle. Camera behaviour: IZ-IMPL-10 §8.
+6. **Red alert.** Superseded by the staged DEFCON-tier lighting (IZ-IMPL-05 §2.5). The earlier `RED_ALERT_GRADE_MATRIX` / `RedAlertOverlay` no longer exist.
+7. **`.cooldown-ring`.** The conic-gradient sweep is `rgba(2,6,23,0.78)` over a registered `@property --progress` (`<number>`), with `transition: --progress 1s linear` so one tick of progress eases instead of stepping. Consumed by `CooldownButton.tsx` and the runbook cards.
+8. **Status and severity tokens.** `StatusPill.tsx` and `utils/severity.ts` give the canonical colours (P1 rose, P2 amber, P3 sky, P4 slate). The incident detail dialog is organised as three blocks: *what is happening*, *what is the impact*, *what can I do now* (runbooks, with the log terminal opened as its own dialog). Rack and engineer visual states: IZ-IMPL-05 and IZ-IMPL-10 §8.
+9. **Audio.** Procedural Web Audio only (no audio files): IZ-IMPL-10 §10. **Never verified by ear in this project.**
+10. **Accessibility and reduced motion.** `index.css` switches animation **off** (`animation: none`, not a 0.01 ms clamp) when the OS asks for reduced motion or when the in-game Motion setting is `on`; `App.tsx` also skips the screen-shake classes. See IZ-IMPL-10 §4.
+11. **Match end.** `PostMatchDebriefModal.tsx` with a staged reveal planned by `utils/debriefTimeline.ts` (never longer than 3 s; everything at once under reduced motion).
 
 ---
 
 ## 11. Verification & Quality Gates
 
-*Implementação e componentes visuais presentes no código; validação de execução de build e testes automatizados executados com 100% de sucesso.*
+*Implementação presente no código. Verificado em outubro 2026: `vitest run` com 52 arquivos / 354 testes passando. Não verificado nesta revisão: execução do Playwright, build de produção, FPS, áudio por ouvido.*
 
 ---
 
-## 12. Phase 3 — Tactical Depth, Real-Time Analytics & Operational Micro-Visuals (As-Implemented)
+## 12. Phase 3 — Tactical Depth, Analytics & Micro-Visuals (as implemented)
 
-A third major phase elevated the simulation to full enterprise command-center quality:
+1. **Metrics tab** (`MetricsPanel.tsx`, `LiveSparkline.tsx`, hotkey G). Rolling samples (`metricsHistory`, derived client-side from each tick's service snapshot in `setTelemetry`) for SLA, mean latency, error rate and a throughput proxy. The throughput figure is a proxy (healthy services × a nominal RPS), not measured traffic.
+2. **Tech tree** (`UpgradesTreePanel.tsx`). Three branch columns at `lg:` widths (one column below), dependency connectors, purchased / available / locked states. Catalog data in `dock/upgradeCatalog.ts`.
+3. **Tactical minimap** (`TacticalMiniMap.tsx`). Zone footprints, blinking markers on affected racks, click to pan (`panToWorld`), a "Center on Crisis" action, and a viewport frame that follows the camera imperatively through `cameraBus.ts` (no React render per frame).
+4. **Incident alert stack** (`IncidentAlertStack.tsx`). Severity-coloured cards with the shared `IncidentActionButton` (same acknowledge flow as the dock) and rack focus; uses a stretched button (§9).
+5. **Dependency lines** (`ServiceDependencyLines.tsx`) with status-dependent colours.
+6. **Cascade ripple** (`CascadeRipple.tsx`). Three expanding rings as plain CSS keyframes started on mount. **Lesson:** the first version used SMIL `<animate>`, whose clock starts at page load, so a ripple added minutes into a session had already "finished" and never showed.
+7. **Rack radial menu** (`RackRadialMenu.tsx`). Focus, log triage, incident detail, close; the two incident actions are disabled with the reason exposed when the service has no open incident; buttons pop in staggered.
+8. **Predictive anomaly visuals** (`ServerRack.tsx`). With `predictive_anomaly_detection` purchased, a service with creeping latency/error rate shows an amber aura and a warning badge before it fails.
+9. **Feature freeze banner** (`IsometricOffice.tsx`). Office-spanning `role="status"` banner, entered and exited through `usePresenceFlag`.
+10. **Replay export** (`IncidentReplayModal.tsx`). "Share / Export JSON" copies the replay ledger to the clipboard (`navigator.clipboard`, so it needs a secure context and permission).
+11. **Log terminal** (`LogTriageTerminal.tsx`). Typewriter boot line (`useTypewriter`), arrow/Home/End list navigation, a confirmation stamp (`animate-stamp-in`) overlaid so nothing moves. Reduced motion shows text immediately. (`playTypeTick` exists in `sound.ts` and is unit-tested but is not called by the terminal.)
+12. **Bundle Optimization & Lazy Loading (`App.tsx`, `i18n/loadLanguage.ts`, `vite.config.ts`):** After the UX overhaul the entry chunk had grown to 662 kB (197 kB gzip); it is now ~350 kB (107 kB gzip), plus a 142 kB `vendor-react` chunk (≈492 kB of initial JS in total, under the 500 kB budget), by two measures. First, **per-language code splitting**: English stays bundled (fallback and tests) while the pt-BR and es dictionaries (core `Translations`, `hud`, `flow`, `gameplayModals`, `officeLife` and the dynamic-content tables) live in `i18n/locales/<lang>/` and are loaded with a dynamic `import()` into their own `locale-<lang>` chunk (~50 kB each) only for the active language; `main.tsx` awaits `loadLanguage()` for the stored language before the first render (an inline splash in `index.html` covers the wait), and `setLanguage()` loads the dictionary before switching. Each locale module uses `satisfies Translations`, so a missing key still fails `tsc`. Second, every dialog not needed for the first paint (Settings, Credits, Pause, Scenario Builder, Briefing, Post-Mortem, Replay, Hall of Fame, Scenario Select, Debrief and the live Incident Detail / Log Triage dialogs) is a `React.lazy` chunk behind `LazyModalHost` (skeleton, chunk error boundary, idle preload; the incident dialogs are fetched the moment the title is dismissed), while the timed CAB dilemma stays eager.
 
-1. **Real-Time Analytics & Live Sparklines (`MetricsPanel.tsx`, `LiveSparkline.tsx`):**
-   - Added a dedicated "Metrics & Analytics" tab to the Bottom Dock (Hotkey `[G]`).
-   - Visualizes rolling time-series telemetry from `metricsHistory` across 4 core SLO vectors: Availability SLA %, Mean Mesh Latency (ms), Aggregate Error Rate %, and Query Throughput (req/s).
-   - Lightweight SVG sparklines render live data trends with gradient area fills, dynamic tone calibration (emerald for healthy SLA, amber for latency, rose for errors), and pulsating head markers.
+---
 
-2. **Visual Tech Tree Graph (`UpgradesTreePanel.tsx`):**
-   - Replaced flat upgrade catalog grid with an interactive DAG (Directed Acyclic Graph) showing category tracks (Observability, Resilience, Facilities).
-   - SVG dependency connectors visually branch from prerequisite nodes (e.g. `apm_tracing` $\to$ `predictive_anomaly_detection`).
-   - Visual state indicators clearly demarcate purchased (emerald check), available (cyan buy action), and locked (dimmed slate + prerequisite requirement tooltip).
+## 13. Honest Status
 
-3. **Tactical Mini-Map (`TacticalMiniMap.tsx`):**
-   - Real-time isometric overview widget anchored in the lower-right corner of the canvas.
-   - Shows the architectural footprint of all zones (Server Room, Engineering Floor, Executive Boardroom, Break Room, Reception).
-   - Blinks red/amber markers over affected service nodes with quick-click pan navigation and direct "Center on Crisis" camera snapping.
-
-4. **Incident Alert Stack (`IncidentAlertStack.tsx`):**
-   - Floating tactical alert cards stacked in the top-right corner of the office view.
-   - Color-coded by incident severity (`P1_CRITICAL` through `P4_LOW`), displaying elapsed time, affected service name, and instant one-click rack focus (`handleFocusService`).
-
-5. **Topological Dependency Visualizer (`ServiceDependencyLines.tsx`):**
-   - Renders animated bezier/isometric connection lines between interrelated microservices in the Server Room.
-   - Wire colors dynamically reflect status: bright neon-emerald when upstream is healthy, warning-amber during degradation, and broken-dash crimson when an upstream dependency is down.
-
-6. **Cascade Failure Impact Waves (`CascadeRipple.tsx`):**
-   - When a service outage cascades through upstream failure, an animated shockwave ripple expands outward from the downed rack toward dependent hosts, clarifying the systemic blast radius.
-
-7. **Contextual Rack Radial Action Menu (`RackRadialMenu.tsx`):**
-   - Clicking a server rack summons an instant sci-fi circular radial menu directly above the physical 3D cabinet.
-   - Allows instant camera focusing, incident triage launching, and quick runbook execution without needing to divert attention to peripheral dock panels.
-
-8. **Predictive Anomaly Detection Visuals (`ServerRack.tsx`):**
-   - When the `predictive_anomaly_detection` upgrade is active, servers simmering with anomalous latency (>110ms) or error rates (>1.2%) render a pulsating amber radar aura at the base and a warning beacon overhead prior to full failure.
-
-9. **Prominent Feature Freeze Banner (`IsometricOffice.tsx`):**
-   - Replaced the understated topbar badge with a high-visibility, office-spanning warning banner during error budget exhaustion: *"⚠ FEATURE FREEZE ACTIVE — Deployments suspended until error budget recovers"*.
-
-10. **Replay JSON Export & Sharing (`IncidentReplayModal.tsx`):**
-    - Incident post-mortem replays now feature a 1-click "Share / Export JSON" action copying the chronological event ledger to the system clipboard for team sharing.
-
-11. **Typewriter Terminal Immersion (`LogTriageTerminal.tsx`):**
-    - The forensic log triage mini-game includes simulated CRT typewriter line rendering with authentic scanline aesthetics and audio feedback.
-
-12. **Bundle Optimization & Lazy Loading (`App.tsx`):**
-    - Heaviest modals (`PostMatchDebriefModal`, `ScenarioSelectModal`, `HallOfFameModal`) decoupled using `React.lazy()` and `Suspense`, dropping initial index bundle size down to ~477 kB (under the 500 kB performance budget).
+| Area | Status |
+|---|---|
+| Unit tests (vitest) | 52 files / 354 tests passing (re-run for this revision) |
+| E2E (Playwright) | 8 specs defined (6 files), all passing when re-run for this revision |
+| Frame rate / paint cost | **Unmeasured**; performance claims are structural (memoized layers, no SVG filters, imperative camera and lighting) |
+| Audio | **Unheard**; implemented and unit-tested at the graph/helper level only |
+| Dead code | `VictoryScreen.tsx`, `LiquidationScreen.tsx` unmounted |
+| Touch | Camera pan/zoom is mouse and keyboard only; **touch pan is unsupported** |

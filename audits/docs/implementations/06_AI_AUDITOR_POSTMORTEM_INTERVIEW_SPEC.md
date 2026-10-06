@@ -2,181 +2,75 @@
 
 **Document ID:** IZ-IMPL-06  
 **Classification:** Technical Specification / Regulatory Interview & AI Governance  
-**Status:** Implementado  
-**Source of Truth:** `backend/app/api/v1/audits.py`, `backend/app/engine/formulas.py`, `backend/app/schemas/interview.py`, `backend/app/reports/dossier.py`
+**Status:** Backend e interface de chat implementados e verificados contra o código (Outubro 2026); ver § 2.7  
+**Last Updated:** Outubro 2026  
+**Source of Truth:** `backend/app/api/v1/audits.py` (dossier, interview, apply-verdict and PDF code all live here; there is no `backend/app/reports/` package), `backend/app/engine/formulas.py`, `backend/app/schemas/interview.py`, `backend/app/core/config.py`, `frontend/src/components/auditor/*`, `frontend/src/components/modals/PostMortemModal.tsx`, `frontend/src/i18n/auditorChat.ts`
 
 ---
 
 ## 1. System Objective
 
-Extend the existing, purely-mechanical post-mortem generation pipeline (Document 05: `generate_postmortem` in `backend/app/api/v1/audits.py`) with an interactive, LLM-driven regulatory defense interview. The existing `GET /api/audits/postmortem/{incident_id}` endpoint, its `_render_template` hydration logic, and the persisted `.md` report files under `audits/reports/` are **not modified in any way** by this specification — the interview is a wholly new, additive endpoint that consumes the same incident/session/audit data but produces a distinct artifact (a scored interview transcript) rather than a rendered template.
+Extend the existing, purely-mechanical post-mortem generation pipeline (Document 05: `generate_postmortem` in `backend/app/api/v1/audits.py`) with an interactive, LLM-driven regulatory defense interview. The existing `GET /api/audits/postmortem/{incident_id}` endpoint, its `_render_template` hydration logic, and the persisted `.md` report files under `audits/reports/` are separate from the interview: the interview is an additional endpoint that consumes the same incident dossier (`_build_incident_dossier`, shared with the markdown report and the PDF export) but produces a distinct artifact (a scored interview transcript) rather than a rendered template.
 
 ---
 
 ## 2. Integration Architecture
 
-### 2.1 New Endpoint
+### 2.1 Interview Endpoint
 
-New route, additive to `backend/app/api/v1/audits.py` (same router, same file, appended after the existing `generate_postmortem` function — not a new router file, since this is conceptually part of the same audits domain):
+Route in `backend/app/api/v1/audits.py` (same router as the post-mortem endpoints):
 
 ```python
 @router.post("/api/audits/postmortem/{incident_id}/interview")
 async def conduct_interview(incident_id: str, payload: InterviewMessageRequest, request: Request) -> Dict[str, Any]:
     """CONDUCT ONE TURN OF AN LLM-DRIVEN REGULATORY DEFENSE INTERVIEW FOR A RESOLVED INCIDENT"""
-    db: OrmSession = SessionLocal()
-    try:
-        incident = db.get(Incident, incident_id)
-        if not incident:
-            raise HTTPException(status_code=404, detail="Incident not found in the compliance ledger")
-
-        session = db.get(GameSession, incident.session_id)
-        context = _compile_interview_context(db, incident, session)
-        transcript = _load_or_init_transcript(incident_id)
-        transcript.append({"role": "player", "content": payload.message})
-
-        auditor_response = await _invoke_auditor_llm(context, transcript)
-        transcript.append({"role": "auditor", "content": auditor_response["reply"]})
-
-        _persist_transcript(incident_id, transcript)
-        _persist_interview_event(db, incident_id, payload.message, auditor_response)
-
-        return {
-            "incident_id": incident_id,
-            "reply": auditor_response["reply"],
-            "verdict": auditor_response["verdict"],
-            "regulatory_fine_adjustment": auditor_response["regulatory_fine_adjustment"],
-            "transcript_turn": len(transcript) // 2,
-        }
-    finally:
-        db.close()
-```
-
-`InterviewMessageRequest` (`backend/app/schemas/interview.py`): `{"message": str}` — the player's free-text answer to the auditor's most recent question (or an opening statement, on the first call in a session).
-
-This endpoint is **stateful across calls** (each call appends to a growing transcript) but **stateless within the process** — the transcript is persisted to disk (§ 2.4) rather than held in `SimulationEngine` memory, since an interview is a post-hoc reviewer action entirely decoupled from the live tick loop, exactly as `generate_postmortem` already is (Document 05, § 2.4: "This is a read-and-render operation... its sole side effect is a filesystem write").
-
-### 2.2 Prompt Orchestration — Context Injection
-
-`_compile_interview_context` builds a single structured context object by reusing the exact same data-gathering logic `generate_postmortem` already performs (Document 05, § 3.2), factored out into a shared helper so both endpoints draw from one source of truth rather than two independently-maintained queries that could drift:
-
-```python
-def _compile_interview_context(db: OrmSession, incident: Incident, session: GameSession) -> Dict[str, Any]:
-    """ASSEMBLE THE FULL INCIDENT DOSSIER THE AI AUDITOR PERSONA IS GROUNDED IN"""
-    runbook_events = (
-        db.query(AuditLog)
-        .filter(AuditLog.event_type == "RUNBOOK_EXECUTED")
-        .filter(AuditLog.details_json.like(f'%"{incident.service_id}"%'))
-        .order_by(AuditLog.tick.asc())
-        .all()
+    if not settings.LLM_API_KEY:
+        raise HTTPException(status_code=503, detail="AI Auditor interview service is not configured")
+    _check_interview_rate_limit(request.client.host if request.client else "unknown")   # 429 when exceeded
+    # 404 if the incident is not in the ledger; then:
+    context = _compile_interview_context(db, incident, session)
+    transcript = _load_or_init_transcript(incident_id) + [{"role": "player", "content": payload.message}]
+    auditor_response = await _invoke_auditor_llm(context, transcript)
+    transcript.append({"role": "auditor", "content": auditor_response["reply"]})
+    eligible_amount = formulas.eligible_audit_adjustment(
+        auditor_response["verdict"], auditor_response["regulatory_fine_adjustment"], incident.severity
     )
-    all_incident_related_logs = (
-        db.query(AuditLog)
-        .filter(AuditLog.tick >= incident.created_tick)
-        .filter(AuditLog.tick <= (incident.resolved_tick or incident.created_tick + 50))
-        .order_by(AuditLog.tick.asc())
-        .all()
-    )
+    _persist_transcript(incident_id, transcript)
+    _persist_interview_event(db, incident_id, auditor_response, eligible_amount)
     return {
-        "incident_id": incident.id,
-        "title": incident.title,
-        "severity": incident.severity,
-        "service_id": incident.service_id,
-        "root_cause": incident.root_cause,
-        "mtta_ticks": incident.mtta_seconds,
-        "mttr_ticks": incident.mttr_seconds,
-        "status": incident.status,
-        "created_tick": incident.created_tick,
-        "resolved_tick": incident.resolved_tick,
-        "tech_debt_at_review_time": session.tech_debt if session else None,
-        "sla_percentage_at_review_time": float(session.sla_percentage) if session else None,
-        "runbooks_executed": [
-            {"tick": e.tick, "action": json.loads(e.details_json).get("action"), "cost": json.loads(e.details_json).get("cost")}
-            for e in runbook_events
-        ],
-        "raw_audit_log_window": [
-            {
-                "tick": e.tick,
-                "event_type": e.event_type,
-                "actor": e.actor,
-                "details": json.loads(e.details_json),
-                "compliance_flag": e.compliance_flag,
-            }
-            for e in all_incident_related_logs
-        ],
+        "incident_id": incident_id,
+        "reply": auditor_response["reply"],
+        "verdict": auditor_response["verdict"],
+        "regulatory_fine_adjustment": eligible_amount,   # the backend-clamped preview, never the raw LLM proposal
+        "transcript_turn": len(transcript) // 2,
     }
 ```
 
-This context object is deliberately **not** the rendered post-mortem markdown (Document 05, § 3) — it is the raw, structured dossier, since a markdown narrative would force the LLM to re-parse prose to extract facts it should instead receive as directly-addressable structured fields. Note that `all_incident_related_logs` deliberately pulls the **raw** `audit_logs` rows via direct SQL query rather than the engine's in-memory-capped `recent_audits` (which is truncated to the last 15 entries for WebSocket bandwidth reasons, Document 01 § "WS Broadcaster" — a limit that has no bearing on this endpoint, which reads SQLite directly and is under no framing-budget constraint).
+`InterviewMessageRequest` (`backend/app/schemas/interview.py`): `{"message": str}` with `min_length=1`, `max_length=2000` (the body is forwarded verbatim, with the dossier, to a paid external API, so an unbounded body would be a spend-amplification vector).
+
+**Guards, in order:** (1) HTTP 503 when `LLM_API_KEY` is empty; (2) an in-process sliding-window rate limit of **10 interview turns per 60 seconds per client IP** (HTTP 429; single process, resets on restart, IP-keyed, so it only closes the trivial "loop it as fast as possible" path and is not a substitute for real auth/quota infrastructure); (3) HTTP 404 for an unknown incident.
+
+The endpoint is **stateful across calls** (each call appends to a growing transcript) but the transcript lives on disk (§ 2.4) rather than in `SimulationEngine` memory, since an interview is a post-hoc reviewer action decoupled from the live tick loop. Note that the REST state-push middleware deliberately skips `.../interview` (it never mutates engine state) but does push after a successful `.../interview/apply-verdict`.
+
+### 2.2 Prompt Orchestration — Context Injection
+
+`_compile_interview_context(db, incident, session)` reuses **`_build_incident_dossier`**, the single factual record that also feeds the markdown post-mortem and the PDF export, so the auditor never sees a different version of events than the player does:
+
+```python
+dossier = _build_incident_dossier(db, incident)
+session_context = {"tech_debt_current": ..., "sla_percentage_current": ..., "note": "Session-wide, as of right now -- NOT specific to this incident ..."}
+return {**dossier, "session_context": session_context}   # session_context is None when the session row is gone
+```
+
+The dossier contains the incident's identity and severity, `mtta_ticks`/`mttr_ticks`, `root_cause` (only if confirmed through triage, otherwise `null`), point-in-time `tech_debt_at_creation`/`tech_debt_at_resolution`/`tech_debt_delta`, a `financial_impact` block (accrued surcharge, mitigation cost, regulatory fines, auditor credits), `mitigations`, a `timeline`, `compliance_status`, and a labelled `concurrent_context` of session-wide events (SLA sanction, feature freeze, dilemmas, risk windows) that are explicitly *not* attributed to this incident. Incident-scoped events are matched by exact `incident_id` equality in the audit payload (never by service-id substring or "most recent event on this service"), and the dossier never reads the live session's budget/tech-debt/SLA to reconstruct the past. The raw `audit_logs` rows are read directly from SQLite, so the WebSocket `recent_audits` cap does not apply.
 
 ### 2.3 Auditor Persona and Prompting Contract
 
-`_invoke_auditor_llm` constructs a system prompt establishing the persona and constraining the response format:
+`AUDITOR_SYSTEM_PROMPT` (a module constant in `audits.py`; the file is authoritative, this is a summary) establishes a Lead Auditor interviewing under SOX-404 and SOC 2 Type II, treats the dossier as ground truth, tells the model that a `null` `root_cause` means the operator never confirmed the cause (challenge that gap, do not invent one), forbids presenting `concurrent_context` as this incident's own impact, asks for particular scrutiny of `Hotfix Prod Live` runbook executions, `UNATTENDED_ALERT_VIOLATION` events and MTTA/MTTR patterns, and requires one focused question per turn and a JSON reply of exactly `{"reply": string, "verdict": "PENDING" | "VALID" | "JUSTIFIED" | "NON_COMPLIANT", "regulatory_fine_adjustment": number}`. The prompt tells the model that the amount is only a recommendation and that the platform independently computes the eligible amount.
 
-```python
-AUDITOR_SYSTEM_PROMPT = """You are a Lead Auditor conducting a formal regulatory defense interview under
-SOX-404 and SOC 2 Type II frameworks. You are reviewing a specific, already-resolved incident from the
-IncidentZero platform's compliance ledger. You have been given the complete, factual incident dossier below —
-treat every field in it as ground truth; do not speculate beyond it. Your task is to interrogate the operator
-(the player) about their decisions during this incident, with particular scrutiny on:
+`_invoke_auditor_llm` posts `{model, messages: [system prompt, dossier JSON, transcript...], response_format: {"type": "json_object"}}` with `httpx.AsyncClient(timeout=30.0)` to `settings.LLM_API_BASE_URL` (the **full chat-completions URL** of any OpenAI-compatible provider, used as given) with `Authorization: Bearer <LLM_API_KEY>`. The model output is **untrusted**: it must parse as a JSON object, `verdict` must be one of the four allowed values (anything else becomes `PENDING`, otherwise a typo'd verdict would be read as "not NON_COMPLIANT", i.e. compliant), `reply` is truncated to 4,000 characters, and `regulatory_fine_adjustment` must be numeric. Any transport error, HTTP error, empty `choices`, malformed JSON or non-numeric amount returns the neutral holding response `{"reply": "The auditor's response could not be parsed. Please restate your previous answer.", "verdict": "PENDING", "regulatory_fine_adjustment": 0.0}` instead of crashing or fabricating a verdict.
 
-- Any RUNBOOK_EXECUTED event where the action is "Hotfix Prod Live" (the emergency_patch runbook), which
-  bypasses standard change-management review by design (see the platform's own Runbook Catalog and
-  Mitigation Matrix specification, which flags this action's regulatory risk profile as High).
-- Any UNATTENDED_ALERT_VIOLATION or SLA_BREACH_EMERGENCY_SANCTION event in the raw audit log window,
-  indicating a compliance_flag=False regulatory breach already recorded against this incident window.
-- Whether MTTA and MTTR figures indicate a pattern of delayed acknowledgment or delayed resolution
-  inconsistent with the incident's stated severity.
-
-Ask ONE focused question per turn. After the operator responds, evaluate their answer and, on your NEXT
-turn only (not every turn), you may render a verdict. You must respond with a JSON object matching exactly
-this schema: {"reply": string, "verdict": "PENDING" | "VALID" | "JUSTIFIED" | "NON_COMPLIANT",
-"regulatory_fine_adjustment": number}. Use "PENDING" while the interview is still in progress and no
-final verdict has been reached. "regulatory_fine_adjustment" is a dollar amount: 0 while PENDING, a
-positive value (an additional fine) if NON_COMPLIANT, and may be a negative value (a partial fine waiver)
-if VALID or JUSTIFIED and the incident dossier already shows a recorded fine (e.g. an
-UNATTENDED_ALERT_VIOLATION fine) that the operator's defense credibly mitigates. Never invent facts not
-present in the dossier; if the operator's claim contradicts the dossier, you must challenge it directly by
-citing the specific contradicting field."""
-```
-
-```python
-async def _invoke_auditor_llm(context: Dict[str, Any], transcript: List[Dict[str, str]]) -> Dict[str, Any]:
-    """INVOKE THE LLM AUDITOR PERSONA WITH THE COMPILED DOSSIER AND CONVERSATION HISTORY"""
-    from app.core.config import settings
-    import httpx
-
-    messages = [
-        {"role": "system", "content": AUDITOR_SYSTEM_PROMPT},
-        {"role": "system", "content": f"INCIDENT DOSSIER (ground truth, JSON):\n{json.dumps(context, indent=2)}"},
-    ] + [{"role": m["role"], "content": m["content"]} for m in transcript]
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            settings.LLM_API_BASE_URL,
-            headers={"Authorization": f"Bearer {settings.LLM_API_KEY}", "Content-Type": "application/json"},
-            json={"model": settings.LLM_MODEL_ID, "messages": messages, "response_format": {"type": "json_object"}},
-        )
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
-
-    try:
-        parsed = json.loads(raw)
-        return {
-            "reply": parsed["reply"],
-            "verdict": parsed.get("verdict", "PENDING"),
-            "regulatory_fine_adjustment": float(parsed.get("regulatory_fine_adjustment", 0.0)),
-        }
-    except (json.JSONDecodeError, KeyError):
-        # malformed model output: fail safe into a neutral, non-scoring holding pattern rather than
-        # crashing the interview or silently fabricating a verdict the model did not actually produce
-        return {
-            "reply": "The auditor's response could not be parsed. Please restate your previous answer.",
-            "verdict": "PENDING",
-            "regulatory_fine_adjustment": 0.0,
-        }
-```
-
-**New required configuration, additive to `backend/app/core/config.py`'s `Settings` class** (Document 01 flagged `SESSION_SECRET` as an existing unused-but-declared field; this specification is careful not to repeat that pattern — every field declared here is actually read, in `_invoke_auditor_llm` above):
+**Configuration (`backend/app/core/config.py`, `Settings`):**
 
 ```python
 LLM_API_BASE_URL: str = os.getenv("LLM_API_BASE_URL", "")
@@ -184,7 +78,7 @@ LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
 LLM_MODEL_ID: str = os.getenv("LLM_MODEL_ID", "claude-sonnet-5")
 ```
 
-**Fail-safe when unconfigured:** if `LLM_API_KEY` is empty at call time, `conduct_interview` returns HTTP 503 with `{"detail": "AI Auditor interview service is not configured"}` **before** attempting the HTTP call — an explicit early guard, not a silent fallback to a fabricated response, so a deployment without LLM credentials fails loudly and immediately rather than serving a placeholder "auditor" that produces meaningless verdicts. This is the honest-disclosure design principle established throughout Documents 02–05 applied to a new failure mode: a misconfigured integration must be legible as broken, not silently degrade into fake governance theater.
+**Fail-safe when unconfigured:** an empty `LLM_API_KEY` returns HTTP 503 `{"detail": "AI Auditor interview service is not configured"}` before any HTTP call. There is **no offline fallback and no canned auditor**: a deployment without credentials fails loudly rather than serving fake governance theater. (The guard checks the key only: with a key but an empty or wrong `LLM_API_BASE_URL` the call fails inside `_invoke_auditor_llm` and the turn degrades to the `PENDING` holding response.)
 
 ### 2.4 Transcript Persistence
 
@@ -209,63 +103,79 @@ def _persist_transcript(incident_id: str, transcript: List[Dict[str, str]]) -> N
     path.write_text(json.dumps(transcript, indent=2), encoding="utf-8")
 ```
 
-Unlike `_persist_report`'s single-shot overwrite (Document 05 § 3.5, flagged there as destroying prior renders with no versioning), transcript persistence is **inherently append-and-resave**, since the whole point of the artifact is the full multi-turn conversation — there is no analogous "prior version destroyed" concern here because each write is a strict superset (the prior transcript content plus the new turn) of the one it replaces on disk, not an unrelated re-render.
+Alongside the transcript, `_persist_interview_event` writes a small verdict cache, `audits/interviews/<incident_id>.verdict.json` (`{"verdict", "proposed_amount", "applied": false}`), which `apply-verdict` reads. Unlike `_persist_report`'s single-shot overwrite (Document 05 § 3.5, flagged there as destroying prior renders with no versioning), transcript persistence is **inherently append-and-resave**, since the whole point of the artifact is the full multi-turn conversation — there is no analogous "prior version destroyed" concern here because each write is a strict superset (the prior transcript content plus the new turn) of the one it replaces on disk, not an unrelated re-render.
 
 ### 2.5 Governance Ledger Integration
 
 Each interview turn logs an additive audit event, so the fact that a regulatory interview occurred — and its outcome — is visible in the same compliance ledger as every other governance-relevant action, per this project's established design philosophy that the audit ledger is the single durable record of governance-relevant activity (Document 03 § 1, Control Objective 1: Audit Trail Completeness):
 
 ```python
-def _persist_interview_event(db: OrmSession, incident_id: str, player_message: str, auditor_response: Dict[str, Any]) -> None:
-    """RECORD AN AI AUDITOR INTERVIEW TURN AS A GOVERNANCE LEDGER ENTRY"""
-    entry_id = f"aud-{uuid.uuid4().hex[:8]}"
+def _persist_interview_event(db: OrmSession, incident_id: str, auditor_response: Dict[str, Any], eligible_amount: float) -> None:
+    """RECORD AN AI AUDITOR INTERVIEW TURN AS A GOVERNANCE LEDGER ENTRY AND CACHE ITS VERDICT"""
     db.add(AuditLog(
-        id=entry_id,
-        session_id=db.get(Incident, incident_id).session_id,
+        id=f"aud-{uuid.uuid4().hex[:8]}",
+        session_id=incident.session_id,
         tick=0,  # interviews are post-hoc, out-of-band reviewer actions with no live tick context; see note below
         event_type="AI_AUDITOR_INTERVIEW_TURN",
         actor="AUDIT_SYSTEM",
         details_json=json.dumps({
             "incident_id": incident_id,
             "verdict": auditor_response["verdict"],
-            "regulatory_fine_adjustment": auditor_response["regulatory_fine_adjustment"],
+            "proposed_amount": round(auditor_response["regulatory_fine_adjustment"], 2),
+            "eligible_amount": round(eligible_amount, 2),
         }),
         compliance_flag=auditor_response["verdict"] != "NON_COMPLIANT",
     ))
     db.commit()
+    # ... then writes <incident_id>.verdict.json with applied=False (a fresh verdict is always unapplied)
 ```
 
-**Disclosed limitation, in the same honest-auditor voice as every prior document in this repository:** the `tick` field is hardcoded to `0` because an interview can occur arbitrarily long after the simulation session that produced the incident has ended, paused, or been reset — there is no live `current_tick` to attribute the event to that would be meaningful (unlike every other existing event type, which is logged synchronously from within the tick loop or a live player action against a running session, Document 05, `audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md` § 1). This is recorded here explicitly as a data-provenance caveat: a reviewer correlating `AI_AUDITOR_INTERVIEW_TURN` rows by `tick` will find them all clustered at `tick=0` regardless of when the interview actually happened, and must instead rely on the row's `timestamp` column (Document 05's `AUDIT_LEDGER_DATA_DICTIONARY.md` § 1.1) — itself already documented as the less-authoritative of the two temporal fields for every *other* event type, an irony this specification does not attempt to paper over. Implementers extending this system should consider whether a nullable `tick` column (a genuine, additive schema change to `audit_logs`, not covered by the strictly-additive-new-tables scope of this document) is warranted in a later phase; this specification deliberately does not make that schema change itself, to keep this phase's footprint limited to wholly new tables and columns rather than touching the existing `audit_logs` table's `tick` column's nullability.
+**Disclosed limitation, in the same honest-auditor voice as every prior document in this repository:** the `tick` field is hardcoded to `0` because an interview can occur arbitrarily long after the simulation session that produced the incident has ended, paused, or been reset — there is no live `current_tick` to attribute the event to that would be meaningful (unlike every other existing event type, which is logged synchronously from within the tick loop or a live player action against a running session, Document 05, `audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md` § 1). This is recorded here explicitly as a data-provenance caveat: a reviewer correlating `AI_AUDITOR_INTERVIEW_TURN` rows by `tick` will find them all clustered at `tick=0` regardless of when the interview actually happened, and must instead rely on the row's `timestamp` column (Document 05's `AUDIT_LEDGER_DATA_DICTIONARY.md` § 1.1) — itself already documented as the less-authoritative of the two temporal fields for every *other* event type, an irony this specification does not attempt to paper over. Implementers extending this system should consider whether a nullable `tick` column (a schema change to `audit_logs`, which would need its own Alembic revision) is warranted in a later phase; it is not made here.
 
-This introduces one additive audit event type:
+This introduces the following audit event type (the verdict-application event is described in § 2.6):
 
 | `event_type` | Trigger | Actor | `compliance_flag` | Payload |
 |---|---|---|---|---|
-| `AI_AUDITOR_INTERVIEW_TURN` | Each `POST .../interview` call completes | `AUDIT_SYSTEM` | `False` only when `verdict == "NON_COMPLIANT"` | `{"incident_id": string, "verdict": string, "regulatory_fine_adjustment": float}` |
+| `AI_AUDITOR_INTERVIEW_TURN` | Each `POST .../interview` call completes | `AUDIT_SYSTEM` | `False` only when `verdict == "NON_COMPLIANT"` | `{"incident_id": string, "verdict": string, "proposed_amount": float, "eligible_amount": float}` |
 
 ### 2.6 Applying the Regulatory Fine Adjustment & Backend Financial Authority
 
 The AI Auditor functions as an advisory and investigative agent: **the LLM may analyze and propose adjustments, but the backend is the sole authority deciding what is financially applicable.**
 
-Applying a fine or credit requires an explicit call to `POST /api/audits/postmortem/{incident_id}/interview/apply-verdict`. The backend enforces the following controls:
+Applying a fine or credit requires an explicit call to `POST /api/audits/postmortem/{incident_id}/interview/apply-verdict` (no body; success returns `{"success": true, "budget": <new budget>}`). The backend enforces the following controls:
 
-1. **Session & Incident Association:**
-   - Verifies that `incident.session_id == engine.session_id`. An incident from a previous or different session cannot be applied against the live session (HTTP 400).
-2. **Dual-Layer Idempotency:**
-   - **Cache-layer guard:** Checks `verdict_meta.get("applied")`. If already flagged, rejects duplicate application.
-   - **Ledger-layer persistence guard (`_verdict_already_applied`):** Queries `AuditLog` for existing `AI_AUDITOR_VERDICT_APPLIED` events with matching `incident_id`. Even across server restarts, cache corruption, or network retries, no fine or credit can ever be applied twice.
-3. **Safe Parsing and Non-Finite Number Guards:**
-   - Free-form LLM outputs are treated as untrusted. If `proposed_amount` is non-finite (`NaN`, `+Infinity`, `-Infinity`), `formulas.eligible_audit_adjustment()` immediately zeroes it to `0.0` rather than defaulting to floor/ceiling bounds.
-4. **Deterministic Backend Clamping (`formulas.eligible_audit_adjustment`):**
-   - **`NON_COMPLIANT`:** Permitted adjustments are strictly non-negative fines ($[0, \text{ceiling}]$). Ceilings are strictly scaled by incident severity:
-     - `P1_CRITICAL`: Max fine \$6,000.00
-     - `P2_HIGH`: Max fine \$3,000.00
-     - `P3_MEDIUM`: Max fine \$1,500.00
-     - `P4_LOW`: Max fine \$750.00
-   - **`VALID` / `JUSTIFIED`:** Permitted adjustments are strictly non-positive credits ($[-2000.0, 0.0]$), capped by `AUDIT_CREDIT_CEILING` (\$2,000.00).
-   - **`PENDING` / Other:** Eligible amount is strictly \$0.00.
-5. **Centralized Financial Ledger Integration:**
-   - Applied adjustments are routed through `engine._apply_financial_event(category="regulatory_fine", amount=-eligible_amount, reference=incident_id, ...)` ensuring unified ledger balance updates and durable audit logging under `AI_AUDITOR_VERDICT_APPLIED`.
+1. **Session & Incident Association:** unknown incident -> HTTP 404; `incident.session_id != engine.session_id` -> HTTP 400 (an incident from a previous or different session cannot be applied against the live session).
+2. **A concluded verdict must exist:** HTTP 400 `"No concluded interview verdict available to apply"` when there is no cached verdict or the latest one is `PENDING`.
+3. **Dual-layer idempotency:**
+   - **Cache-layer guard:** if the cached verdict's `applied` flag is set, the call is rejected (HTTP 400, "already been applied").
+   - **Ledger-layer guard (`_verdict_already_applied`):** looks for any `AI_AUDITOR_VERDICT_APPLIED` audit row whose payload carries the same `incident_id`; if found it self-heals the cache flag and rejects with HTTP 400. Because this check is keyed on `incident_id` alone, **a verdict can be applied at most once per incident**: a later interview turn produces a fresh, unapplied cache entry, but the ledger guard still blocks it once any verdict was applied for that incident. The flag is written only after the financial event has gone through, so a failed application never blocks a legitimate retry.
+4. **Safe parsing and non-finite guards:** the LLM output is untrusted. A non-finite `proposed_amount` (`NaN`, `+/-Infinity`) is zeroed to `0.0` by `formulas.eligible_audit_adjustment()` rather than pinned to a floor/ceiling (pinning to the credit floor would hand out the largest possible credit).
+5. **Deterministic backend clamping (`formulas.eligible_audit_adjustment(verdict, proposed_amount, severity)`)**, re-derived at application time from the cached proposal, never trusted from the cache:
+   - **`NON_COMPLIANT`:** a non-negative fine in $[0, \text{ceiling}]$ with `AUDIT_FINE_CEILING_BY_SEVERITY`: `P1_CRITICAL` \$6,000.00, `P2_HIGH` \$3,000.00, `P3_MEDIUM` \$1,500.00, `P4_LOW` \$750.00 (an unrecognized severity falls back to the `P4_LOW` ceiling).
+   - **`VALID` / `JUSTIFIED`:** a non-positive credit in $[-2000.0, 0.0]$ (`AUDIT_CREDIT_CEILING = 2000.0`).
+   - **`PENDING` / anything else:** exactly \$0.00.
+6. **Centralized financial ledger integration:** the amount is applied through `engine._apply_financial_event(category="regulatory_fine", amount=-eligible_amount, reference=incident_id, audit_event_type="AI_AUDITOR_VERDICT_APPLIED", actor="AUDIT_SYSTEM", compliance_flag=verdict != "NON_COMPLIANT", ...)`, so the budget change, the ledger entry and the audit row come from one call. The `AI_AUDITOR_VERDICT_APPLIED` payload is `{"incident_id", "verdict", "proposed_amount", "eligible_amount"}`, and the event is restored into the in-memory financial ledger after a restart. The incident dossier/PDF then shows the fine under `regulatory_fines` or the credit under `audit_credits`.
+
+### 2.7 Client UI (post-mortem dialog, "Auditor" tab)
+
+`PostMortemModal` has two section buttons (`aria-pressed`, deliberately not `role="tab"`): **Report** (the markdown document, default) and **Auditor**. The auditor section (`components/auditor/AuditorChat.tsx`, state in `auditorChatState.ts`, copy in the `auditorChat` i18n namespace) lives inside the same lazy chunk, is mounted on first visit and then kept, so a half-typed answer survives a look at the report. Copy, PDF export and replay stay in the footer for both sections.
+
+- **Explanation:** a short note that the server, not the AI, decides any fine or credit, capped by severity.
+- **Transcript:** `role="log"` + `aria-live="polite"`; auditor and operator bubbles; a typing indicator while a turn is pending (a static ellipsis under reduced motion). On open, `GET .../interview` resumes a saved conversation; a `404` simply means a fresh one.
+- **Composer:** textarea with the backend bound (2,000 characters, `maxLength` and a live counter); Send is disabled while pending or when the trimmed text is empty; Ctrl/Cmd+Enter sends. The message is trimmed before sending.
+- **Verdict:** a chip (`PENDING` neutral, `VALID`/`JUSTIFIED` emerald, `NON_COMPLIANT` rose) plus the backend-clamped preview ("Proposed: -US$1,500 credit (cap US$2,000)" / "Proposed: +US$3,000 fine (cap US$6,000)"). Every figure shown is the backend's; the LLM's raw number never reaches the client.
+- **Apply verdict:** enabled only for a final verdict with a non-zero eligible amount, not yet applied, and nothing pending. On success it shows the `applied_amount` returned by `apply-verdict`, pushes a toast (`pushFloatingText`, `danger` for a fine, `success` for a credit) and the button becomes **Applied**. The backend's "already been applied" 400 is mapped to the same Applied state; any other 400 (for example an incident from a past session) shows the backend message and leaves the button usable.
+- **Errors (`classifyChatError`):** `503` renders a calm "not configured on this server" empty state with the `LLM_API_KEY` how-to and no retry (the composer is disabled but the typed text is kept); `429` shows "wait a moment" (with the seconds when `Retry-After` is readable) and a Retry button; a network failure or any other status shows an inline message with Retry. On any failure the optimistic bubble is removed and the typed message is restored, so nothing is lost.
+
+`services/api.ts` throws `ApiError` (an `Error` subclass carrying `status` and `retryAfterSeconds`) and exposes `conductInterview`, `getInterview` and `applyInterviewVerdict`. Unit tests: `auditorChatState.test.ts` (reducer, error mapping, apply states) and `AuditorChat.test.tsx` (mocked `fetch`: send, reply, verdict, apply, 503, 429 + retry, already-applied).
+
+**Read endpoint and response additions** (this change; all additive):
+
+- `GET /api/audits/postmortem/{incident_id}/interview` returns `{incident_id, turns: [{role: "player"|"auditor", content}], verdict, regulatory_fine_adjustment, adjustment_cap, applied, transcript_turn}`. It is read-only, needs no `LLM_API_KEY`, never calls the LLM and re-clamps the cached proposal with `formulas.eligible_audit_adjustment`. The id must match `^[A-Za-z0-9_-]{1,64}$` and exist in the ledger before any file path is built (`404` otherwise, also when no transcript exists); corrupt cache files degrade to `PENDING`/`0`.
+- `POST .../interview` also returns `adjustment_cap` (magnitude of the ceiling for that verdict and the incident's severity, `0` for `PENDING`) and `applied`; its `429` carries `Retry-After` seconds. CORS does not expose that header cross-origin (`expose_headers` is not set), so the UI falls back to the generic wait message there.
+- `POST .../apply-verdict` also returns `verdict` and `applied_amount` (the clamped amount charged: positive fine, negative credit).
+
+Known limits: the transcript and verdict files are keyed by incident id on the server disk, not per player; the in-process rate limit is per client IP.
 
 ---
 
@@ -280,17 +190,18 @@ The complete, closed set of verdict values is:
 | `JUSTIFIED` | Procedure deviated with acceptable justification | $[-\$2,000.00, \$0.00]$ | Capped credit waiver |
 | `NON_COMPLIANT` | Defense rejected or contradicted ground truth | $[\$0.00, \text{Severity Ceiling}]$ | Clamped fine (\$750 – \$6,000) |
 
-This four-value enum is the exhaustive, closed set this specification defines — the LLM integration is constrained (via the `response_format: {"type": "json_object"}` structured-output request and the explicit schema in the system prompt, § 2.3) to emit exactly one of these four strings, never a free-text or novel verdict category, keeping the outcome machine-actionable by `apply_interview_verdict` without any string-matching heuristics on unconstrained model prose.
+This four-value enum is the exhaustive, closed set: the integration *requests* one of these four strings (via `response_format: {"type": "json_object"}` and the schema in the system prompt, § 2.3) and **enforces** it server-side, because any other string is coerced to `PENDING` in `_invoke_auditor_llm`. The outcome therefore stays machine-actionable by `apply_interview_verdict` without string-matching heuristics on unconstrained model prose.
 
 ---
 
 ## 4. Non-Breaking Compliance Checklist
 
-- [x] `GET /api/audits/postmortem/{incident_id}` and its `_render_template`/`_persist_report` internals (Document 05 §§ 3.2–3.5) are completely unmodified; the interview reuses their data-gathering *pattern*, not their code path.
-- [x] The interview's dossier-compilation query is a new, separate function; the existing `_render_template` function's own inline mitigation-lookup query is untouched.
-- [x] Three new endpoints are additive: `POST .../interview`, `POST .../interview/apply-verdict`, with zero existing route signature changes.
-- [x] `Settings` gains three new, actually-consumed configuration fields — explicitly avoiding the pre-existing `SESSION_SECRET`-is-declared-but-unused anti-pattern Document 01 flagged.
+- [x] `GET /api/audits/postmortem/{incident_id}` and its `_render_template`/`_persist_report` internals (Document 05 §§ 3.2–3.5) do not depend on the interview; both draw on the shared `_build_incident_dossier`.
+- [x] `_compile_interview_context` adds only a labelled `session_context` on top of the shared dossier; no second, independently maintained query exists.
+- [x] Three interview endpoints (`POST .../interview`, read-only `GET .../interview`, `POST .../interview/apply-verdict`) sit beside `GET .../postmortem/{id}` and `GET .../export-pdf`; no existing route signature changed.
+- [x] `Settings` carries three configuration fields (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`), all actually read by the interview code.
 - [x] Interview transcripts persist to a new sibling directory (`audits/interviews/`), never touching `audits/reports/`.
-- [x] Two additive audit event types (`AI_AUDITOR_INTERVIEW_TURN`, `AI_AUDITOR_VERDICT_APPLIED`); no existing event type's schema changes.
+- [x] Two audit event types (`AI_AUDITOR_INTERVIEW_TURN`, `AI_AUDITOR_VERDICT_APPLIED`), both catalogued in the Audit Ledger Data Dictionary.
 - [x] Fine adjustments are never auto-applied to a live session's budget without a distinct, explicit, separately-audited confirmation call — preserving the principle that only mechanically-derived penalties (Document 02's regulatory formulas) are applied unconditionally.
-- [x] A misconfigured or unreachable LLM backend fails loudly (HTTP 503 or a parse-fallback `PENDING` holding response) rather than silently fabricating a verdict.
+- [x] A missing key fails loudly (HTTP 503); an unreachable or malformed LLM response degrades to the neutral `PENDING` holding response rather than a fabricated verdict.
+- [x] A chat UI consuming these endpoints is implemented in the post-mortem dialog (§ 2.7).

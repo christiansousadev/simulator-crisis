@@ -2,9 +2,9 @@
 
 **Document ID:** IZ-IMPL-01  
 **Classification:** Implementation Contract / Technical Architecture Specification  
-**Status:** Implementado  
-**Last Updated:** Setembro 2026  
-**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/engine/upgrades.py`, `backend/app/models/upgrade.py`, `backend/app/api/v1/upgrades.py`, `frontend/src/components/dock/UpgradesPanel.tsx`, `frontend/src/store/useGameStore.ts`
+**Status:** Implementado e verificado contra o código (Outubro 2026)  
+**Last Updated:** Outubro 2026  
+**Integration baseline:** `backend/app/engine/formulas.py`, `backend/app/engine/simulator.py`, `backend/app/engine/upgrades.py`, `backend/app/models/upgrade.py`, `backend/app/api/v1/upgrades.py`, `frontend/src/components/dock/UpgradesTreePanel.tsx`, `frontend/src/components/dock/upgradeCatalog.ts`, `frontend/src/store/useGameStore.ts`
 
 ---
 
@@ -18,7 +18,7 @@ Introduce a persistent, budget-gated capital-investment layer — the **Upgrade 
 
 ## 2. Upgrade Catalog
 
-The catalog is a Python module-level constant, `UPGRADE_CATALOG`, defined in a new file `backend/app/engine/upgrades.py`, mirroring the existing `MITIGATION_CATALOG` single-source-of-truth pattern in `formulas.py` (Document 04, § 1). Each upgrade is purchased at most once per session (no stacking/leveling in this phase — see § 3.1 for why the persistence schema nonetheless reserves a `level` column for forward compatibility).
+The catalog is a Python module-level constant, `UPGRADE_CATALOG`, defined in `backend/app/engine/upgrades.py`, mirroring the existing `MITIGATION_CATALOG` single-source-of-truth pattern in `formulas.py` (Document 04, § 1). Each upgrade is purchased at most once per session (no stacking/leveling in this phase — see § 3.1 for why the persistence schema nonetheless reserves a `level` column for forward compatibility).
 
 | Upgrade ID | Display Name | Category | Cost | Prerequisite | Effect Hook | Modifier Value |
 |---|---|---|---|---|---|---|
@@ -35,15 +35,17 @@ This is the complete, exhaustive catalog for this implementation phase. No hidde
 
 `predictive_anomaly_detection` is the only entry with a `prerequisite` field. The purchase endpoint (§ 4.2) MUST reject a purchase attempt for an upgrade whose `prerequisite` is not already present in the session's `purchased_upgrades` rows, returning HTTP 400 with `{"success": false, "error": "Prerequisite upgrade not yet purchased: apm_tracing"}`. This mirrors the existing budget-check rejection pattern in `apply_mitigation` (Document 04, § 2: `{"success": False, "error": "Insufficient budget runway"}`).
 
+`backend/app/engine/upgrades.py` additionally runs `_validate_catalog_references()` at import time: any `prerequisite` that does not resolve to a real catalog id raises `ValueError`, so a typo can never leave an upgrade silently unpurchasable. The frontend mirrors the catalog's ids, costs, categories and prerequisites in `frontend/src/components/dock/upgradeCatalog.ts` (display copy lives in i18n).
+
 ---
 
 ## 3. Data & Persistence Contract
 
 ### 3.1 SQL Migration Schema — `purchased_upgrades`
 
-No migration framework (Alembic or otherwise) exists in the current codebase (Document 01 confirms schema creation is via `Base.metadata.create_all(bind=db_engine)` in `backend/app/main.py`, § `lifespan`). This table is therefore introduced the same way every existing table is: as a new SQLAlchemy model class, additive to `backend/app/models/__init__.py`'s `__all__` export list, picked up automatically by the existing `create_all` call with **zero changes to `main.py`**.
+The project uses **Alembic** (`backend/alembic/`, seven revisions at the time of this update; `backend/app/main.py` runs `command.upgrade(alembic_cfg, "head")` on boot; a legacy pre-Alembic SQLite file makes boot fail with an actionable error asking the operator to delete the regenerable database file). The `purchased_upgrades` table is created by the initial revision (`8907816f55ab_initial_schema.py`); any future column (for example a real `level` mechanic) requires a new Alembic revision, not a `create_all` edit. The SQLAlchemy model is exported from `backend/app/models/__init__.py`.
 
-New file: `backend/app/models/upgrade.py`
+File: `backend/app/models/upgrade.py`
 
 ```python
 from sqlalchemy import Column, String, Integer, Numeric, ForeignKey
@@ -71,19 +73,19 @@ class PurchasedUpgrade(Base):
 | `id` | `VARCHAR(36)` | No (PK) | Generated as `f"upg-{uuid.uuid4().hex[:8]}"`, following the `inc-`/`aud-` prefix convention established in `event_generator.py`. |
 | `session_id` | `VARCHAR(36)` FK → `game_sessions.id`, `ON DELETE CASCADE` | No | Identical cascade-delete pattern to every other child table (`services`, `incidents`, `audit_logs`) — a session reset destroys purchase history along with everything else, consistent with the existing reset semantics documented in Document 03, § 2.1. |
 | `upgrade_id` | `VARCHAR(50)` | No | Foreign key *by convention only* (not a DB-level `ForeignKey`, mirroring how `MitigationAction.id` is referenced from audit `details_json` rather than a hard FK — Document 05, `AUDIT_LEDGER_DATA_DICTIONARY.md`, § 4) into `UPGRADE_CATALOG`'s `id` field. |
-| `level` | `INTEGER` | No, default `1` | Reserved for a future stacking/leveling mechanic. In this phase every purchase writes exactly `level=1` and the purchase endpoint rejects a second purchase of the same `upgrade_id` in the same session (§ 4.2) — the column exists now so that a future leveling feature does not require an additive-but-disruptive schema migration later. |
+| `level` | `INTEGER` | No, default `1` | Reserved for a future stacking/leveling mechanic. In this phase every purchase writes exactly `level=1` and the purchase endpoint rejects a second purchase of the same `upgrade_id` in the same session (§ 4.2) — the column is reserved so a future leveling feature does not need to reshape the table. |
 | `purchased_at_tick` | `INTEGER` | No | `SimulationEngine.current_tick` at the moment of purchase — same provenance pattern as `Incident.created_tick`. |
 | `cost_paid` | `NUMERIC(12,2)` | No | The exact amount deducted from `budget`, captured at purchase time so a later change to `UPGRADE_CATALOG` pricing does not retroactively misrepresent what a historical purchase actually cost — the same historical-accuracy rationale documented for `RUNBOOK_EXECUTED.cost` in Document 05, § 3.3. |
 
-**Required additive edit to `GameSession`** (`backend/app/models/session.py`): add one relationship line to the existing relationship block —
+**`GameSession`** (`backend/app/models/session.py`) carries the matching relationship line in its relationship block —
 
 ```python
 purchased_upgrades = relationship("PurchasedUpgrade", back_populates="session", cascade="all, delete-orphan")
 ```
 
-This is a pure addition beside the existing `services`, `incidents`, and `audit_logs` relationships; it does not alter any existing column or relationship.
+It sits beside the existing `services`, `incidents`, and `audit_logs` relationships.
 
-**Required additive edit to `backend/app/models/__init__.py`:**
+**`backend/app/models/__init__.py`** exports the model:
 
 ```python
 from app.models.upgrade import PurchasedUpgrade
@@ -93,13 +95,13 @@ __all__ = ["Base", "GameSession", "Service", "Incident", "MitigationAction", "Au
 
 ### 3.2 In-Memory Engine State
 
-Following the established pattern where `SimulationEngine` holds authoritative in-memory state mirrored to SQLite on each tick (Document 01, § "State Immutability Safeguards"), a new attribute is added to `SimulationEngine.__init__` (`backend/app/engine/simulator.py`):
+Following the established pattern where `SimulationEngine` holds authoritative in-memory state mirrored to SQLite on each tick (Document 01, § "State Immutability Safeguards"), `SimulationEngine.__init__` (`backend/app/engine/simulator.py`) holds:
 
 ```python
 self.purchased_upgrade_ids: Set[str] = set()
 ```
 
-This is populated on `_persist_bootstrap`/`reset` (empty set) and appended to on each successful purchase. It is the runtime source of truth `apply_mitigation`, `_apply_happiness_drift`, and `_evaluate_random_failures` consult via the modifier hooks in § 2 — the SQL table (§ 3.1) is the durable audit record, not the hot-path read source, exactly mirroring how `self.incidents` (a Python list) is the hot-path source while the `incidents` table is the durable mirror (Document 01, § "Persistence Layer").
+The set is emptied on reset, appended to on each successful purchase, and **rebuilt from the `purchased_upgrades` table by `_try_restore_from_snapshot()`** after a process restart, so purchases survive a crash. It is the runtime source of truth `apply_mitigation`, `_apply_happiness_drift`, and `_evaluate_random_failures` consult via the modifier hooks in § 2 — the SQL table (§ 3.1) is the durable audit record, not the hot-path read source, exactly mirroring how `self.incidents` (a Python list) is the hot-path source while the `incidents` table is the durable mirror (Document 01, § "Persistence Layer").
 
 ---
 
@@ -107,7 +109,7 @@ This is populated on `_persist_bootstrap`/`reset` (empty set) and appended to on
 
 ### 4.1 `GET /api/upgrades/catalog`
 
-New file: `backend/app/api/v1/upgrades.py`, registered additively in `backend/app/api/router.py` via one new line: `api_router.include_router(upgrades.router)` — appended after the existing `audits.router` line, not replacing it.
+File: `backend/app/api/v1/upgrades.py`, registered in `backend/app/api/router.py` through `api_router.include_router(upgrades.router)`.
 
 ```python
 @router.get("/api/upgrades/catalog")
@@ -131,7 +133,7 @@ async def purchase_upgrade(upgrade_id: str, request: Request) -> Dict[str, Any]:
     return result
 ```
 
-New `SimulationEngine.purchase_upgrade` method (`backend/app/engine/simulator.py`), added beside `apply_mitigation` under the existing `# --- player actions ---` section marker:
+`SimulationEngine.purchase_upgrade` (`backend/app/engine/simulator.py`) as implemented:
 
 ```python
 def purchase_upgrade(self, upgrade_id: str) -> Dict[str, Any]:
@@ -147,21 +149,21 @@ def purchase_upgrade(self, upgrade_id: str) -> Dict[str, Any]:
     if self.budget < upgrade["cost"]:
         return {"success": False, "error": "Insufficient budget runway"}
 
-    self.budget -= upgrade["cost"]
     self.purchased_upgrade_ids.add(upgrade_id)
     self._persist_upgrade_purchase(upgrade_id, upgrade["cost"])
-    self._log_audit_event(
-        event_type="UPGRADE_PURCHASED",
-        actor="VP_OF_INFRA",
-        details={"upgrade_id": upgrade_id, "cost": upgrade["cost"], "category": upgrade["category"]},
-        compliance_flag=True,
+    self._apply_financial_event(
+        category="upgrade_purchase",
+        amount=-upgrade["cost"],
+        reference=upgrade_id,
+        audit_event_type="UPGRADE_PURCHASED",
+        audit_details={"upgrade_id": upgrade_id, "cost": upgrade["cost"], "category": upgrade["category"]},
     )
     return {"success": True, "upgrade_id": upgrade_id, "budget": self.budget}
 ```
 
-`_persist_upgrade_purchase` follows the exact `db.add(...)` / `db.commit()` / `finally: db.close()` pattern already used by `_persist_incident` (Document 05, `simulator.py` reference).
+`_persist_upgrade_purchase` follows the `db.add(...)` / `db.commit()` / `finally: db.close()` pattern used by `_persist_incident`. The budget deduction and the audit row both go through the single financial choke point `_apply_financial_event` (category `upgrade_purchase`), which also feeds the in-memory financial ledger; that ledger is reconstructed from `UPGRADE_PURCHASED` audit rows on restore. Like every REST command, a successful purchase triggers an immediate state push to WebSocket clients (`app/core/state_push.py`), so the dock reflects ownership without waiting for the next tick.
 
-**New audit event type — `UPGRADE_PURCHASED`:** this is an *additive* ninth entry to the eight-entry closed set enumerated in the Audit Ledger Data Dictionary (`audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md`, § 2). Implementing this spec requires updating that document's enumerated-event-types table from 8 to 9 rows — the only change this specification requires to a previously-published compliance document, and it is additive (a new row, not a modification of the existing eight).
+**Audit event type — `UPGRADE_PURCHASED`:** one entry in the closed set of event types enumerated in the Audit Ledger Data Dictionary (`audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md`, § 2; the ledger now carries more than thirty event types, so no count is repeated here). It is a financial event: its `cost` is what the engine replays on restore to rebuild the in-memory financial ledger.
 
 | `event_type` | Trigger | Actor | `compliance_flag` | Payload |
 |---|---|---|---|---|
@@ -169,28 +171,32 @@ def purchase_upgrade(self, upgrade_id: str) -> Dict[str, Any]:
 
 ### 4.3 Modifier Hook Integration Points in `formulas.py`
 
-Per the "strictly additive" constraint, no existing function signature in `formulas.py` changes. Instead, each modifier is applied by the **caller** (`simulator.py`), which already holds `self.purchased_upgrade_ids`, immediately before or after invoking the pure formula function — preserving `formulas.py`'s documented purity guarantee ("kept free of engine state so each function is independently testable," `formulas.py:1-4`, Document 02 § 0). Four call sites change:
+No function signature in `formulas.py` is altered by upgrades. Each modifier is applied by the **caller** (`simulator.py`), which already holds `self.purchased_upgrade_ids`, immediately before or after invoking the pure formula function — preserving `formulas.py`'s documented purity guarantee ("kept free of engine state so each function is independently testable," `formulas.py:1-4`, Document 02 § 0). Four call sites carry upgrade modifiers (snippets are simplified: the real call sites also fold in scenario, difficulty, reputation, specialist and infrastructure multipliers described in the sibling specs):
 
 1. **`_evaluate_random_failures`** — hazard multiplier:
    ```python
    failure_probability = formulas.cascading_failure_probability(self.tech_debt, dep_statuses)
+   # ... exposure / specialist / scenario multipliers ...
    if "multi_az_clusters" in self.purchased_upgrade_ids:
        failure_probability *= 0.60
+   # ... infrastructure / difficulty / reputation multipliers ...
+   failure_probability = formulas.clamp_probability(failure_probability)  # the only cap, applied last
    ```
 2. **`_progress_incidents`** — MTTA reduction for regulatory-window checks only (the raw `mtta_seconds` counter stored on the incident and shown in the UI is NOT altered, preserving Document 05 §3.3's MTTA field semantics; only the *breach evaluation* uses the adjusted value):
    ```python
    effective_mtta = inc["mtta_seconds"]
    if "apm_tracing" in self.purchased_upgrade_ids:
        effective_mtta = max(0, effective_mtta - 2)
+   # a competency-matched engineer (specialist quality >= 0.7) shaves a further tick (Document 03)
    if formulas.is_unattended_breach(effective_mtta):
        ...
    ```
 3. **`_apply_happiness_drift`** — happiness dampener, applied as a multiplier on every negative delta:
    ```python
    dampener = 0.75 if "espresso_machine" in self.purchased_upgrade_ids else 1.0
-   self.user_happiness = max(5.0, self.user_happiness - 0.7 * dampener)
+   self.user_happiness = formulas.happiness_after_outage_drift(self.user_happiness, any_unhealthy, dampener)
    # and, within the per-incident alert-fatigue loop:
-   self.user_happiness = max(0.0, self.user_happiness - penalty * dampener)
+   self.user_happiness = formulas.happiness_after_alert_fatigue(self.user_happiness, penalty, dampener)
    ```
 4. **`apply_mitigation`** — rollback cost/TDI reduction, applied only when `action_id == "rollback"`:
    ```python
@@ -202,7 +208,7 @@ Per the "strictly additive" constraint, no existing function signature in `formu
    ```
    with `effective_cost`/`effective_tdi_delta` substituted for `action["cost"]`/`action["tech_debt_delta"]` in every subsequent line of the method body (the budget deduction, the TDI clamp, and the `RUNBOOK_EXECUTED` audit payload — the ledger must record what was actually charged, not the catalog's list price, consistent with the historical-accuracy rationale in § 3.1).
 
-`predictive_anomaly_detection`'s pre-alert mechanic (§ 5.2) is the one hook that is not a formula modifier but a new broadcast side-channel, detailed below.
+`ergonomic_chairs` is applied inside the staff stress loop (`gain *= 0.80` on the per-tick stress gain of an unacknowledged alarm, Document 03). `predictive_anomaly_detection`'s pre-alert mechanic (§ 5.2) is the one hook that is not a formula modifier but a delayed-materialization queue plus a broadcast side-channel, detailed below.
 
 ---
 
@@ -210,41 +216,37 @@ Per the "strictly additive" constraint, no existing function signature in `formu
 
 ### 5.1 `TICK_BROADCAST` Additive Field
 
-`SimulationEngine.get_state_payload()` (Document 01, § Architectural Data Flow) gains one new key, appended after the existing `recent_audits` key so no consumer that positionally destructures the object (none currently do — all consumers key-access by name) is affected:
+`SimulationEngine.get_state_payload()` (Document 01, § Architectural Data Flow) includes the key below (consumers key-access by name, never positionally):
 
 ```python
 "purchased_upgrades": sorted(self.purchased_upgrade_ids),
 ```
 
-The corresponding Pydantic contract (`backend/app/schemas/websocket.py`) gains a matching optional field with a default, preserving backward-compatible deserialization for any client still running the previous schema:
-
-```python
-purchased_upgrades: List[str] = []
-```
+On the client, `TelemetryState.purchased_upgrades: string[]` (`frontend/src/types/game.ts`) receives it. Note that `backend/app/schemas/websocket.py` (`SimulationTickPayload`) is a legacy, narrower Pydantic model that does **not** list this field: the live broadcast is the plain dict built by `get_state_payload()`, which is the real contract.
 
 ### 5.2 New Broadcast Type — `PRE_ALERT_WARNING`
 
-`predictive_anomaly_detection` requires the hazard-roll evaluation in `_evaluate_random_failures` to distinguish "roll succeeded, materialize immediately" (current behavior, unchanged for all players without the upgrade) from "roll succeeded, queue a 5-tick delayed materialization with an advance broadcast" (new behavior, gated behind upgrade ownership). This is implemented as a new engine-internal queue, not a mutation of the existing incident-creation path:
+`predictive_anomaly_detection` requires the hazard-roll evaluation in `_evaluate_random_failures` to distinguish "roll succeeded, materialize immediately" (current behavior, unchanged for all players without the upgrade) from "roll succeeded, queue a 5-tick delayed materialization with an advance broadcast" (new behavior, gated behind upgrade ownership). This is implemented as an engine-internal queue, not a mutation of the existing incident-creation path:
 
 ```python
-self.pending_pre_alerts: List[Dict[str, Any]] = []  # added to __init__
+PRE_ALERT_LEAD_TICKS = 5                              # module constant in simulator.py
+self.pending_pre_alerts: List[Dict[str, Any]] = []    # in __init__
+self._pending_broadcasts: List[Dict[str, Any]] = []   # out-of-band frames, flushed by the tick loop
 ```
 
-Modified `_evaluate_random_failures` branch:
+The `_evaluate_random_failures` branch:
 
 ```python
 if random.random() < failure_probability:
     if "predictive_anomaly_detection" in self.purchased_upgrade_ids:
-        self.pending_pre_alerts.append({"service_id": srv["id"], "fire_at_tick": self.current_tick + 5})
-        await_broadcast = {"type": "PRE_ALERT_WARNING", "service_id": srv["id"], "ticks_remaining": 5}
-        # queued for the next broadcast_state() call via self._out_of_band_events, see below
+        self._queue_pre_alert(srv)      # appends {"service_id", "fire_at_tick": tick + 5} and queues the frame
     else:
         self._trigger_service_failure(srv)
 ```
 
-A new `_progress_pre_alerts` step (invoked from `_update_simulation_tick`, alongside `_progress_incidents`) decrements `ticks_remaining` each tick and calls `_trigger_service_failure(srv)` once `self.current_tick >= fire_at_tick`, removing the entry from `pending_pre_alerts`. This is an **additive tick-loop step**: it is inserted into the existing sequential call chain in `_update_simulation_tick` without reordering or removing any existing call.
+`_progress_pre_alerts` (called from `_update_simulation_tick`) materializes the failure with `_trigger_service_failure(srv)` once `self.current_tick >= fire_at_tick`, **but only if the service is still `healthy` at that tick** (a service already degraded by another cause is not failed twice); the entry is then removed from `pending_pre_alerts`. The queue is cleared on reset and is not persisted across a process restart.
 
-The out-of-band `PRE_ALERT_WARNING` message is sent as a **separate WebSocket frame**, not merged into `TICK_BROADCAST`, using the existing `broadcast_state`-style fan-out loop (Document 01, § WS Broadcaster) factored into a small reusable `_broadcast_json(payload: dict)` helper that both `broadcast_state` (unchanged call site) and the new pre-alert path invoke. This keeps `TICK_BROADCAST`'s shape completely stable (no new required field to parse every tick) while still delivering the warning promptly rather than waiting for the next tick's regular frame.
+The out-of-band `PRE_ALERT_WARNING` message is sent as a **separate WebSocket frame**, not merged into `TICK_BROADCAST`: `_queue_pre_alert` appends it to `_pending_broadcasts`, `flush_pending_broadcasts()` (called from `_run_loop`) drains it, and both that path and `broadcast_state` fan out through the shared `_broadcast_json(payload)` helper. `TICK_BROADCAST`'s shape therefore stays stable.
 
 ```json
 {
@@ -254,51 +256,42 @@ The out-of-band `PRE_ALERT_WARNING` message is sent as a **separate WebSocket fr
 }
 ```
 
-Frontend clients that do not recognize `"type": "PRE_ALERT_WARNING"` MUST ignore unknown `type` values in their WebSocket message handler — this is already the required behavior per Document 01's WS contract, since `TICK_BROADCAST` is the only `type` currently emitted and any forward-compatible client already needs a `switch`/`if` dispatch keyed on `type` rather than assuming every frame is a tick update.
+`frontend/src/hooks/useSimulationSocket.ts` dispatches on `type`: `PRE_ALERT_WARNING` becomes a `warning` floating text (`floatingTexts.preAlertWarning(service_id, ticks_remaining)`), and unrecognized frame types are ignored so the handler stays forward-compatible (the socket also handles `DILEMMA_OFFERED` and `ACHIEVEMENT_UNLOCKED`).
 
 ---
 
 ## 6. UI/UX Specification
 
-### 6.1 New Dock Tab
+### 6.1 Dock Tab (`UpgradesTreePanel`)
 
-`frontend/src/components/layout/BottomDock.tsx` currently defines `type DockTab = "incidents" | "directives" | "compliance"` (three tabs, Document 01 § Component Inventory). This is extended additively:
+`frontend/src/components/layout/BottomDock.tsx` defines `type DockTab = "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics"`. The upgrades tab is registered with the lucide `TrendingUp` icon, the label `t.upgrades.header`, the **`U` hotkey**, and a badge that counts the upgrades the player could buy right now (`countAffordableUpgrades(budget, purchased)` in `upgradeCatalog.ts`: not owned, prerequisite met, `budget >= cost`); the badge is hidden while the tab is open. The tab body renders `<UpgradesTreePanel />`.
 
-```typescript
-type DockTab = "incidents" | "directives" | "compliance" | "upgrades";
-```
+The earlier flat-grid `UpgradesPanel.tsx` has been **removed**; `UpgradesTreePanel.tsx` is the only upgrades UI.
 
-with one new entry appended to the `tabs` array (using a new icon import, e.g. `TrendingUp` from `lucide-react`, already a dependency per the existing `AlertTriangle`/`Wrench`/`ScrollText` imports):
+### 6.1.1 Tree Layout and Card States
 
-```typescript
-{ id: "upgrades", label: t.upgrades.header, icon: TrendingUp },
-```
+1. **Three branch columns:** on wide screens (`lg:grid-cols-3`) the panel shows one column per branch — Observability, Resilience, Facility & Ergonomics — so the whole tree is visible at a glance inside the short dock; narrow screens stack the branches. Each column has a coloured category header (cyan / violet / amber).
+2. **Dependency connectors:** a root upgrade renders as a card; its children (`predictive_anomaly_detection` under `apm_tracing`) are indented beneath it behind a dashed vertical connector line and a "next tier" label (`CornerDownRight` glyph). The tree is built by grouping the catalog by `prerequisite`, so any future prerequisite chain nests the same way. (The connectors are CSS borders, not SVG paths.)
+3. **Card states:** *owned* — emerald border, check mark and "Owned" label; *locked* (prerequisite missing) — dimmed slate border, padlock and "Requires: <name>"; *unaffordable* — neutral border with the cost and an amber "short by $X" hint; *available* — neutral border that lights up on hover, showing the cost as a plain neutral price (red is reserved for alarms). A card is disabled when owned, locked, unaffordable or while its request is pending.
+4. **Purchase flow:** a click runs `api.purchaseUpgrade(id)` through `runExclusive`, which keeps the card pending until telemetry shows the upgrade as owned (a double click cannot buy twice). On success the UI shows floating text, a budget KPI delta and the cash sound; on a rejected purchase it shows the server error (or the localized "Insufficient budget runway").
 
-and one new conditional render branch alongside the existing three:
+### 6.2 `api.ts` Client Methods
 
-```tsx
-{activeTab === "upgrades" && <UpgradesPanel />}
-```
-
-`UpgradesPanel` is a new component, `frontend/src/components/dock/UpgradesPanel.tsx`, structurally mirroring `MitigationsPanel.tsx`'s existing catalog-grid-plus-buy-button layout (Document 04, § "As-Implemented Mechanics" describes the client-side cooldown pattern that `MitigationsPanel` already implements; `UpgradesPanel` reuses the same `api.ts` client-call idiom but against `/api/upgrades/*` instead of `/api/mitigations/*`).
-
-Each upgrade card renders: display name, category badge (color-coded per `observability`/`resilience`/`facility`, extending the existing category-badge palette already used for `deployment`/`compute`/`resilience`/`emergency` mitigation categories), cost, a locked/owned/prerequisite-missing state, and a "Purchase" button disabled when `budget < cost`, when already owned, or when the prerequisite is unmet — the disabled-state pattern already exists in `MitigationsPanel.tsx`'s cooldown-disabled button and `CooldownButton.tsx` (`frontend/src/components/common/CooldownButton.tsx`), reused here rather than reimplemented.
-
-### 6.2 Required `api.ts` Client Methods
-
-Additive methods appended to `frontend/src/services/api.ts`, following the existing method-per-endpoint convention (e.g. `getMitigationsCatalog`, `executeMitigation`):
+`frontend/src/services/api.ts` exposes:
 
 ```typescript
-getUpgradesCatalog: () => request<UpgradeAction[]>("/api/upgrades/catalog"),
+getUpgradesCatalog: () => request<Upgrade[]>("/api/upgrades/catalog"),
 purchaseUpgrade: (upgradeId: string) =>
   request<{ success: boolean; upgrade_id: string; budget: number }>(`/api/upgrades/${upgradeId}/purchase`, {
     method: "POST",
   }),
 ```
 
+The panel itself renders from the static mirror in `upgradeCatalog.ts`; `getUpgradesCatalog` is available for tooling and tests.
+
 ### 6.3 Zustand Store Extension
 
-`frontend/src/types/game.ts`'s `TelemetryState` interface gains one new optional-in-practice-but-typed-required field, matching § 5.1's default-populated broadcast field:
+`frontend/src/types/game.ts`'s `TelemetryState` interface carries one typed field matching § 5.1's broadcast key:
 
 ```typescript
 export interface TelemetryState {
@@ -307,11 +300,11 @@ export interface TelemetryState {
 }
 ```
 
-and `useGameStore.ts`'s `INITIAL_TELEMETRY` constant gains the matching bootstrap value `purchased_upgrades: []`, consistent with every other array field's empty-array initial state (`services: []`, `active_incidents: []`, `recent_audits: []`). No existing store action, selector, or field is renamed or removed.
+and `useGameStore.ts`'s `INITIAL_TELEMETRY` constant holds the matching bootstrap value `purchased_upgrades: []`, consistent with every other array field's empty-array initial state.
 
 ### 6.4 i18n Extension
 
-`frontend/src/i18n/translations.ts`'s `Translations` interface gains one new top-level namespace, `upgrades`, following the exact shape convention of the existing `mitigations` namespace:
+`frontend/src/i18n/translations.ts`'s `Translations` interface has a top-level `upgrades` namespace (typed with `UpgradeCategoryKey` and `UpgradeActionId` aliases), following the shape convention of the `mitigations` namespace. The panel's hint strings (`requires`, `shortBy`, `nextTier`, `buyTitle`) live in `t.hud.upgrades`; the pre-alert toast lives in `t.floatingTexts.preAlertWarning`.
 
 ```typescript
 upgrades: {
@@ -353,26 +346,21 @@ upgrades: {
 },
 ```
 
-The `pt-BR` and `es` entries in the same `TRANSLATIONS` record MUST be populated with parallel, fully-translated values before merge (the existing three-locale pattern in `translations.ts` has no precedent for a partially-translated namespace shipping to production) — the English block above is the authoritative source text those two translations are derived from.
+The `pt-BR` and `es` locale files (`frontend/src/i18n/locales/`) carry parallel, fully-translated values — the project ships no partially-translated namespace. The English block above is the source text those translations derive from.
 
-### 6.1 Visual Tech Tree (`UpgradesTreePanel.tsx`) & In-Game Hardware FX
+### 6.5 In-Game Hardware FX
 
-1. **Interactive Node-Graph Tree View:** While the legacy `UpgradesPanel` displayed a flat grid, `UpgradesTreePanel.tsx` organizes the upgrade catalog into an authentic tech-tree diagram with SVG dependency connector lines. Direct visual branches link `apm_tracing` to its child prerequisite `predictive_anomaly_detection`.
-2. **Category Clustering & State Tones:** Nodes are grouped into categorized tracks (Observability, Resilience, Facilities) with distinct visual state styling:
-   - **Owned:** Emerald border (`border-emerald-500/60`), green badge, and glowing checkmark.
-   - **Available:** Cyan/amber border with interactive purchase button and cost counter.
-   - **Locked:** Dimmed slate border (`border-slate-800`), padlock icon, and prerequisite dependency hint.
-3. **In-Game Predictive Anomaly Aura (`ServerRack.tsx`):** When `predictive_anomaly_detection` is purchased, healthy servers experiencing simmering latency or error anomalies render a pulsing amber radar halo at the rack foundation (`animate-pulse`) and a warning badge overhead, giving operators intuitive early-warning feedback before an incident escalates.
+**Predictive Anomaly Aura (`ServerRack.tsx`):** when `predictive_anomaly_detection` is owned, a rack whose service is still `healthy` but shows simmering telemetry (`latency_ms > 110` or `error_rate > 0.012`) renders a dashed, pulsing amber halo at the rack foundation (`animate-pulse`) and a small warning badge overhead (tooltip `t.officeLife.predictiveAnomaly`), giving the operator an early-warning cue before the incident materializes. This complements, and does not replace, the `PRE_ALERT_WARNING` toast of § 5.2.
 
 ---
 
 ## 7. Non-Breaking Compliance Checklist
 
-- [x] No existing SQL column altered or dropped; `purchased_upgrades` is a wholly new table.
-- [x] No existing REST route path or method changed; two new routes added.
-- [x] `TICK_BROADCAST`'s existing keys are all unchanged; one new key appended with a safe default.
-- [x] No existing Zustand store field, action, or selector renamed; one new field, no new required store method beyond internal `setTelemetry` (already the single entry point for whole-telemetry updates).
-- [x] No existing i18n key removed; one new top-level namespace added, and all three locale blocks must be filled in together per the project's existing i18n completeness convention (Document 01, § Localization Layer).
+- [x] `purchased_upgrades` is created by the initial Alembic revision; no existing column was altered for upgrades.
+- [x] Two routes added (`GET /api/upgrades/catalog`, `POST /api/upgrades/{id}/purchase`); no existing route changed.
+- [x] `TICK_BROADCAST`'s existing keys are unchanged; `purchased_upgrades` is an additional key (the client defaults it to `[]`).
+- [x] The store gained one field (`telemetry.purchased_upgrades`); `setTelemetry` remains the single entry point for whole-telemetry updates.
+- [x] The `upgrades` namespace is filled in for all three locales (en, pt-BR, es) together, per the project's i18n completeness convention.
 - [x] No existing `formulas.py` function signature changed; all four modifier hooks are applied at the call site in `simulator.py`, preserving `formulas.py`'s pure-function contract.
-- [x] The Audit Ledger Data Dictionary's enumerated event-type set grows from 8 to 9 via one additive row (`UPGRADE_PURCHASED`); no existing event type's trigger, actor, or payload schema changes.
-- [x] Interactive `UpgradesTreePanel.tsx` integrates directly into `BottomDock.tsx` tab navigation with hotkey `[U]`.
+- [x] `UPGRADE_PURCHASED` is catalogued in the Audit Ledger Data Dictionary; no other event type's trigger, actor, or payload schema is affected.
+- [x] `UpgradesTreePanel.tsx` is the dock's upgrades tab (hotkey `[U]`); the legacy `UpgradesPanel.tsx` no longer exists.

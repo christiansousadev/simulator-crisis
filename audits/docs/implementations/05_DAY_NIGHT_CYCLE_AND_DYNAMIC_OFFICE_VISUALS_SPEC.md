@@ -2,342 +2,178 @@
 
 **Document ID:** IZ-IMPL-05  
 **Classification:** Technical Specification / Office Presentation Layer  
-**Status:** Implementado  
-**Source of Truth:** `frontend/src/components/layout/Topbar.tsx`, `frontend/src/components/office/IsometricOffice.tsx`, `frontend/src/components/office/SkylineBackdrop.tsx`, `frontend/src/components/office/PathfindingEmployee.tsx`, `frontend/src/utils/officeClock.ts`
+**Status:** Implementado (revisado para a implementação atual; sem medição de FPS)  
+**Last Updated:** Outubro 2026  
+**Source of Truth:** `frontend/src/utils/officeClock.ts`, `frontend/src/components/office/lighting.ts`, `lightingBus.ts`, `LightingDriver.tsx`, `AmbientLight.tsx`, `SkyLayers.tsx`, `SkylineBackdrop.tsx`, `EmergencyFx.tsx`, `frontend/src/utils/defcon.ts`, `frontend/src/components/office/waypointGraph.ts`, `rosterPlan.ts`, `rosterStage.ts`, `RosterDirector.tsx`, `RosterWalkers.tsx`, `PathfindingEmployee.tsx`, `WanderingEmployee.tsx`, `officeLayout.ts`
+
+> **Revision note.** This document was rewritten against the code as it stands after the UX overhaul. The first version described a six-phase `feColorMatrix` grade, a `dimmed` wall prop and a `PathfindingEmployee` that was specified but not yet used. None of that is how the app works today; those designs survive only as short **Superseded** notes. Companion document for the shared motion/interaction rules: `10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md` (IZ-IMPL-10).
 
 ---
 
 ## 1. System Objective
 
-Layer an atmospheric day/night lighting progression and a real waypoint-graph movement system on top of the existing isometric office renderer, without altering the isometric projection math, the SVG viewBox contract, the zone-origin layout constants, or any backend telemetry field — this is a purely presentational specification. It formalizes and extends a clock convention that **already exists** in the codebase: `Topbar.tsx`'s `formatOfficeClock` function already treats `tick % 24` as an hour-of-day and `Math.floor(tick / 24) + 1` as a day counter (`Topbar.tsx:17-22`). This specification is the natural extension of that existing convention into the office's visual rendering, not a new clock model competing with it.
+Give the isometric office a continuous sense of time of day and of threat level, and make the hired engineers physically walk through the office along real corridors. Both layers are purely presentational: no backend field, REST route or `TICK_BROADCAST` key was added for them, `isoMath.ts::project()` and the viewBox contract (`-406 -156 1006 640`) are unchanged, and the zone origins are shared constants.
+
+Two inputs drive everything: the tick (1 tick = 1 game hour) and the DEFCON level derived from telemetry (`computeDefconLevel`, `utils/defcon.ts`). Nothing in this document is persisted.
 
 ---
 
-## 2. Day/Night System
+## 2. Day/Night and Threat Lighting
 
-### 2.1 Clock Mapping (Formalizing the Existing Convention)
+### 2.1 Clock mapping
 
-$$
-\text{HourOfDay}(tick) = tick \bmod 24
-$$
-$$
-\text{DayNumber}(tick) = \left\lfloor \frac{tick}{24} \right\rfloor + 1
-$$
+`utils/officeClock.ts` is the single source for tick → hour. `Topbar.tsx` (clock readout), `ScreenTransition.tsx` (shift banner), `TitleScreen.tsx`, `LightingDriver.tsx` and `EngineerDesk.tsx` all import it.
 
-This is byte-for-byte the same arithmetic already implemented in `Topbar.tsx:19-20`. No change to that function is required; it is reused as the single source of truth for "what hour is it," imported rather than reimplemented, by the new lighting system (§ 2.2) — avoiding the drift risk of two independently-maintained tick-to-hour formulas.
+| Function | Behaviour |
+|---|---|
+| `START_HOUR = 8` | Tick 0 reads **08:00**, so a fresh session opens on a bright office. Presentational only; the backend never sees the offset. |
+| `getHourOfDay(tick)` | `((tick + START_HOUR) % 24 + 24) % 24` |
+| `getDayNumber(tick)` | `floor((tick + START_HOUR) / 24) + 1` |
+| `getDayPhase(hour)` | Six discrete labels (`dawn`, `morning`, `noon`, `afternoon`, `dusk`, `night`; night = 22:00–05:00). **No longer drives any lighting**; it is only used through `isNightHour` (`officeLifeUtils.ts`) to enlarge the desk-monitor glow in `EngineerDesk.tsx`. |
+| `getDaylight(hour)` | Continuous 0..1 sunlight. |
+| `getNightIntensity(hour)` | `1 - getDaylight(hour)`. |
+| `getTwilight(hour)` | Warm dawn/dusk term: `max(0, 1 - |2·daylight - 1|) ^ 1.5` (zero at full night and full day). |
 
-New shared utility, `frontend/src/utils/officeClock.ts`, extracting the existing inline arithmetic into an importable, testable function (an additive refactor — `Topbar.tsx` is updated to import and call it rather than recompute it inline, with its own external behavior completely unchanged):
+### 2.2 Continuous daylight curve
 
-```typescript
-export function getHourOfDay(tick: number): number {
-  return tick % 24;
-}
+`getDaylight` interpolates between keyframes with a smoothstep, so there are no kinks and no phase steps:
 
-export function getDayNumber(tick: number): number {
-  return Math.floor(tick / 24) + 1;
-}
+| Hour | 0 | 4.5 | 6.5 | 8 | 10 | 15.5 | 17.5 | 19 | 20.5 | 22 | 24 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Daylight | 0 | 0 | 0.45 | 0.96 | 1 | 1 | 0.82 | 0.4 | 0.08 | 0 | 0 |
 
-export type DayPhase = "dawn" | "morning" | "noon" | "afternoon" | "dusk" | "night";
+Covered by `utils/officeClock.test.ts` (the `START_HOUR` offset, day rollover and the curve).
 
-// PHASE BOUNDARIES: DAWN (06:00), NOON (12:00), DUSK (18:00), NIGHT SHIFT (22:00-05:00)
-export function getDayPhase(hour: number): DayPhase {
-  if (hour >= 22 || hour < 5) return "night";
-  if (hour >= 5 && hour < 7) return "dawn";
-  if (hour >= 7 && hour < 11) return "morning";
-  if (hour >= 11 && hour < 13) return "noon";
-  if (hour >= 13 && hour < 18) return "afternoon";
-  return "dusk"; // 18:00-22:00
-}
-```
+### 2.3 Lighting model, driver and bus
 
-`Topbar.tsx`'s existing `formatOfficeClock` is updated to call `getHourOfDay`/`getDayNumber` internally, changing zero characters of its own return value or external contract:
+Pure model — `components/office/lighting.ts` (no React, no DOM):
 
-```typescript
-function formatOfficeClock(tick: number, dayLabel: string): string {
-  return `${dayLabel} ${getDayNumber(tick)} · ${getHourOfDay(tick).toString().padStart(2, "0")}:00`;
-}
-```
+- `computeLightTargets(hour, level)` returns `night`, `twilight`, `pool` (DEFCON 4 and worse), `amber` (DEFCON 3), `alert` (DEFCON 2 and worse) and `alertDepth` (1 at DEFCON 1, 0.85 at DEFCON 2).
+- `stepLighting(runtime, targets, dtMs)` eases a smoothed `LightState` toward those targets. Day/night values use an exponential ease (`NIGHT_TAU_MS = 3000`), so 5x speed never strobes the scene. The amber values use a 1.2 s time constant.
+- `snapLightState(targets)` returns the final state with no easing (reduced motion, hidden tab, first paint). `isLightingSettled` lets the loop sleep.
+- `lightVars(state)` converts the state to CSS custom properties: `--night`, `--twilight`, `--pool`, `--amber`, `--alert-dark`, `--beacons`, `--sweep`, `--lights`, `--emit`. `--emit` is how bright emissive things read (faint by day, strong at night and under emergency power).
 
-### 2.2 SVG Color Grading Filter
+Runtime — `LightingDriver.tsx` renders nothing. It subscribes to the store, but only re-targets when the key `tick|defconLevel` changes, then runs a `requestAnimationFrame` loop that publishes through `lightingBus.ts` and stops as soon as the state has settled. There is **no React state** involved, so a lighting change never re-renders the scene. `reduced motion` or a hidden tab snaps straight to the targets (`isReducedMotionNow()`, `document.hidden`).
 
-A new `<filter>` element, `officeDayNightGrade`, is added to `IsometricOffice.tsx`'s existing `<defs>` block (`IsometricOffice.tsx:88-93`, which currently contains only `groundShadowGradient`) — purely additive to that block:
+Bus — `lightingBus.ts` keeps a registry of "light scopes". An element becomes a scope through the `useLightScope()` ref callback; the driver writes the CSS variables only onto those few elements (the sky wrapper, `FloorPools`, `AmbientLightOverlay`, `EmissiveLayer`), never onto the whole office container, so a lighting frame only restyles their small subtrees.
 
-```tsx
-<defs>
-  <radialGradient id="groundShadowGradient" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" stopColor="rgba(15,23,42,0.32)" />
-    <stop offset="100%" stopColor="rgba(15,23,42,0)" />
-  </radialGradient>
+### 2.4 Layers
 
-  {/* additive: day/night color grade, driven by CSS custom properties updated per-phase */}
-  <filter id="officeDayNightGrade" x="-5%" y="-5%" width="110%" height="110%">
-    <feColorMatrix type="matrix" values="var(--office-grade-matrix)" />
-  </filter>
-</defs>
-```
+| Layer | File | What it does |
+|---|---|---|
+| Sky | `SkyLayers.tsx` + `.office-sky-night` / `.office-sky-dusk` in `index.css` | Two absolutely positioned gradients whose **opacity** follows `--night` and `--twilight`, over the daytime gradient on `.office-sky::before`. Opacity-only, so no gradient repaint. |
+| Skyline | `SkylineBackdrop.tsx` | Three depth bands of silhouettes; window panes fade in as `clamp(0, (--night − 0.3) × 2.2, 1)`; warm-white / soft-cyan panes with a per-cell intensity hash; blinking red aviation beacons on the near towers; parallax driven by the camera (translate only, max 26 px). |
+| Floor pools | `AmbientLight.tsx::FloorPools` | Cyan server pool, an amber pool at DEFCON ≤ 4, a pulsing red pool in a red alert, warm lamp pools over the engineering desks and the boardroom screen glow; opacities are `calc()` expressions over the variables. |
+| Darkness overlay | `AmbientLight.tsx::AmbientLightOverlay` | Plain translucent polygons over floor and walls (`#0a1226` × `--night`, orange twilight tint, near-black emergency wash, a faint pulsing dark-red layer). |
+| Emissive layer | `AmbientLight.tsx::EmissiveLayer` | Drawn **after** the overlay so rack glows, desk monitor glows (`--emit`) and the DEFCON beacon rig cut through the dark. The beacon rig stays mounted for 700 ms after the alert ends (`usePresenceFlag`) so its fade-out can finish. |
+| Desk glow at night | `EngineerDesk.tsx` | The monitor glow ellipse grows (22×11 instead of 15×7) and brightens (0.3 instead of 0.12) when `isNightHour`. |
 
-Rather than re-deriving a 20-value color matrix in React state every render, the grading is driven by a CSS custom property (`--office-grade-matrix`) set once per phase transition on the root office `<div>` (`IsometricOffice.tsx:86`'s existing `ref={containerRef}` element), via a small `useEffect` keyed on the current `DayPhase`:
+Paint order in `IsometricOffice.tsx`: `StaticFloor` → `FloorPools` → decor → cables → props → racks/desks → rooms → `AmbientLightOverlay` → `EmissiveLayer`, all inside the camera rig `<g>`. The static layers are `memo`ed with no props or subscriptions.
 
-```typescript
-const GRADE_MATRICES: Record<DayPhase, string> = {
-  dawn:      "0.95 0.05 0.10 0 0.02   0.05 0.92 0.08 0 0.01   0.15 0.10 1.05 0 0.03   0 0 0 1 0",
-  morning:   "1.00 0.00 0.00 0 0.00   0.00 1.00 0.00 0 0.00   0.00 0.00 1.00 0 0.00   0 0 0 1 0",
-  noon:      "1.05 0.00 0.00 0 0.02   0.00 1.05 0.00 0 0.02   0.00 0.00 0.98 0 0.00   0 0 0 1 0",
-  afternoon: "1.02 0.02 0.00 0 0.01   0.02 1.00 0.00 0 0.00   0.00 0.00 0.95 0 0.00   0 0 0 1 0",
-  dusk:      "1.10 0.05 0.00 0 0.03   0.05 0.85 0.05 0 0.01   0.00 0.10 0.90 0 0.02   0 0 0 1 0",
-  night:     "0.55 0.05 0.15 0 0.00   0.05 0.60 0.20 0 0.00   0.15 0.20 0.85 0 0.02   0 0 0 1 0",
-};
+### 2.5 DEFCON tiers and the staged red alert
 
-useEffect(() => {
-  containerRef.current?.style.setProperty("--office-grade-matrix", GRADE_MATRICES[dayPhase]);
-}, [dayPhase]);
-```
+`defconLightingTier(level)` (`utils/defcon.ts`) is the one rule every consumer shares:
 
-The filter is applied to the single top-level `<g>` wrapping the entire office scene (a new wrapping group added around the existing sequence of `<PerimeterWalls>`, `<ParquetFloor>`, room-tile, and prop components in `IsometricOffice.tsx`'s render body) via `filter="url(#officeDayNightGrade)"` — one additive wrapping element, with every existing child element passed through completely unmodified as children of that group. A CSS `transition: filter 4s linear` (or an SVG-native animated `feColorMatrix values` via `<animate>`, whichever the implementation phase prefers — both are additive, non-breaking choices) smooths phase boundaries rather than hard-cutting, consistent with the codebase's existing preference for eased transitions (`OfficeWorker.tsx`'s `transitionMs`-driven `ease-in-out` translate, `WanderingEmployee.tsx`'s `1800ms` walk transitions).
+| DEFCON | Tier | Lighting |
+|---|---|---|
+| 5 | `nominal` | Day/night only. |
+| 4 | `watch` | Faint amber pool over the vault. |
+| 3 | `warning` | Amber pool plus slow amber beacons. |
+| 2, 1 | `alert` | Red alert; `alertDepth` 0.85 at DEFCON 2 and 1.0 at DEFCON 1. |
 
-### 2.3 Night Mode Aesthetics
+The red alert is **staged**, not a single filter swap (constants in `lighting.ts`):
 
-Three additive visual elements, each gated behind `dayPhase === "night"` (or, where a softer transition reads better, behind a `nightIntensity` continuous value derived from proximity to the 22:00/05:00 boundaries — an optional refinement, not required for correctness):
+1. First 150 ms (`ALERT_FLICKER_MS`): hard on/off flickers (`alertFlicker`), like emergency power kicking in.
+2. After the flicker: the darkening approaches `alertDepth` over 150 ms and the beacons scale in over 250 ms.
+3. From 400 ms: the rotating sweep fades in over 300 ms. Normal lights drop to 0.35 (`EMERGENCY_LIGHTS`) over 400 ms.
+4. On exit: the alert wash, beacons and sweep fade over 500 ms; the normal lights restore only after a further 500 ms, over about 1.2 s.
 
-1. **Dimmed ceiling lights.** `PerimeterWalls.tsx` (Document 01 § Component Inventory) gains one additive conditional prop, `dimmed?: boolean`, passed as `dimmed={dayPhase === "night"}` from `IsometricOffice.tsx`. When `true`, any ambient overhead light rect/gradient already drawn by `PerimeterWalls` has its `opacity` reduced (e.g., from `1.0` to `0.35`) — a prop-driven opacity change requires no new SVG elements, only an additive optional prop threaded to an existing fill/opacity attribute.
-2. **Monitor glow.** `OfficeWorker.tsx` already supports a `glowColor` prop rendering a soft ellipse behind the head (`OfficeWorker.tsx:144-146`, currently used for some existing desk contexts). Night mode sets `glowColor` to a cyan (`#22d3ee`) or emerald (`#34d399`) value (alternating per-desk, keyed by `desk index % 2`, for visual variety) on every seated engineer sprite rendered by `EngineerDesk.tsx`, wherever that component currently passes `glowColor` conditionally or not at all — an additive default value activated only under the night phase, not a new prop on `OfficeWorker` itself (the prop already exists).
-3. **Illuminated skyline.** A new component, `frontend/src/components/office/SkylineBackdrop.tsx`, rendered as a fixed background layer behind the SVG canvas (a `position: absolute` `<div>` sibling preceding the existing `<svg>` element inside `IsometricOffice.tsx`'s root container, `IsometricOffice.tsx:86-87` — additive sibling, not a modification of the SVG itself), drawing a simple parallax skyline of building silhouettes as flat SVG rects/polygons. Under `dayPhase === "night"`, a subset of the buildings' "windows" (small rects scattered across each silhouette) render at full opacity with a warm/cool light fill, while under any daytime phase those same window rects render at near-zero opacity — achieved with the identical CSS-custom-property-driven approach as § 2.2 (`--skyline-window-opacity`), keeping the component's own render output static across phases and only its computed style dynamic, which avoids any SVG re-layout cost on every phase transition.
+`lighting.test.ts` covers the targets, the easing, the flicker and the exit order. The beacon geometry (`AlertBeacon`, `floorWallPath`) lives in `EmergencyFx.tsx`.
 
-    **As-implemented (Phase 2 revision).** Three refinements landed on top of the base skyline: (a) window-pane fill was retuned from a flat, fully-opaque amber to a softer, per-cell-intensity-varied pair (`#fef08a` warm-white / `#7dd3fc` soft cyan, opacity cycling `0.55`–`0.91` via a deterministic hash of each pane's row/column) so the building faces no longer read as a wall of identical solid squares; (b) a dedicated deep-atmosphere background gradient (`#030712` at the top of the viewBox fading to `#0f172a` at the horizon) was added behind every building silhouette, rendered at full opacity during dusk/night and a faint 0.22-opacity vignette during the day so the pre-existing daylight CSS gradient (`.office-sky::before`, § 5 of Document `IZ-IMPL-09`) continues to show through; and (c) a ground-hugging horizon-haze band (`rgba(15,23,42,0.85)` fading to transparent) was added where the skyline silhouette meets the office floor, plus a small blinking red aviation-warning beacon (`animate-pulse`) atop each of the tallest ("near"-depth-band) towers' rooftop antennas — together giving the backdrop real atmospheric depth instead of a flat painted cutout.
+> **Two different "red alert" signals exist, on purpose.** The *lighting* rig follows the DEFCON tier above (DEFCON ≤ 2). The *NPC reaction* (ambient characters stop and face the vault; the boardroom reacts) follows `hooks/useRedAlert.ts`: a critical-tier service is `down` or the SLA status is `breached`. They usually coincide but are not the same predicate.
 
-None of these additions touch `isoMath.ts`'s `project()` function or any zone-origin constant (`SERVER_ROOM_ORIGIN`, `ENGINEERING_ORIGIN`, etc., `IsometricOffice.tsx:20-24`) — the isometric projection and room layout are completely orthogonal to, and untouched by, the lighting system.
+### 2.6 Performance notes
 
-### 2.4 Red Alert Emergency Override (As-Implemented, Phase 2)
+- No SVG filter elements and no SMIL anywhere in the office (see §4). The scene-wide `feColorMatrix` pass was removed because it forced a full offscreen pass on every repaint.
+- Lighting variables are written to four small scopes, not the container.
+- `.office-paused` (set by `IsometricOffice.tsx` when the tab is hidden or the scene is off screen via `IntersectionObserver`) pauses every looping CSS animation in the scene.
+- **Not measured:** no FPS or frame-time profile exists for the lighting layers. The claims above are structural (what is and is not re-rendered or repainted), not benchmark results.
 
-A second, independent override state was added on top of the day/night grade described in § 2.2: whenever `redAlert` is true (a live `P1_CRITICAL` incident is present in `active_incidents`, or `status === "breached"`), the `officeDayNightGrade` filter's `feColorMatrix` values are substituted entirely with `RED_ALERT_GRADE_MATRIX`, superseding whatever `GRADE_MATRICES[dayPhase]` would otherwise apply for the current tick-derived hour. This matrix is deliberately not a tinted variant of the ambient grade; it is a heavy desaturation-and-darkening transform pushed toward a cool navy (diagonal coefficients roughly `0.30`–`0.44` per channel, blue retained slightly more than red/green, small cross-channel terms so shadow regions stay genuinely dark rather than color-cast), with the phase transition's usual 4-second `<animate>` duration shortened to 0.8 seconds so the alert state reads as an urgent, near-immediate cut rather than a slow fade.
+### 2.7 Superseded
 
-This directly supersedes an earlier implementation that instead layered a flat, translucent brick-red overlay (`#7f1d1d` at `opacity: 0.22`) on top of the ordinary grade — that approach visually read as washing the whole office toward pink/salmon rather than an emergency blackout, and offered no way for the rack/character contrast to remain legible under the tint. The as-implemented design keeps the scene's blacks deep and the racks/desks contrasted against them, and reserves red exclusively for two purposes: (1) the rotating volumetric sweep and flashing dome of `EmergencyBeacon` (`frontend/src/components/office/EmergencyFx.tsx`), instanced at the server room, the engineering bay, and the boardroom whenever `redAlert` is true, and (2) each server rack's own existing status glow (spark/flame/floor-reflection treatment, unchanged from its baseline behavior). A companion `RedAlertOverlay` component renders one additional near-black (`#020617`, `opacity: 0.4`, pulsing) vignette path across the full floor footprint, functioning purely as a darkening device — not a color wash — consistent with the "spotlights cutting through darkness" model rather than the earlier flat tint.
+- **Superseded — `officeDayNightGrade` filter.** A single `<filter>` with six per-phase 5×4 colour matrices, switched by a `useEffect` on `DayPhase`, was the original day/night design. It is gone; there is no `feColorMatrix` in the scene. `AmbientLight.tsx` documents the removal in its own header comment.
+- **Superseded — `RED_ALERT_GRADE_MATRIX`, `RedAlertOverlay` and `EmergencyBeacon`.** Replaced by the staged model in §2.5 (`AlertBeacon` plus the overlay layers).
+- **Superseded — `data-day-phase` on the office container.** `.office-sky` no longer retints a single gradient per phase; the night and dusk layers cross-fade by opacity (§2.4).
+- **Superseded — `PerimeterWalls` `dimmed` prop.** Removed; `PerimeterWalls.tsx` states that night is handled by the overlay. The walls are now `memo`ed.
+- **Superseded — cyan/emerald monitor `glowColor` per desk index at night.** Desk screen colour now comes from live state (`deskScreenColor`: service status, investigating, mitigating, engineer present).
 
 ---
 
-## 3. Physical Waypoint & Movement Engine
+## 3. Movement: the Roster Walks the Office
 
-### 3.1 Why This Builds on, Rather Than Replaces, `WanderingEmployee`
+### 3.1 Three kinds of mover
 
-`WanderingEmployee.tsx` already implements the foundational primitive this specification needs: a component holding a `waypoints: Waypoint[]` array, an `index` state cycling through it on an interval, and rendering `OfficeWorker` at `current.x`/`current.y` with a CSS `transitionMs`-eased move (line count has since shifted with a bugfix, see note below — do not cite a specific line range without rereading the file). The gap this specification closes is that `WanderingEmployee`'s transition is a **direct straight-line CSS interpolation between two arbitrary points** — it does not check whether that straight line passes through a desk, a wall, or a server rack, because its existing waypoint pools (coffee machine, sofa, ping-pong table, per its docstring) were hand-authored to already avoid collisions. This specification generalizes that pattern into a real graph so that **new** waypoint pools (e.g., "any desk to the server room door") can be authored declaratively without a human manually verifying every pairwise straight line is collision-free.
+| Mover | Component | Driven by |
+|---|---|---|
+| Hired engineers (the roster) | `PathfindingEmployee.tsx`, painted by `RosterWalkers.tsx` | `rosterStage.ts` walking a path over `waypointGraph.ts`, fed by `RosterDirector.tsx` from telemetry |
+| Lounge NPCs (up to two, shown by morale thresholds) and a corridor patroller | `WanderingEmployee.tsx` | A fixed waypoint loop on a timer; no graph |
+| Seated/animated props (ping-pong ball, door, clock hands) | `OfficeProps.tsx`, `BreakRoom.tsx`, `officeLife.css` | State or CSS |
 
-> **Fixed (frontend hardening pass):** the interval effect described above originally listed the
-> reactive `happiness` value in its dependency array. Because `user_happiness` drifts on almost
-> every tick broadcast, the interval was torn down and recreated before `dwellMs` could ever
-> elapse, so `index` effectively never advanced — every `WanderingEmployee` instance (both NPCs
-> in `BreakRoom.tsx` and the corridor patroller in `IsometricOffice.tsx`) stood frozen at its
-> first waypoint for the entire session, despite rendering a "patrolling" component. It now reads
-> `happiness` via a ref inside the interval callback instead. This does not change anything this
-> specification builds on top of (the waypoint-cycling shape, the CSS-eased move, the morale-gate
-> skip logic) — only that the cycling itself now actually runs at the intended cadence.
->
-> **Fixed (follow-up):** that same cycling fix exposed a second, previously-latent bug: `BreakRoom.tsx`'s
-> ping-pong ball (`OfficeProps.tsx::PingPongBall`) rendered on an infinite CSS loop gated only by
-> `user_happiness > 70`, not by whether `employeeB` (the `WanderingEmployee` instance whose
-> waypoints include the table) had actually arrived there — so once the cycling bug above was
-> fixed and the employee started really patrolling, the ball volleyed by itself for the two-thirds
-> of the loop spent at the coffee/sofa waypoints instead. `WanderingEmployee` now accepts an
-> `onActionChange` callback, fired `WALK_TRANSITION_MS` (1800ms, matching `transitionMs`) after the
-> sprite's target waypoint changes, so a parent scene can key a prop's own animation to actual
-> arrival rather than a proxy condition. `BreakRoom` uses this to gate `PingPongBall` on
-> `employeeBAction === "pingpong"` directly.
->
-> **Fixed (follow-up 2):** separately, the table itself didn't read as a ping-pong table — it was
-> a single solid `IsoBox` sitting flush on the floor (no legs) with a thin, easy-to-miss net box
-> on top, so once the ball stopped volleying by itself (previous fix) the whole prop looked like
-> an arbitrary green block, not furniture. Replaced the two inline `IsoBox` calls with a new
-> `PingPongTable` component (`OfficeProps.tsx`) built from two dark end supports raising a thin
-> tabletop off the ground plus a taller, more legible net across the midline — the same
-> stacked-box vocabulary every other prop in this file already uses (c.f. `Sofa`, `Fridge`), not a
-> new rendering primitive.
->
-> **Changed (visual refactor pass):** three further changes, requested directly ("bonecos muito
-> quadradão e sem movimentação... refatorar essas animações, personagens e ambientes"), touch
-> every scene this specification builds on:
-> 1. `isoMath.ts::boxFaces` now chamfers each face's corners (a small proportional inset, capped
->    and clamped so it degrades gracefully on both tiny and sliver-thin boxes) instead of emitting
->    a plain 4-point rectangle. This is the single shared primitive behind every `IsoBox`-based
->    prop in the game (server racks, desks, the new `PingPongTable`, etc.) — the change is
->    entirely inside `boxFaces()`, so `IsoBox.tsx` and every prop component are unmodified and
->    automatically inherit the softer silhouette. `project()` itself is still untouched, so this
->    document's existing "isoMath.ts's project() is a read-only input" claims still hold.
-> 2. `OfficeWorker.tsx` gained blinking eyes (a per-instance randomized `animationDelay` so a room
->    of sprites doesn't blink in lockstep) and a real walk-cycle: legs now swap between a static
->    `StandingLegs` pose and a `WalkingLegs` pose (each leg a separately-pivoted `<g>` swinging in
->    opposite phase) based on a new `isWalking` state, itself derived from comparing the sprite's
->    current `(x, y)` against its previous render — true only for the `transitionMs` window after
->    a position actually changes. Previously the legs were one fixed mid-stride pose regardless of
->    whether the sprite was moving or standing still.
-> 3. `BreakRoom.tsx`'s ping-pong table redesign (previous note) is the concrete example of the
->    "less blocky prop" ask; the same stacked-box-plus-chamfer treatment now applies uniformly via
->    point 1 above rather than needing a bespoke redesign per prop.
+`PathfindingEmployee` is **in use**: it is the sprite for every hired engineer. It no longer takes `currentNodeId` / `targetNodeId` props and no longer walks by itself; it receives a `WalkerView` (position, hop duration, facing, seated, band, place) and turns it into an `OfficeWorker` whose mood follows live telemetry (stress, stamina, the incident on the service, an acknowledge or mitigation in flight).
 
-### 3.2 Waypoint Graph Data Structure
+### 3.2 Waypoint graph
 
-New module, `frontend/src/components/office/waypointGraph.ts`:
+`waypointGraph.ts` builds a bidirectional graph from the real layout (`officeLayout.ts`), not from hand-placed coordinates:
 
-```typescript
-export interface GraphNode {
-  id: string;
-  x: number;
-  y: number;
-}
+- A vertical spine west of the desks (`SPINE_X = 9.75`) joins the aisles (rows at y 2.4, 4.9, 6.95), the mid-floor road (y 5.55) and the main hall (y 8.4).
+- Each assigned desk has `aisle-*` → `approach-*` → `seat-<service>` nodes (`seat: true`, elevated by `SEAT_Z`); reserve desks have `seat-reserve-<n>`.
+- The hall continues east to reception (`hall-east`, `reception-west`, `reception-front`, `entrance`).
+- The lounge is entered through `lounge-door` → `lounge-mid`, with coffee, table and two sofa seats.
+- The vault: `mid-spine` → `mid-door` → `server-room-door` → `server-room-front`, then a rack aisle at y 3.5 with one `rack-front-<service>` stand per rack (sorted by x so the chain never doubles back).
+- **Door fix.** The `server-room-door` node used to sit at (2.3, 8.6) in the boardroom hallway; it is now derived from `SERVER_ROOM_DOOR` = origin + `SERVER_DOOR_OFFSET` = (3.9, 4.05), the real sliding door. `waypointGraph.test.ts` pins both the numbers and that every destination is reachable from the entrance, and samples every edge against the furniture footprints (`walkBlockers`) so a sprite following an edge cannot clip a desk, rack or sofa.
 
-export interface GraphEdge {
-  from: string;
-  to: string;
-  weight: number; // euclidean tile distance, precomputed
-}
+`findPath` is a plain A* with a linear open-set scan (the graph has well under 100 nodes). It returns `[]` for a missing node or no route; callers fall back (§3.4). `hopDurationMs` gives a constant walking speed (`WALK_SPEED_TILES_PER_S = 1.5`, minimum hop 220 ms) so motion reads as walking, not hopping. `facingForMove` derives left/right from the isometric screen-x delta.
 
-export interface WaypointGraph {
-  nodes: Map<string, GraphNode>;
-  adjacency: Map<string, GraphEdge[]>;
-}
+### 3.3 Planning (pure)
 
-export function buildGraph(nodes: GraphNode[], edges: Array<[string, string]>): WaypointGraph {
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const adjacency = new Map<string, GraphEdge[]>();
-  for (const id of nodeMap.keys()) adjacency.set(id, []);
-  for (const [fromId, toId] of edges) {
-    const from = nodeMap.get(fromId)!;
-    const to = nodeMap.get(toId)!;
-    const weight = Math.hypot(to.x - from.x, to.y - from.y);
-    adjacency.get(fromId)!.push({ from: fromId, to: toId, weight });
-    adjacency.get(toId)!.push({ from: toId, to: fromId, weight }); // corridors are bidirectional
-  }
-  return { nodes: nodeMap, adjacency };
-}
-```
+`rosterPlan.ts`, no React and no timers:
 
-The graph's nodes are authored as explicit corridor waypoints along the office's existing `WalkwayGuide` lines (`IsometricOffice.tsx:106-107`, already drawn as the two main hallway circulation guides at `axis="y" fixed={8.6}` and `axis="x" fixed={8.4}`) and doorway gaps (the existing `GlassWall` `doorFrom`/`doorTo` props, `IsometricOffice.tsx:110, 114`), rather than being freely placed — this guarantees every graph edge, by construction, follows a path the office's own architecture already declares as walkable, with zero risk of a new edge silently cutting through a wall segment that a human author would need to visually double-check.
+- `deriveIntent`: `resting` / `off_duty` → lounge; assigned service has an `acknowledged` or `mitigated` incident → incident (stand at the rack); otherwise desk.
+- `assignSeats`: oldest hire first; the first engineer assigned to a service takes its desk, everyone else takes a reserve desk in order; none left → lounge.
+- `planTargets` gives one destination per engineer (lounge spots fill in order; only the coffee spot holds a mug).
+- `bandOf(x, y)` assigns a painter layer (`w0`, `w1`, `w2`, `lounge`) so a walking sprite is drawn just behind the furniture in front of it.
+- `appearanceFor(id)` hashes the engineer id to a stable look.
 
-```typescript
-export const OFFICE_WAYPOINT_NODES: GraphNode[] = [
-  { id: "engineering-hall-1", x: 10.5, y: 8.4 },
-  { id: "engineering-hall-2", x: 13.0, y: 8.4 },
-  { id: "central-junction", x: 8.6, y: 8.4 },
-  { id: "server-room-door", x: 2.3, y: 8.6 },
-  { id: "server-room-interior", x: 3.0, y: 2.0 },
-  { id: "breakroom-junction", x: 8.6, y: 9.5 },
-  { id: "breakroom-coffee-machine", x: 9.5, y: 10.2 },
-  { id: "boardroom-door", x: 8.6, y: 10.95 },
-  { id: "reception-junction", x: 13.5, y: 8.4 },
-];
+### 3.4 Choreography
 
-export const OFFICE_WAYPOINT_EDGES: Array<[string, string]> = [
-  ["engineering-hall-1", "engineering-hall-2"],
-  ["engineering-hall-1", "central-junction"],
-  ["central-junction", "server-room-door"],
-  ["server-room-door", "server-room-interior"],
-  ["central-junction", "breakroom-junction"],
-  ["breakroom-junction", "breakroom-coffee-machine"],
-  ["breakroom-junction", "boardroom-door"],
-  ["central-junction", "reception-junction"],
-];
+`rosterStage.ts` (`RosterChoreographer`, a small Zustand store `useRosterStage`) advances each walker hop by hop with **plain JS timers**, so it keeps walking while the simulation is paused. `RosterDirector.tsx` calls `sync()` only when who-is-where can change (roster membership, duty status, which services have a picked-up incident, reduced motion), never on a plain tick.
 
-export const OFFICE_GRAPH = buildGraph(OFFICE_WAYPOINT_NODES, OFFICE_WAYPOINT_EDGES);
-```
+- A hire at most `FRESH_HIRE_TICKS = 2` ticks old enters at `entrance`, walks to `reception-front`, pauses `CHECK_IN_PAUSE_MS = 1100` (bumps `checkIns`), then walks on.
+- Before a hop that crosses into another painter band the sprite stops, hands over (`HANDOFF_MS = 90`) and continues; `busyUntil` stops a re-plan from cutting a hop in half.
+- `serverRoomOccupied` is true while somebody stands at a vault node (the vault door opens for them).
+- **Reduced motion:** `sync(..., { instant: true })` places everyone at their destination without walking.
+- **Broken graph:** if any leg has no path, the sprite is placed at its target instead of being stranded; this is an authoring gap, not a silent success.
+- A desk nobody is assigned to shows a quiet vacancy marker (`t.officeLife.vacantDesk` in `EngineerDesk.tsx`) instead of an invented occupant. Clicking a seated engineer selects its service.
 
-Each engineer desk position (rendered by `EngineerDesk.tsx` at some `(x, y)` per the existing engineering-bay layout) is additionally registered as a leaf node connected to its nearest `engineering-hall-*` junction — generated programmatically at desk-layout time (`nearestHallNode(deskX, deskY)`, a simple minimum-distance scan over the fixed hall-junction nodes) rather than hand-authored per desk, so adding or repositioning a desk in `EngineeringFloor.tsx` automatically yields a correctly-connected graph leaf with no waypoint-authoring step required.
+### 3.5 Ambient NPCs (`WanderingEmployee`)
 
-### 3.3 Pathfinding — A* Over the Graph
+Still a timer-driven loop through fixed waypoints (lounge pair in `BreakRoom.tsx`, corridor patroller in `IsometricOffice.tsx`). Current behaviour: skips morale-gated waypoints, sits on a sofa waypoint for real (`z = 0.2`), stops and faces the vault while `useRedAlert()` is true, and stays still under reduced motion. `onActionChange` fires after the walk transition so `BreakRoom` shows the ping-pong ball only while the second NPC is actually at the table (`employeeBAction === "pingpong"`).
 
-```typescript
-export function findPath(graph: WaypointGraph, startId: string, goalId: string): GraphNode[] {
-  const heuristic = (a: GraphNode, b: GraphNode) => Math.hypot(b.x - a.x, b.y - a.y);
-  const openSet = new Set([startId]);
-  const cameFrom = new Map<string, string>();
-  const gScore = new Map<string, number>([[startId, 0]]);
-  const fScore = new Map<string, number>([[startId, heuristic(graph.nodes.get(startId)!, graph.nodes.get(goalId)!)]]);
+History kept short: a stale-closure bug that froze these NPCs at their first waypoint (the interval depended on the drifting `happiness` value) was fixed by reading `happiness`, `redAlert` and the waypoint list through refs; `isoMath.boxFaces` chamfers box corners and `OfficeWorker` has a real walk cycle and blinking eyes. `isoMath.ts` also now memoizes `shade()`; `project()` is unchanged.
 
-  while (openSet.size > 0) {
-    const current = [...openSet].reduce((best, id) =>
-      (fScore.get(id) ?? Infinity) < (fScore.get(best) ?? Infinity) ? id : best
-    );
-    if (current === goalId) {
-      const path: GraphNode[] = [graph.nodes.get(current)!];
-      let cursor = current;
-      while (cameFrom.has(cursor)) {
-        cursor = cameFrom.get(cursor)!;
-        path.unshift(graph.nodes.get(cursor)!);
-      }
-      return path;
-    }
-    openSet.delete(current);
-    for (const edge of graph.adjacency.get(current) ?? []) {
-      const tentativeG = (gScore.get(current) ?? Infinity) + edge.weight;
-      if (tentativeG < (gScore.get(edge.to) ?? Infinity)) {
-        cameFrom.set(edge.to, current);
-        gScore.set(edge.to, tentativeG);
-        fScore.set(edge.to, tentativeG + heuristic(graph.nodes.get(edge.to)!, graph.nodes.get(goalId)!));
-        openSet.add(edge.to);
-      }
-    }
-  }
-  return []; // no path found — caller falls back to a direct teleport, logged as a graph-authoring gap, never silently
-}
-```
+### 3.6 Known limitation
 
-A standard, textbook A* implementation over the small (≤ ~15 node) fixed graph from § 3.2 — at this scale the algorithm's `O(n²)`-per-step naive open-set scan (rather than a binary-heap priority queue) is a deliberate simplicity-over-micro-optimization choice, since the entire graph is smaller than the constant factor a heap would need to pay off, consistent with the codebase's general preference for straightforward, readable implementations over premature optimization (e.g., `formulas.py`'s plain-loop `find_mitigation` lookup rather than a dict-indexed catalog, Document 04 § 1).
-
-### 3.4 Movement Component — `PathfindingEmployee`
-
-New component, `frontend/src/components/office/PathfindingEmployee.tsx`, a sibling to (not a replacement for) `WanderingEmployee.tsx`. Where `WanderingEmployee` cycles a fixed, pre-vetted waypoint loop with instantaneous re-targeting, `PathfindingEmployee` computes a multi-hop path via `findPath` whenever its `targetNodeId` prop changes, then walks that path's nodes **in sequence**, one CSS-eased transition per hop (reusing `OfficeWorker`'s existing `transitionMs` prop exactly as `WanderingEmployee` already does), rather than one long transition straight to the final destination:
-
-```typescript
-interface PathfindingEmployeeProps {
-  currentNodeId: string;
-  targetNodeId: string;
-  shirtColor: string;
-  hairColor: string;
-  hopDurationMs?: number;
-  onArrived?: () => void;
-}
-
-export default function PathfindingEmployee({
-  currentNodeId, targetNodeId, shirtColor, hairColor, hopDurationMs = 900, onArrived,
-}: PathfindingEmployeeProps) {
-  const [path, setPath] = useState<GraphNode[]>([]);
-  const [hopIndex, setHopIndex] = useState(0);
-
-  useEffect(() => {
-    setPath(findPath(OFFICE_GRAPH, currentNodeId, targetNodeId));
-    setHopIndex(0);
-  }, [currentNodeId, targetNodeId]);
-
-  useEffect(() => {
-    if (hopIndex >= path.length - 1) {
-      if (path.length > 0) onArrived?.();
-      return;
-    }
-    const timer = setTimeout(() => setHopIndex((i) => i + 1), hopDurationMs);
-    return () => clearTimeout(timer);
-  }, [hopIndex, path, hopDurationMs, onArrived]);
-
-  const node = path[hopIndex] ?? OFFICE_GRAPH.nodes.get(currentNodeId)!;
-  const mood: WorkerMood = "running";
-
-  return (
-    <OfficeWorker x={node.x} y={node.y} shirtColor={shirtColor} hairColor={hairColor} mood={mood} transitionMs={hopDurationMs} />
-  );
-}
-```
-
-This directly satisfies the "engineers walk along valid office corridors instead of teleporting or clipping through desks" requirement: because every edge in `OFFICE_GRAPH` was authored along an already-walkable architectural feature (§ 3.2), and the component transitions hop-by-hop along the returned path rather than in one straight CSS interpolation from origin to final destination, the rendered motion is visually constrained to the corridor network by construction.
-
-`PathfindingEmployee` is the component the Staff On-Call system's "running between desks and server room" sprite state (`03_STAFF_ONCALL_AND_FATIGUE_SPEC.md` § 4.1) is intended to use once an engineer's `assigned_service_id` incident goes active — the engineer's current desk node becomes `currentNodeId` and `server-room-door`/`server-room-interior` becomes `targetNodeId`, with `onArrived` transitioning the sprite's mood away from `"running"` once the walk completes.
+Scene geometry is duplicated: `officeLayout.ts` (roster/pathfinding) states in its header that its zone origins are copied from the scene and "kept in sync" by hand; `sceneLayout.ts` holds the scene/camera/lighting copies (including a second `DESK_ORDER` / `DESK_SLOTS`). `waypointGraph.test.ts` and `sceneLayout.test.ts` guard some of it, but nothing enforces that the two files agree.
 
 ---
 
 ## 4. Non-Breaking Compliance Checklist
 
-- [x] `isoMath.ts`'s `project()` function and every zone-origin constant in `IsometricOffice.tsx` are read-only inputs to this specification; none are modified.
-- [x] `Topbar.tsx`'s `formatOfficeClock` external output is unchanged; its internal arithmetic is extracted into a shared, additive utility module.
-- [x] The color-grading filter wraps existing scene content in one additive `<g>`; no existing child element, prop, or z-order is altered.
-- [x] `PerimeterWalls.tsx` gains one additive optional prop (`dimmed`) defaulting to falsy/absent behavior identical to the current render.
-- [x] `OfficeWorker.tsx`'s existing `glowColor` prop is reused, not extended or renamed; night-mode glow is a caller-side default, not a component change.
-- [x] `SkylineBackdrop.tsx` is a wholly new sibling component; it does not alter the existing `<svg>` element's viewBox, content, or event handlers.
-- [x] `WanderingEmployee.tsx` is completely untouched — `PathfindingEmployee.tsx` is a new, separate component for the new corridor-constrained use case, preserving every existing NPC patrol behavior verbatim.
-- [x] This specification introduces no new backend endpoint, database table, or `TICK_BROADCAST` field — it is entirely client-side and has no server-side integration surface.
-- [x] The § 2.4 red-alert grade override reads `active_incidents` and `status`, both pre-existing `TICK_BROADCAST` fields, and introduces no new server-side state; it substitutes the `feColorMatrix` values applied by the pre-existing `officeDayNightGrade` filter rather than adding a second filter element.
-- [x] `EmergencyBeacon` (`EmergencyFx.tsx`) and `RedAlertOverlay` are additive components with no effect on `isoMath.ts`, zone-origin constants, or any existing prop/child of `IsometricOffice.tsx`'s render tree beyond their own conditionally-rendered subtree.
+- [x] `isoMath.ts::project()` and the viewBox are unchanged. (`isoMath.ts` did gain chamfered faces and a `shade()` cache; neither touches projection.)
+- [x] No backend endpoint, table or `TICK_BROADCAST` field was added for the lighting or movement systems. (The unrelated `POST /api/tutorial/incident` belongs to the tutorial, see IZ-IMPL-10.)
+- [x] `Topbar.tsx` still prints `Day N · HH:00`; its arithmetic comes from `officeClock.ts`. Note the displayed hour now starts at 08:00.
+- [x] No SVG `<filter>`/`feColorMatrix` element and no SMIL `<animate>` remain in the office scene (verified by search of `frontend/src`; the only SMIL mention is a comment in `CascadeRipple.tsx`). A few small CSS `drop-shadow()` glows on rack LEDs in `ServerRack.tsx` do remain.
+- [x] The lighting driver holds no React state and writes CSS variables to four scopes only.
+- [x] Reduced motion: lighting snaps, the roster teleports, ambient NPCs stand still, the camera snaps.
+- [x] `PathfindingEmployee.tsx` is used by the app (via `RosterWalkers`); `WanderingEmployee.tsx` is **not** untouched any more (reduced motion, red-alert behaviour, seating, refs).
+- [ ] Frame-rate impact of the overlay/emissive layers: **not measured**.

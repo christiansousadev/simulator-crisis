@@ -1,5 +1,9 @@
 # INCIDENTZERO: ARCHITECTURAL BLUEPRINT & SRE CRISIS SIMULATOR SPECIFICATION
 
+**Status:** Implementado — blueprint reconciled with the code (Revisão Técnica Atualizada)  
+**Last Updated:** Outubro 2026  
+**Scope of this document:** a concise orientation map. The authoritative, line-by-line specifications live in [`audits/docs/`](./audits/docs/) (Documents 01-05), [`audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md`](./audits/specs/AUDIT_LEDGER_DATA_DICTIONARY.md) and [`audits/docs/implementations/`](./audits/docs/implementations/). Where this file and those documents disagree, the documents (which are checked against the code) win. This revision was written by reading `backend/app/**` and `frontend/src/**`; it was not machine-verified.
+
 ## 1. BRANDING & IDENTITY
 
 - **Primary Project Name:** IncidentZero
@@ -40,427 +44,189 @@
 
 ---
 
-## 2. COMPLETE DIRECTORY TREE
+## 2. DIRECTORY TREE (CONDENSED, AS IMPLEMENTED)
 
 ```text
 simulator-crisis/
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── Makefile
-├── README.md
+├── .env.example               # template only: the backend does not auto-load a .env file
+├── .github/                   # CI workflow (ruff + pytest; eslint + tsc + vitest + build), issue/PR templates
+├── docker-compose.yml, Makefile, start.sh, start.ps1
+├── README.md, README.pt-BR.md, ARCHITECTURE.md, SECURITY.md, CHANGELOG.md
 ├── audits/
-│   ├── templates/
-│   │   └── post_mortem_template.md
-│   └── reports/
-│       └── .gitkeep
+│   ├── docs/                  # IZ-ARCH-01 .. IZ-SOP-05 + implementations/ (feature specs 01-10)
+│   ├── specs/                 # AUDIT_LEDGER_DATA_DICTIONARY.md
+│   ├── templates/             # post_mortem_template.md
+│   └── reports/               # generated post-mortems (created on demand); interviews/ is created on demand too
+├── docs/screenshots/
 ├── backend/
-│   ├── pyproject.toml
-│   ├── requirements.txt
-│   ├── Dockerfile
+│   ├── pyproject.toml, requirements.txt, Dockerfile, alembic.ini
+│   ├── alembic/versions/      # 7 revisions, merge head fef99a15e754
+│   ├── tests/                 # pytest: formulas, engine features, scenarios, API smoke, migrations
 │   └── app/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── config.py
-│       │   └── database.py
-│       ├── engine/
-│       │   ├── __init__.py
-│       │   ├── formulas.py
-│       │   ├── event_generator.py
-│       │   └── simulator.py
-│       ├── models/
-│       │   ├── __init__.py
-│       │   ├── base.py
-│       │   ├── session.py
-│       │   ├── service.py
-│       │   ├── incident.py
-│       │   ├── mitigation.py
-│       │   └── audit.py
-│       ├── schemas/
-│       │   ├── __init__.py
-│       │   ├── session.py
-│       │   ├── service.py
-│       │   ├── incident.py
-│       │   ├── mitigation.py
-│       │   ├── audit.py
-│       │   └── websocket.py
+│       ├── main.py            # FastAPI app, lifespan (migrate -> engine -> start), CORS, state-push middleware
+│       ├── core/              # config.py, database.py, state_push.py, version.py
+│       ├── engine/            # simulator.py, formulas.py, event_generator.py, log_generator.py,
+│       │                      # dilemmas.py, infrastructure.py, staff.py, upgrades.py, achievements.py,
+│       │                      # cosmetics.py, scenarios/ (6 registered + custom)
+│       ├── models/            # SQLAlchemy tables (see section 4)
+│       ├── schemas/           # Pydantic request/response models
 │       └── api/
-│           ├── __init__.py
-│           ├── router.py
-│           └── v1/
-│               ├── __init__.py
-│               ├── sessions.py
-│               ├── services.py
-│               ├── incidents.py
-│               ├── mitigations.py
-│               ├── audits.py
-│               └── ws.py
+│           ├── router.py      # aggregates 14 REST routers + the WebSocket router
+│           └── v1/            # sessions, services, incidents, mitigations, audits, upgrades, dilemmas, staff,
+│                              # scenarios, infrastructure, tutorial, achievements, cosmetics, career, ws
 └── frontend/
-    ├── index.html
-    ├── package.json
-    ├── postcss.config.js
-    ├── tailwind.config.js
-    ├── tsconfig.json
-    ├── tsconfig.node.json
-    ├── vite.config.ts
+    ├── index.html, package.json, vite.config.ts (PWA + manual chunks), tailwind.config.js, playwright.config.ts
+    ├── e2e/                   # Playwright specs
     └── src/
-        ├── main.tsx
-        ├── App.tsx
-        ├── index.css
-        ├── types/
-        │   └── game.ts
-        ├── store/
-        │   └── useGameStore.ts
-        ├── hooks/
-        │   └── useSimulationSocket.ts
-        ├── components/
-        │   ├── layout/
-        │   │   ├── Topbar.tsx
-        │   │   ├── LeftPanel.tsx
-        │   │   ├── CenterWarRoom.tsx
-        │   │   ├── RightRunbooks.tsx
-        │   │   └── BottomAuditDrawer.tsx
-        │   └── common/
-        │       ├── MetricGauge.tsx
-        │       ├── StatusBadge.tsx
-        │       └── TerminalLog.tsx
-        └── services/
-            └── api.ts
+        ├── main.tsx, App.tsx  # path branch: /live-ops spectator view, otherwise the game
+        ├── types/game.ts      # wire types mirroring the backend payloads
+        ├── services/api.ts    # typed fetch client + WS_URL
+        ├── store/             # useGameStore.ts (game + UI state), useFlowStore.ts (screen-flow presentation)
+        ├── hooks/             # socket, audio, shortcuts, tutorial engine, catalogs, objectives, presence ...
+        ├── i18n/              # en in main chunk; locales/{pt-BR,es} lazy chunks via loadLanguage.ts
+        ├── utils/             # audioEngine/musicEngine/sound, modalStack, kpi bands, DEFCON, office clock ...
+        └── components/
+            ├── layout/        # Topbar, BottomDock, CorporateNewsTicker, ScreenTransition
+            ├── office/        # isometric SVG scene, camera, lighting, engineers, build mode
+            ├── dock/          # incidents, directives (runbooks), compliance ticker, upgrades tree, roster, achievements, metrics
+            ├── modals/        # title, scenario select/builder/briefing, incident detail, triage, post-mortem, CAB, debrief ...
+            ├── common/        # meters, Modal, toasts, floating combat text, shared widgets
+            ├── flow/          # lazy modal host/loader, menu navigation
+            ├── tutorial/      # guided tutorial overlay and steps
+            └── live-ops/      # read-only second-monitor dashboard
 ```
 
 ---
 
 ## 3. GAME MECHANICS & SIMULATION ENGINE (FORMULAS & STATE)
 
+The exact constants and the full hazard chain are specified in [Document 02](./audits/docs/02_MATHEMATICAL_ENGINE_AND_SLA_SPECIFICATION.md) and [Document 04](./audits/docs/04_RUNBOOK_CATALOG_AND_MITIGATION_MATRIX.md); the summary below is for orientation.
+
 ### 3.1 Game Loop & Time Scale
-- **Base Simulation Tick:** $1.0\text{ second (real-time)} = 1\text{ game hour}$.
-- **Sprint Window:** $24\text{ ticks} = 1\text{ game day}$; $720\text{ ticks} = 1\text{ fiscal month (SLA evaluation period)}$.
-- **Speed Multipliers:** `0x` (PAUSED), `1x` (1.0s/tick), `2x` (0.5s/tick), `5x` (0.2s/tick).
+- **Base Simulation Tick:** $1.0\text{ second (real-time)} = 1\text{ game hour}$ at 1x.
+- **Day / Month:** $24\text{ ticks} = 1\text{ game day}$; $720\text{ ticks} = 1\text{ audit month}$ (the rolling SLA window and the sandbox victory threshold).
+- **Speed Multipliers:** paused (loop cancelled), `1x` (1.0 s/tick), `2x` (0.5 s/tick), `5x` (0.2 s/tick); the API accepts any multiplier in $(0, 10]$.
+- **Tick order** (strict, in `SimulationEngine._update_simulation_tick`): SLA window and error budget, budget burn, happiness drift, incident MTTA/MTTR, quiet-period refactor, random failures, scenario hook, session status (early exit on a terminal tick), feature freeze, staff fatigue, pre-alerts, CAB dilemma, achievements.
 
 ### 3.2 Core Variables
 1. **Budget / Runway ($ USD):**
-   - Initial: `$250,000.00`.
-   - Passive Burn Rate: `Base Infra ($200/tick) + Engineering Payroll ($450/tick) = $650/tick`.
-   - Outage Surcharge: High latency/downtime imposes direct cloud egress & customer SLA refund costs.
-   - Failure Condition: `budget <= 0` (Bankruptcy -> Game Over).
+   - Initial depends on difficulty: `intern` $320,000, `standard` $250,000, `chaos` $180,000.
+   - Passive burn: `Cloud ($200/tick) + Payroll ($450/tick) = $650/tick`, multiplied by 1.5 while user happiness is below 40%.
+   - Outage surcharge: per open incident, $\text{SeverityBase} \times (1 + 0.08 t)^{1.3}$ per tick (P1 800, P2 250, P3 100, P4 40).
+   - Failure condition: `budget <= 0` (bankruptcy, run ends).
 2. **Global SLA %:**
-   - Target: `99.90%` (Error Budget: `0.10%` = max 43.2 minutes of weighted downtime per 720-tick month).
-   - Failure Condition: Rolling window SLA `< 99.00%` (evaluated after 24-tick grace period) triggers regulatory breach (`SLA_BREACH_EMERGENCY_SANCTION`) and emergency Board Review.
-3. **User Happiness (0.0 to 100.0%):**
-   - Driven by weighted service latency and error rates.
-   - If User Happiness `< 40.0%`, customer churn accelerates passive revenue drain.
+   - Rolling mean of the last 720 per-tick weighted availability samples (critical services weigh 3, standard 1).
+   - Target `99.90%` (error budget `0.10%`); exhausting it engages a **feature freeze** that blocks discretionary hotfixes.
+   - Rolling SLA `< 99.00%` after a 24-tick grace period flips the status to `breached` and logs `SLA_BREACH_EMERGENCY_SANCTION` (a status/compliance signal; no cash penalty).
+3. **User Happiness (0.0 to 100.0%):** drifts down while any service is unhealthy, recovers slowly otherwise, and is hit by alert fatigue on unacknowledged incidents; below 40% it accelerates the passive burn.
 4. **Technical Debt Index (TDI) (0 to 100 points):**
    - Baseline start: `25`.
-   - Rises by choosing quick-and-dirty mitigations (e.g., hot patching prod directly).
-   - Decreases by executing architecture refactoring runbooks.
-   - Modulates the cascade failure probability across all microservices.
+   - Raised by quick-and-dirty runbooks (hotfix +8, circuit breaker +3, scale replicas +1) and mismatch taxes; lowered by rollbacks (-2), quiet-period refactors (-1 per 20 incident-free ticks) and some CAB choices.
+   - Raises the stochastic failure hazard of every service.
+5. **Governance Reputation (0-100, starts at 50):** shaped by CAB dilemma choices; below 25 it multiplies hazard by 1.15, above 75 by 0.90.
 
-### 3.3 Mathematical Formulas
+### 3.3 Mathematical Formulas (summary)
 
-#### Formula 1: SLA Availability Calculation Per Tick & Rolling Window
-Each microservice $i \in \{1, \dots, N\}$ has weight $w_i$:
-- $w_i = 3.0$ for **Critical Tier** (Payment Gateway, Auth Service, Database Master).
-- $w_i = 1.0$ for **Standard Tier** (Search Indexer, Recommendation Engine, Notification Worker).
+#### Formula 1: SLA Availability
+Each service has weight $w_i = 3.0$ (critical: `srv-auth`, `srv-payment`, `srv-api-gw`) or $1.0$ (standard: `srv-search`, `srv-notify`). Unavailability $U_i(t)$:
 
-Unavailability factor $U_i(t)$ per service:
-$$U_i(t) = \begin{cases} 
-0.0 & \text{if status is healthy} \\
-\min\left(1.0, \frac{\text{latency\_ms} - 200}{1800} \cdot 0.5 + \text{error\_rate} \cdot 0.5\right) & \text{if status is degraded} \\
-1.0 & \text{if status is down}
+$$U_i(t) = \begin{cases}
+0.0 & \text{healthy} \\
+\min\left(1.0,\; 0.5\cdot\max\left(0, \frac{\text{latency\_ms} - 100}{1000}\right) + 0.5\cdot\text{error\_rate}\right) & \text{degraded} \\
+1.0 & \text{down}
 \end{cases}$$
 
-Instantaneous Tick SLA:
-$$SLA_{tick}(t) = 1.0 - \frac{\sum_{i=1}^N w_i \cdot U_i(t)}{\sum_{i=1}^N w_i}$$
+$$SLA_{tick}(t) = 100 \times \left(1 - \frac{\sum_i w_i \cdot U_i(t)}{\sum_i w_i}\right), \qquad SLA_{rolling}(t) = \frac{1}{|W_t|}\sum_{s\in W_t} SLA_{tick}(s), \quad |W_t| \le 720$$
 
-Rolling Window SLA at tick $t$ (up to 720 samples):
-$$SLA_{rolling}(t) = \text{clamp\_percentage}\left(\frac{1}{|W_t|} \sum_{s \in W_t} SLA_{tick}(s)\right) \times 100\%$$
+#### Formula 2: Outage Cascading Probability
+Per healthy service per tick, before the call-site multipliers (fan-in exposure, specialist coverage, decision windows, upgrades, infrastructure nodes, scenario, difficulty, reputation):
 
-Where $W_t$ is the bounded sliding window (`_sla_window`, maxlen=720 ticks, serialized in `sla_window_json`). Regulatory breach evaluation begins after a 24-tick grace period (`BREACH_GRACE_TICKS = 24`) against `SLA_BREACH_THRESHOLD = 99.00%`.
+$$P_{raw}(i) = 0.015 \cdot \left(1 + \frac{\text{TDI}}{35}\right)^{1.8} \cdot \prod_{d \in \text{Deps}(i)} \begin{cases} 4.5 & d \text{ down} \\ 2.8 & d \text{ degraded} \\ 1 & \text{otherwise}\end{cases}$$
 
-#### Formula 2: Outage Cascading Probability Based on Technical Debt
-Base spontaneous failure probability per healthy service per tick: $P_{base} = 0.012$ (1.2%).
-The effective failure probability $P_{failure}(i)$ incorporates the Technical Debt Index (TDI) and upstream dependency health:
-
-$$P_{failure}(i) = P_{base} \cdot \left(1 + \frac{\text{TDI}}{35}\right)^{1.8} \cdot \prod_{d \in \text{Dependencies}(i)} \left(1 + \mathbf{1}_{\{status(d) = \text{down}\}} \cdot 3.0 + \mathbf{1}_{\{status(d) = \text{degraded}\}} \cdot 1.2\right)$$
-
-- If $\text{TDI} = 25$: debt multiplier is $\approx 2.45\times$.
-- If $\text{TDI} = 85$: debt multiplier jumps to $\approx 8.12\times$.
-- If an upstream dependency is **down**, the cascade multiplier spikes by $+300\%$.
+The product of all multipliers is clamped once, at the end, to $[0, 0.65]$.
 
 #### Formula 3: MTTA & MTTR Penalty Impact
-- **Mean Time to Acknowledge (MTTA):** Ticks elapsed between incident spawn and player acknowledgement.
-  - $\text{Ticks} \in [0, 4]$: Standard triage, no panic penalty.
-  - $\text{Ticks} \in [5, 12]$: "Unattended Alert" status. User Happiness penalty: $\Delta H = -1.8\text{ pts/tick}$.
-  - $\text{Ticks} > 12$: "Executive Escalation". Triggers immediate `$4,500` audit non-compliance fine per tick.
-- **Mean Time to Resolve (MTTR):**
-  - Continuous downtime accelerates the cost of downtime exponentially:
-  $$\text{BurnPenalty}(t) = \text{BaseBurn} + (\text{CostFactor}_{sev} \times t^{1.25})$$
-  Where $\text{CostFactor}_{P1} = 850$, $\text{CostFactor}_{P2} = 300$, $\text{CostFactor}_{P3} = 75$.
+- **MTTA** (ticks an incident stays unacknowledged): ticks 5-11 drain $1.5$ happiness per tick; from tick 12 each tick logs `UNATTENDED_ALERT_VIOLATION` and fines `$4,500`. MTTR and MTTA are elapsed counts and never rewritten.
+- **MTTR cost:** surcharge per tick as above, with the elapsed time scaled by the assigned specialist's recovery multiplier.
 
 ---
 
-## 4. DATABASE SCHEMA & DATA CONTRACTS (SQL DDL & PYDANTIC)
+## 4. DATABASE SCHEMA & DATA CONTRACTS
 
-### 4.1 Standard SQL DDL (PostgreSQL & SQLite Compatible)
+### 4.1 Persistence (SQLite via SQLAlchemy 2.x, Alembic migrations applied on boot)
 
-```sql
--- GAME SESSIONS TABLE
-CREATE TABLE game_sessions (
-    id VARCHAR(36) PRIMARY KEY,
-    player_name VARCHAR(100) NOT NULL,
-    budget DECIMAL(12, 2) NOT NULL DEFAULT 250000.00,
-    sla_percentage DECIMAL(5, 2) NOT NULL DEFAULT 100.00,
-    tech_debt INTEGER NOT NULL DEFAULT 25,
-    user_happiness DECIMAL(5, 2) NOT NULL DEFAULT 95.00,
-    status VARCHAR(20) NOT NULL DEFAULT 'running',
-    current_tick INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+| Table | Purpose |
+|---|---|
+| `game_sessions` | One live session row (`incidentzero-alpha`): budget, SLA, TDI, happiness, status, tick, difficulty, reputation, scenario state, cooldowns, hazard windows, RNG state, the 720-sample SLA window and the error-budget history (full crash-resume snapshot, `schema_version`). |
+| `services` | The five fixed microservices and their live health. |
+| `incidents` | Incident lifecycle plus frozen forensic facts (`tech_debt_at_creation/resolution`, `accrued_surcharge`, triage state, the log stream and its answer key). |
+| `audit_logs` | Append-only governance ledger (34 event types; see the data dictionary). |
+| `engineers`, `purchased_upgrades`, `dilemma_events`, `infrastructure_nodes` | Session-scoped roster, tech-tree purchases, CAB history and placed build-mode nodes. |
+| `achievements`, `unlocked_cosmetics`, `career_records` | Permanent career progression; **not** deleted by a session reset. |
+| `mitigation_actions` | Declared by the initial migration but unused: the runbook catalog is served from `formulas.MITIGATION_CATALOG`. |
 
--- SERVICES TABLE
-CREATE TABLE services (
-    id VARCHAR(36) PRIMARY KEY,
-    session_id VARCHAR(36) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    tier VARCHAR(20) NOT NULL CHECK(tier IN ('critical', 'standard')),
-    status VARCHAR(20) NOT NULL DEFAULT 'healthy' CHECK(status IN ('healthy', 'degraded', 'down')),
-    latency_ms INTEGER NOT NULL DEFAULT 45,
-    error_rate DECIMAL(5, 4) NOT NULL DEFAULT 0.0000,
-    dependencies_json TEXT NOT NULL DEFAULT '[]',
-    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
-);
+Session-scoped rows are removed with their session by the ORM cascade on reset (SQLite's `foreign_keys` pragma is off). Routine per-tick burn and surcharges are not written to the ledger; discrete financial events are (see Document 01, § 5.4).
 
--- INCIDENTS TABLE
-CREATE TABLE incidents (
-    id VARCHAR(36) PRIMARY KEY,
-    session_id VARCHAR(36) NOT NULL,
-    service_id VARCHAR(36) NOT NULL,
-    severity VARCHAR(20) NOT NULL CHECK(severity IN ('P1_CRITICAL', 'P2_HIGH', 'P3_MEDIUM', 'P4_LOW')),
-    title VARCHAR(255) NOT NULL,
-    root_cause TEXT NOT NULL,
-    mtta_seconds INTEGER NOT NULL DEFAULT 0,
-    mttr_seconds INTEGER NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'acknowledged', 'mitigated', 'resolved')),
-    created_tick INTEGER NOT NULL,
-    acknowledged_tick INTEGER NULL,
-    resolved_tick INTEGER NULL,
-    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
-);
-
--- MITIGATION ACTIONS TABLE
-CREATE TABLE mitigation_actions (
-    id VARCHAR(36) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    description TEXT NOT NULL,
-    cost DECIMAL(10, 2) NOT NULL,
-    tech_debt_delta INTEGER NOT NULL,
-    resolve_speed_multiplier DECIMAL(4, 2) NOT NULL DEFAULT 1.00,
-    cooldown_ticks INTEGER NOT NULL DEFAULT 5,
-    category VARCHAR(50) NOT NULL DEFAULT 'infra'
-);
-
--- AUDIT LOGS TABLE
-CREATE TABLE audit_logs (
-    id VARCHAR(36) PRIMARY KEY,
-    session_id VARCHAR(36) NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    tick INTEGER NOT NULL,
-    event_type VARCHAR(50) NOT NULL,
-    actor VARCHAR(50) NOT NULL,
-    details_json TEXT NOT NULL,
-    compliance_flag BOOLEAN NOT NULL DEFAULT 1,
-    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
-);
-
--- INDEXES FOR WAR ROOM PERFORMANCE
-CREATE INDEX idx_services_session ON services(session_id);
-CREATE INDEX idx_incidents_session ON incidents(session_id);
-CREATE INDEX idx_audit_session ON audit_logs(session_id);
-```
-
-### 4.2 Pydantic v2 Models & Contracts
-
-```python
-from enum import Enum
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
-
-class ServiceTier(str, Enum):
-    CRITICAL = "critical"
-    STANDARD = "standard"
-
-class ServiceStatus(str, Enum):
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    DOWN = "down"
-
-class IncidentSeverity(str, Enum):
-    P1_CRITICAL = "P1_CRITICAL"
-    P2_HIGH = "P2_HIGH"
-    P3_MEDIUM = "P3_MEDIUM"
-    P4_LOW = "P4_LOW"
-
-class IncidentStatus(str, Enum):
-    ACTIVE = "active"
-    ACKNOWLEDGED = "acknowledged"
-    MITIGATED = "mitigated"
-    RESOLVED = "resolved"
-
-class SessionStatus(str, Enum):
-    RUNNING = "running"
-    PAUSED = "paused"
-    VICTORY = "victory"
-    BANKRUPTED = "bankrupted"
-    BREACHED = "breached"
-
-# SERVICE SCHEMAS
-class ServiceBase(BaseModel):
-    name: str
-    tier: ServiceTier
-    status: ServiceStatus = ServiceStatus.HEALTHY
-    latency_ms: int = 45
-    error_rate: float = 0.0000
-    dependencies: List[str] = Field(default_factory=list)
-
-class ServiceResponse(ServiceBase):
-    id: str
-    session_id: str
-    model_config = ConfigDict(from_attributes=True)
-
-# INCIDENT SCHEMAS
-class IncidentBase(BaseModel):
-    service_id: str
-    severity: IncidentSeverity
-    title: str
-    root_cause: str
-
-class IncidentResponse(IncidentBase):
-    id: str
-    session_id: str
-    mtta_seconds: int = 0
-    mttr_seconds: int = 0
-    status: IncidentStatus
-    created_tick: int
-    acknowledged_tick: Optional[int] = None
-    resolved_tick: Optional[int] = None
-    model_config = ConfigDict(from_attributes=True)
-
-# MITIGATION ACTION SCHEMAS
-class MitigationActionResponse(BaseModel):
-    id: str
-    name: str
-    description: str
-    cost: float
-    tech_debt_delta: int
-    resolve_speed_multiplier: float
-    cooldown_ticks: int
-    category: str
-    model_config = ConfigDict(from_attributes=True)
-
-# AUDIT LOG SCHEMAS
-class AuditLogResponse(BaseModel):
-    id: str
-    session_id: str
-    timestamp: datetime
-    tick: int
-    event_type: str
-    actor: str
-    details: Dict[str, Any]
-    compliance_flag: bool
-    model_config = ConfigDict(from_attributes=True)
-
-# SESSION SCHEMAS
-class GameSessionCreate(BaseModel):
-    player_name: str = "VP of Infrastructure"
-
-class GameSessionResponse(BaseModel):
-    id: str
-    player_name: str
-    budget: float
-    sla_percentage: float
-    tech_debt: int
-    user_happiness: float
-    status: SessionStatus
-    current_tick: int
-    created_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-# WEBSOCKET REAL-TIME BROADCAST PAYLOAD
-class SimulationTickPayload(BaseModel):
-    type: str = "TICK_BROADCAST"
-    tick: int
-    budget: float
-    sla_percentage: float
-    tech_debt: int
-    user_happiness: float
-    services: List[ServiceResponse]
-    active_incidents: List[IncidentResponse]
-    recent_audits: List[AuditLogResponse]
-```
+### 4.2 Wire Contracts
+- **REST:** 37 routes under `/api/**` in 14 routers (the authoritative table is Document 01, § 4). Request bodies are Pydantic models in `backend/app/schemas/`; refusals return `400`/`404`/`409` (plus `422` validation, `429` and `503` on the AI interview route) with an engine error text.
+- **WebSocket `/ws/telemetry`:** one `TICK_BROADCAST` frame per tick, on connect and after every successful state-changing command (`app/core/state_push.py`), plus event frames `DILEMMA_OFFERED`, `PRE_ALERT_WARNING`, `ACHIEVEMENT_UNLOCKED`. The `TICK_BROADCAST` shape is `SimulationEngine.get_state_payload()` (annotated example in Document 01, § 3.3; TypeScript mirror in `frontend/src/types/game.ts`). The triage answer key (`log_lines`, `root_cause_line_id`) is stripped and `root_cause` is withheld until triage is solved.
+- **Runbook, upgrade, achievement and cosmetic catalogs:** served from code (`GET /api/*/catalog`); the engine ships 4 runbooks, 6 upgrades, 4 infrastructure node types, 12 achievements and 3 cosmetics.
+- **Scenarios:** six registered (`black_friday_rush`, `chaos_engineering_drill`, `ddos_global`, `deployment_rollback`, `ransomware_infiltration`, `third_party_outage`) plus the player-configured `custom` scenario, plus the sandbox (no scenario).
 
 ---
 
-## 5. UI/UX WAR-ROOM LAYOUT SPECIFICATION
+## 5. UI/UX WAR-ROOM LAYOUT
 
 ```
 +----------------------------------------------------------------------------------------------------+
-| TOPBAR: Live SLA Gauge | MTTR/MTTA | Budget Runway ($) | Speed Controls [||] [1x] [2x] | Audit Score   |
-+------------------------------+---------------------------------------+-----------------------------+
-| LEFT PANEL (w-1/4)           | CENTER WAR ROOM (flex-1)              | RIGHT RUNBOOKS (w-80)       |
-| Service Health & Topology    | Active Alerts & Incident Triage Drawer| Mitigation Action Cards     |
-| - Microservices Health Cards | - Real-time Alert Severity Stream     | - Rollback Deployment       |
-| - Latency & Error Rate Gauges| - Log Terminal (Stack Trace Ingestion)| - Scale Replicas (+3)       |
-| - Cascade Dependency Links   | - One-click Acknowledge / Triage Modal| - Circuit Breaker Toggle    |
-|                              |                                       | - Post-Mortem Generator     |
-+------------------------------+---------------------------------------+-----------------------------+
-| BOTTOM DRAWER (h-48, Collapsible): Live Compliance Stream & SRE Audit Ledger (Terminal aesthetic)  |
+| TOPBAR: identity + office clock | SLA shield | error budget | runway | TDI | morale | reputation |   |
+|         DEFCON meter | speed controls (1x 2x 5x, pause) | help / hall of fame / settings buttons    |
++----------------------------------------------------------------------------------------------------+
+| CORPORATE NEWS TICKER                                                                              |
++----------------------------------------------------------------------------------------------------+
+|                                                                                                    |
+|   ISOMETRIC OFFICE (SVG scene, pan / zoom camera, day-night + DEFCON lighting)                      |
+|   server racks per service, engineers, build-mode overlay, floating combat text, minimap           |
+|                                                                                                    |
++----------------------------------------------------------------------------------------------------+
+| BOTTOM DOCK (collapsible tabs): Incidents | Directives (runbooks) | Compliance (audit ticker) |    |
+|                                 Upgrades | Roster | Achievements | Metrics                          |
++----------------------------------------------------------------------------------------------------+
+| Overlays: title screen, scenario select/builder/briefing, incident detail + log-triage terminal,    |
+| CAB dilemma, post-mortem, debrief, hall of fame, settings, tutorial coach cards                     |
 +----------------------------------------------------------------------------------------------------+
 ```
 
-### Layout Wireframe Breakdown (Tailwind CSS Structure)
-- **Root Container:**
-  `h-screen w-screen flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden select-none`
-- **Topbar (`h-16 border-b border-slate-800 bg-slate-900/90 backdrop-blur px-6 flex items-center justify-between`):**
-  - Left: Logo icon + `font-mono font-bold tracking-wider text-emerald-400` + Session Day/Tick badge (`bg-slate-800 px-3 py-1 rounded text-xs font-mono`).
-  - Center Metrics Bar:
-    - SLA Gauge: `flex items-center gap-2 font-mono text-sm` with dynamic color (`text-emerald-400` > 99.9%, `text-amber-400` > 99.5%, `text-rose-500` <= 99.5%).
-    - MTTR & MTTA: Small badges with timer icons (`lucide-react`).
-    - Budget: `font-mono text-lg font-bold text-emerald-300` with subtle green/red delta ticker.
-    - Tech Debt Indicator: Progress ring or meter (`text-rose-400`).
-  - Right: Game Speed control group (`flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700`).
-- **Main Body Grid (`flex-1 flex overflow-hidden`):**
-  - **Left Panel (Service Topology):**
-    `w-80 border-r border-slate-800/80 bg-slate-900/50 p-4 flex flex-col gap-3 overflow-y-auto`
-    - Service Cards: `rounded-lg border p-3.5 transition-all` with glowing border when degraded/down (`border-rose-500/50 bg-rose-950/20` vs `border-slate-800 bg-slate-900`).
-    - Metric tags: `flex justify-between font-mono text-xs text-slate-400` showing latency (ms) and error rate (%).
-  - **Center Panel (Incident War Room):**
-    `flex-1 flex flex-col p-4 gap-4 bg-slate-950/80 overflow-hidden`
-    - Top: Active Alarming Incidents table/feed (`border border-slate-800 rounded-xl bg-slate-900/40 p-4 flex-1 flex flex-col`).
-    - Severity Badges: P1 (Pulsing Red), P2 (Orange), P3 (Yellow).
-    - Interactive "Acknowledge" & "Investigate" buttons with instant optimistic UI update.
-    - Bottom Half: Live Telemetry Terminal stream (`bg-black/80 font-mono text-xs p-3 rounded-lg border border-slate-800 text-slate-300 h-44 overflow-y-auto`).
-  - **Right Panel (Runbook Actions & Governance):**
-    `w-80 border-l border-slate-800/80 bg-slate-900/50 p-4 flex flex-col gap-3 overflow-y-auto`
-    - Action Cards: "Rollback Canary", "Drain AZ Traffic", "Emergency Autoscaling", "Hotfix Patch".
-    - Each card displays: Cost (`-$2,500`), Tech Debt impact (`+5 TDI` or `-10 TDI`), and execution cooldown bar.
-    - Governance Action: "Generate SOX-404 Post-Mortem Report" button.
-- **Bottom Drawer (Audit Ledger):**
-  `h-44 border-t border-slate-800 bg-slate-950 px-6 py-2 flex flex-col font-mono text-xs`
-  - Real-time audit log stream recording every user action with timestamp, actor (`VP_INFRA`), compliance flag, and hash signature.
+- The layout is a full-screen office scene with a HUD on top (`Topbar`) and a tabbed dock at the bottom (`BottomDock`); there are no fixed left/right side panels.
+- Styling is Tailwind CSS with design tokens in `tailwind.config.js` and `index.css`; keyboard shortcuts are routed through `useGameShortcuts`, which stays quiet while a modal is open.
+- The same telemetry also drives a read-only spectator dashboard at `/live-ops` for a second monitor.
+
+### 5.1 Frontend runtime architecture
+
+The frontend holds no simulation math: it renders the latest backend snapshot and adds client-only presentation state.
+
+- **Data flow:** `useSimulationSocket` receives frames and calls `useGameStore.setTelemetry`, which structurally shares unchanged arrays/objects between frames so selectors only re-render on real changes. Commands go through `services/api.ts`; the backend answers the REST call and pushes the new state frame, so the UI converges without waiting for the next tick.
+- **State:** `useGameStore` (telemetry, selections, modal flags, floating text / KPI event queues, tutorial progress, accessibility and audio preferences) and the small `useFlowStore` (deploy overlay, shift banner, office intro). Derived values (DEFCON level, KPI bands, incident impact) live in `utils/`.
+- **Localization:** English is bundled; `pt-BR` and `es` are separate chunks (`i18n/locales/*`) fetched by `i18n/loadLanguage.ts` before first render or on language change, with dynamic game content (`dynamicContent.ts`) registered alongside the dictionary.
+- **Audio:** a single lazily created Web Audio graph (`utils/audioEngine.ts`) feeds procedural effects (`utils/sound.ts`) and layered music (`utils/musicEngine.ts`); no audio files. Hooks (`useGameAudio`, `useBackgroundMusic`) translate game state (incidents, DEFCON, pause, terminal status) into sound.
+- **Camera and lighting:** `components/office/cameraController.ts` (spring-damped pan/zoom, published through `cameraBus` so the minimap never causes React renders) and `lighting.ts` + `lightingBus.ts` (tick-hour and DEFCON targets eased by a rAF driver and written as CSS custom properties).
+- **Modals:** `components/common/Modal.tsx` registers each open dialog in `utils/modalStack.ts` (Escape ownership, shortcut suppression); non-critical dialogs are code-split in `components/flow/lazyModals.ts` and warmed while the title screen is idle, while the timed CAB dialog stays eager.
+- **Further detail:** the interaction, motion and feedback layer (screen-flow transitions, KPI events, presence animations, reduced-motion handling) is specified in [`audits/docs/implementations/10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md`](./audits/docs/implementations/10_UX_INTERACTION_AND_MOTION_LAYER_SPEC.md).
 
 ---
 
-## 6. STARTER BACKEND & FRONTEND IMPLEMENTATION
+## 6. BACKEND & FRONTEND IMPLEMENTATION MAP
 
-(Embedded directly in the workspace codebase below).
+- **Backend entry:** `backend/app/main.py` runs Alembic to `head`, creates the single `SimulationEngine`, starts the tick loop and mounts the 14 REST routers and the WebSocket router. A pure ASGI middleware re-broadcasts state after each successful `POST`/`DELETE`. CORS is wide open by design (local demo; see [`SECURITY.md`](./SECURITY.md)).
+- **Engine authority:** `SimulationEngine` owns all mutable game state and is the only place `budget` changes (`_apply_financial_event`); `formulas.py` is pure; scenarios plug in through `ScenarioEngine` hooks.
+- **Optional AI auditor:** `audits.py` calls an OpenAI-compatible chat-completions endpoint configured by `LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`; with an empty key the interview route answers `503` and the rest of the game is unaffected.
+- **Frontend entry:** `main.tsx` loads the stored language, then renders `App` (or `LiveOpsView` for `/live-ops`). Production build is Vite with a PWA shell (`vite-plugin-pwa`) and stable `vendor-react` / `locale-*` chunks.
 
 ---
 
-## 7. CLAUDE CODE EXECUTION PLAYBOOK
+## 7. QUALITY GATES & OPERATIONS
 
-Detailed in the final section and ready for automated one-shot execution.
+- **CI** (`.github/workflows/ci.yml`): backend `ruff` + `pytest --cov`; frontend `eslint`, `tsc`, `vitest --coverage` and `vite build`. Local equivalents: `make lint`, `make test`.
+- **End-to-end:** Playwright specs in `frontend/e2e/` (`npm run test:e2e`).
+- **Run:** `./start.sh` / `start.ps1` for local development, `make dev`, or `docker compose up --build`. Environment variables are documented in [`.env.example`](./.env.example).
+- **Detailed specs:** quality gates and installability are in [`audits/docs/implementations/08_QUALITY_GATES_AND_INSTALLABILITY_SPEC.md`](./audits/docs/implementations/08_QUALITY_GATES_AND_INSTALLABILITY_SPEC.md).
