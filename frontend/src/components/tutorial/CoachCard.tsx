@@ -1,4 +1,4 @@
-import { Building2, CheckCircle2, Gauge, LucideIcon, PauseCircle, Radar, Search, Siren, Terminal, Wrench, X } from "lucide-react";
+import { Building2, CheckCircle2, Gauge, Hammer, LucideIcon, MessageSquareWarning, PauseCircle, Radar, Scale, Search, ShieldCheck, Siren, Terminal, Users, Wrench, X } from "lucide-react";
 import { forwardRef, useEffect, useRef } from "react";
 import { TutorialStepId } from "../../i18n/translations";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -14,6 +14,11 @@ const STEP_ICONS: Record<TutorialStepId, LucideIcon> = {
   mitigate: Wrench,
   recap: CheckCircle2,
   governance: Gauge,
+  cab: Scale,
+  warRoom: MessageSquareWarning,
+  buildMode: Hammer,
+  hiring: Users,
+  resilience: ShieldCheck,
 };
 
 export interface RecapStats {

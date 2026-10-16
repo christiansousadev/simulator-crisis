@@ -8,6 +8,9 @@ import {
   clamp,
   clampCamera,
   isCameraSettled,
+  pinchScale,
+  pointerMidpoint,
+  pointerSpread,
   pxToUser,
   stepCameraSpring,
   viewScale,
@@ -16,7 +19,7 @@ import {
   type Camera,
   type ViewSize,
 } from "./cameraMath";
-import { CAMERA_ORIGIN } from "./sceneLayout";
+import { CAMERA_ORIGIN } from "./officeGeometry";
 import type { Point } from "./isoMath";
 
 const DRAG_THRESHOLD_PX = 4;
@@ -65,6 +68,10 @@ export class CameraController {
   private dragMoved = false;
   private drag: { startX: number; startY: number; origin: Camera; moved: boolean; samples: Array<{ t: number; x: number; y: number }> } | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  // touch gestures (pointer events): live touch pointers, and the pinch in progress when there are two
+  private touches = new Map<number, Point>();
+  private pinch: { spread: number; scale: number } | null = null;
+  private previousTouchAction = "";
 
   constructor(private readonly opts: CameraControllerOptions) {}
 
@@ -80,7 +87,11 @@ export class CameraController {
     }
     container.addEventListener("wheel", this.onWheel, { passive: false });
     container.addEventListener("mousedown", this.onMouseDown);
+    container.addEventListener("pointerdown", this.onPointerDown);
     container.addEventListener("click", this.onClickCapture, true);
+    // the camera owns touch gestures on the canvas: without this the browser pans/zooms the whole page
+    this.previousTouchAction = container.style.getPropertyValue("touch-action");
+    container.style.setProperty("touch-action", "none");
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
@@ -92,7 +103,13 @@ export class CameraController {
     const { container } = this.opts;
     container.removeEventListener("wheel", this.onWheel);
     container.removeEventListener("mousedown", this.onMouseDown);
+    container.removeEventListener("pointerdown", this.onPointerDown);
     container.removeEventListener("click", this.onClickCapture, true);
+    if (this.previousTouchAction) container.style.setProperty("touch-action", this.previousTouchAction);
+    else container.style.removeProperty("touch-action");
+    window.removeEventListener("pointermove", this.onPointerMove);
+    window.removeEventListener("pointerup", this.onPointerEnd);
+    window.removeEventListener("pointercancel", this.onPointerEnd);
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
@@ -178,16 +195,82 @@ export class CameraController {
   private onMouseDown = (evt: MouseEvent) => {
     if (evt.button !== 0 && evt.button !== 2) return;
     if (!this.opts.sceneHost.contains(evt.target as Node)) return;
-    this.drag = { startX: evt.clientX, startY: evt.clientY, origin: { ...this.target }, moved: false, samples: [] };
+    this.beginDrag(evt.clientX, evt.clientY);
     window.addEventListener("mousemove", this.onMouseMove);
     window.addEventListener("mouseup", this.onMouseUp);
   };
 
-  private onMouseMove = (evt: MouseEvent) => {
+  private onMouseMove = (evt: MouseEvent) => this.moveDrag(evt.clientX, evt.clientY);
+
+  private onMouseUp = () => {
+    window.removeEventListener("mousemove", this.onMouseMove);
+    window.removeEventListener("mouseup", this.onMouseUp);
+    this.endDrag();
+  };
+
+  // ---- touch: one finger pans, two fingers pinch-zoom around their midpoint ---------------------
+
+  private onPointerDown = (evt: PointerEvent) => {
+    if (evt.pointerType !== "touch") return;
+    if (!this.opts.sceneHost.contains(evt.target as Node)) return;
+    this.touches.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (this.touches.size === 1) {
+      this.beginDrag(evt.clientX, evt.clientY);
+      window.addEventListener("pointermove", this.onPointerMove);
+      window.addEventListener("pointerup", this.onPointerEnd);
+      window.addEventListener("pointercancel", this.onPointerEnd);
+    } else if (this.touches.size === 2) {
+      // the second finger turns the pan into a pinch; the pan ends without a fling
+      this.drag = null;
+      const [a, b] = [...this.touches.values()];
+      this.pinch = { spread: pointerSpread(a, b), scale: this.target.scale };
+      this.vel = { scale: 0, x: 0, y: 0 };
+      this.opts.onDragStart?.();
+    }
+  };
+
+  private onPointerMove = (evt: PointerEvent) => {
+    if (!this.touches.has(evt.pointerId)) return;
+    this.touches.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    if (this.pinch && this.touches.size >= 2) {
+      const [a, b] = [...this.touches.values()];
+      const rect = this.opts.container.getBoundingClientRect();
+      const mid = pointerMidpoint(a, b);
+      const anchor = pxToUser(mid.x - rect.left, mid.y - rect.top, this.view);
+      this.target = clampCamera(zoomAt(this.target, pinchScale(this.pinch.scale, this.pinch.spread, pointerSpread(a, b)), anchor, CAMERA_ORIGIN), CAMERA_ORIGIN);
+      this.cam = { ...this.target };
+      this.apply();
+      this.publish();
+      return;
+    }
+    this.moveDrag(evt.clientX, evt.clientY);
+  };
+
+  private onPointerEnd = (evt: PointerEvent) => {
+    if (!this.touches.delete(evt.pointerId)) return;
+    if (this.touches.size >= 2) return;
+    this.pinch = null;
+    if (this.touches.size === 1) {
+      // a finger left the pinch: the remaining one carries on as a fresh pan
+      const [rest] = [...this.touches.values()];
+      this.beginDrag(rest.x, rest.y);
+      return;
+    }
+    window.removeEventListener("pointermove", this.onPointerMove);
+    window.removeEventListener("pointerup", this.onPointerEnd);
+    window.removeEventListener("pointercancel", this.onPointerEnd);
+    this.endDrag();
+  };
+
+  private beginDrag(clientX: number, clientY: number) {
+    this.drag = { startX: clientX, startY: clientY, origin: { ...this.target }, moved: false, samples: [] };
+  }
+
+  private moveDrag(clientX: number, clientY: number) {
     const drag = this.drag;
     if (!drag) return;
-    const dx = evt.clientX - drag.startX;
-    const dy = evt.clientY - drag.startY;
+    const dx = clientX - drag.startX;
+    const dy = clientY - drag.startY;
     if (!drag.moved) {
       if (Math.abs(dx) <= DRAG_THRESHOLD_PX && Math.abs(dy) <= DRAG_THRESHOLD_PX) return;
       drag.moved = true;
@@ -207,9 +290,7 @@ export class CameraController {
     this.publish();
   };
 
-  private onMouseUp = () => {
-    window.removeEventListener("mousemove", this.onMouseMove);
-    window.removeEventListener("mouseup", this.onMouseUp);
+  private endDrag() {
     const drag = this.drag;
     this.drag = null;
     if (!drag?.moved) return;
@@ -228,7 +309,7 @@ export class CameraController {
       carry = { x: ((last.x - first.x) / dt) * INERTIA_SECONDS, y: ((last.y - first.y) / dt) * INERTIA_SECONDS };
     }
     this.flyTo({ ...this.cam, x: this.cam.x + carry.x, y: this.cam.y + carry.y }, { omega: OMEGA_INERTIA });
-  };
+  }
 
   private onClickCapture = (evt: MouseEvent) => {
     if (this.dragMoved) {

@@ -36,6 +36,10 @@ interface BeaconProps {
 export const AlertBeacon = memo(function AlertBeacon({ x, y, z = 1.95 }: BeaconProps) {
   const p = project(x, y, z);
   const origin = `${p.x}px ${p.y}px`;
+  // the same beam lands on the floor below the lamp: a wedge squashed to the iso ground plane
+  const floor = project(x, y, 0);
+  const floorOrigin = `${floor.x}px ${floor.y}px`;
+  const floorWedge = `M ${floor.x},${floor.y} L ${floor.x + 78},${floor.y - 17} A 80 80 0 0 1 ${floor.x + 78},${floor.y + 17} Z`;
   const cone = `M ${p.x},${p.y} L ${p.x - 34},${p.y - 6} A 36 36 0 0 1 ${p.x - 24},${p.y - 26} Z`;
   return (
     <g style={{ transformOrigin: origin, transform: "scale(max(var(--beacons), var(--amber)))", pointerEvents: "none" }}>
@@ -53,6 +57,13 @@ export const AlertBeacon = memo(function AlertBeacon({ x, y, z = 1.95 }: BeaconP
           <path d={cone} fill="#ef4444" opacity={0.26} />
         </g>
         <circle cx={p.x} cy={p.y} r={13} fill="url(#lightPool-red)" opacity={0.6} />
+        {/* floor sweep: rotates in beam space, then the parent squashes the whole thing onto the floor plane */}
+        <g transform={`translate(0 ${floor.y * 0.5}) scale(1 0.5)`} data-testid="floor-sweep">
+          <g style={{ transformOrigin: floorOrigin, animationDuration: "1.1s" }} className="animate-beacon-sweep">
+            <path d={floorWedge} fill="#ef4444" opacity={0.16} />
+          </g>
+          <ellipse cx={floor.x} cy={floor.y} rx={16} ry={16} fill="url(#lightPool-red)" opacity={0.35} />
+        </g>
       </g>
       <g style={{ opacity: "var(--beacons)" }}>
         <circle cx={p.x} cy={p.y} r={5.5} fill="#7f1d1d" />

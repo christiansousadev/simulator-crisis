@@ -3,7 +3,7 @@
 // the plan, RosterDirector feeds it from telemetry.
 
 import type { Engineer, Incident } from "../../types/game";
-import { DESK_ORDER, RESERVE_SLOTS } from "./officeLayout";
+import { DESK_ORDER, RESERVE_SLOTS } from "./officeGeometry";
 import {
   NODE,
   OFFICE_GRAPH,

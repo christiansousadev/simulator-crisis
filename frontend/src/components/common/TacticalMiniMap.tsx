@@ -20,7 +20,7 @@ import {
   SERVER_ROOM_ORIGIN,
   SERVER_ROOM_SIZE,
   deskGridPosition,
-} from "../office/sceneLayout";
+} from "../office/officeGeometry";
 import { rackGridPosition } from "../office/ServerRoom";
 import { Service } from "../../types/game";
 

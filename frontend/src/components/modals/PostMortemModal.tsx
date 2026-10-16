@@ -8,6 +8,7 @@ import { usePresence } from "../../hooks/usePresence";
 import { playUiConfirmSound } from "../../utils/sound";
 import Markdown from "../../utils/markdown";
 import AuditorChat from "../auditor/AuditorChat";
+import CausalChainView from "./CausalChainView";
 import Modal, { ModalBody, ModalFooter, ModalHeader } from "../common/Modal";
 
 const TITLE_ID = "post-mortem-title";
@@ -22,7 +23,7 @@ export default function PostMortemModal() {
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const auditorCopy = t.auditorChat;
   const [copied, setCopied] = useState(false);
-  const [tabState, setTabState] = useState<{ id: string; tab: "report" | "auditor"; auditorOpened: boolean }>({
+  const [tabState, setTabState] = useState<{ id: string; tab: "report" | "causal" | "auditor"; auditorOpened: boolean }>({
     id: "",
     tab: "report",
     auditorOpened: false,
@@ -69,7 +70,7 @@ export default function PostMortemModal() {
         closeLabel={t.common.close}
       />
       <div role="group" aria-label={auditorCopy.tabsLabel} className="flex gap-1.5 px-5 py-2 border-b border-slate-800 bg-slate-900 shrink-0">
-        {(["report", "auditor"] as const).map((id) => (
+        {(["report", "causal", "auditor"] as const).map((id) => (
           <button
             key={id}
             type="button"
@@ -81,12 +82,15 @@ export default function PostMortemModal() {
                 : "bg-transparent border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
             }`}
           >
-            {id === "report" ? auditorCopy.reportTab : auditorCopy.auditorTab}
+            {id === "report" ? auditorCopy.reportTab : id === "causal" ? t.evolution.causal.tab : auditorCopy.auditorTab}
           </button>
         ))}
       </div>
       <ModalBody className={tab === "report" ? "px-6 py-5" : "hidden"}>
         {report.markdown.trim() ? <Markdown source={report.markdown} /> : <p className="text-sm text-slate-500">{copy.empty}</p>}
+      </ModalBody>
+      <ModalBody className={tab === "causal" ? "px-6 py-5" : "hidden"}>
+        <CausalChainView chain={report.causalChain ?? null} />
       </ModalBody>
       {/* mounted on first visit and kept, so a half-typed answer survives a peek at the report */}
       {auditorOpened && (

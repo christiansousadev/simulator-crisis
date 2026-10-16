@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.schemas.incident import TriageSubmitRequest
+from app.schemas.incident import StatusUpdateRequest, TriageSubmitRequest
 
 router = APIRouter(tags=["incidents"])
 
@@ -40,4 +40,14 @@ async def submit_triage(incident_id: str, payload: TriageSubmitRequest, request:
     result = engine.submit_triage(incident_id, payload.line_id)
     if not result.get("success"):
         raise HTTPException(status_code=404, detail=result.get("error", "Incident not found"))
+    return result
+
+
+@router.post("/api/incidents/{incident_id}/status-update")
+async def post_status_update(incident_id: str, payload: StatusUpdateRequest, request: Request) -> Dict[str, Any]:
+    """PUBLISH A STATUS-PAGE UPDATE (investigating / identified / mitigating) FOR AN OPEN INCIDENT"""
+    engine = request.app.state.engine
+    result = engine.post_status_update(incident_id, payload.stage)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Status update rejected"))
     return result

@@ -10,6 +10,9 @@ import Topbar from "./components/layout/Topbar";
 import CABDilemmaModal from "./components/modals/CABDilemmaModal";
 import OnboardingModal from "./components/modals/OnboardingModal";
 import TitleScreen from "./components/modals/TitleScreen";
+import AcademyModal from "./components/tutorial/AcademyModal";
+import GlossaryModal from "./components/tutorial/GlossaryModal";
+import ServiceMapView from "./components/map/ServiceMapView";
 import IsometricOffice from "./components/office/IsometricOffice";
 import LazyDialogs from "./components/flow/LazyDialogs";
 import LazyModalHost from "./components/flow/LazyModalHost";
@@ -60,6 +63,7 @@ export default function App() {
   const closeScenarioSelect = useGameStore((s) => s.closeScenarioSelect);
   const officeIntro = useFlowStore((s) => s.officeIntro);
   const title = usePresenceFlag(titleScreenVisible, TITLE_EXIT_MS);
+  const stageView = useGameStore((s) => s.stageView);
   const screenShakeSeq = useGameStore((s) => s.screenShakeSeq);
   const screenShakeMagnitude = useGameStore((s) => s.screenShakeMagnitude);
   const highContrast = useGameStore((s) => s.highContrast);
@@ -144,7 +148,7 @@ export default function App() {
           office's own pan/zoom camera inside it */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className={`flex-1 min-h-0 flex flex-col ${title.mounted ? (title.closing ? "flow-title-drift-out" : "flow-title-drift") : ""}`}>
-          <IsometricOffice />
+          {stageView === "graph" ? <ServiceMapView /> : <IsometricOffice />}
         </div>
       </div>
       <BottomDock />
@@ -155,6 +159,8 @@ export default function App() {
 
       <CABDilemmaModal />
       <OnboardingModal />
+      <AcademyModal />
+      <GlossaryModal />
       <AchievementToast />
       {alwaysMountedModals}
 

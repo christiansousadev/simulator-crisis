@@ -67,6 +67,14 @@ const EngineerRow = memo(function EngineerRow({ eng, onRotate }: { eng: Engineer
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-xs font-bold text-slate-100">{eng.name}</span>
+            {eng.level !== undefined && (
+              <span
+                className="shrink-0 rounded bg-cyan-500/15 px-1 py-0.5 text-micro font-bold text-cyan-300"
+                title={t.evolution.engineer.xp(eng.xp ?? 0, eng.xp_to_next ?? null)}
+              >
+                {t.evolution.engineer.level(eng.level)}
+              </span>
+            )}
             {stressed && (
               <span className="flex shrink-0 items-center gap-0.5 rounded bg-rose-500/15 px-1 py-0.5 text-micro font-bold text-rose-300">
                 <AlertTriangle className="h-2.5 w-2.5" aria-hidden />

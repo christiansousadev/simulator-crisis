@@ -17,7 +17,7 @@
 | `session_id` | `String(36)`, `ForeignKey("game_sessions.id", ondelete="CASCADE")` | `VARCHAR(36)` | No | — | Foreign key linking to the active or archived (quarantined) `game_sessions.id`. Rows are removed with their session by the ORM cascade on a session reset (SQLite's `foreign_keys` pragma is off). |
 | `timestamp` | `DateTime` | `DATETIME` | Yes* | `datetime.utcnow` | Persisted UTC insertion time (naive datetime, set by the column default). In-memory ledger entries (`TICK_BROADCAST.recent_audits`, `GET /api/audits`) carry a separate ISO-8601 timestamp with `+00:00` created when the event is built. |
 | `tick` | `Integer` | `INTEGER` | No | — | Logical clock tick when the event was committed. Set to `0` for post-hoc rows written by the API layer (`AI_AUDITOR_INTERVIEW_TURN`). |
-| `event_type` | `String(50)` | `VARCHAR(50)` | No | — | Closed set of 34 event types cataloged in § 2 (closed by convention in code; there is no database `CHECK` constraint). |
+| `event_type` | `String(50)` | `VARCHAR(50)` | No | — | Closed set of 38 event types cataloged in § 2 (closed by convention in code; there is no database `CHECK` constraint). |
 | `actor` | `String(50)` | `VARCHAR(50)` | No | — | Subsystem actor, one of 9 values: `AUDIT_SYSTEM`, `VP_OF_INFRA`, `AUTOMATED_MONITOR`, `BOARD_OF_DIRECTORS`, `PLATFORM`, `PLATFORM_TEAM`, `EXTERNAL_MONITOR`, `CI_PIPELINE`, `BORDER_FIREWALL`. |
 | `details_json` | `Text` | `TEXT` | No | — | Serialized JSON dictionary carrying event payload attributes. Financial events additionally carry `amount` (signed cash movement) and `balance_after`. |
 | `compliance_flag` | `Boolean` | `BOOLEAN` | No | `True` | `True` indicates compliant operation; `False` indicates a regulatory, policy, or financial control breach or an adverse event. |
@@ -28,7 +28,7 @@ No secondary index is declared on `audit_logs`; only the primary key is indexed.
 
 ---
 
-## 2. Complete Authoritative Event Type Catalog (34 Event Types)
+## 2. Complete Authoritative Event Type Catalog (38 Event Types)
 
 The table below catalogs every event type emitted by the codebase. "Incident ID Ref" states whether the payload carries an `incident_id` key (the dossier in Document 05 only reads such rows).
 
@@ -68,14 +68,18 @@ The table below catalogs every event type emitted by the codebase. "Incident ID 
 | `SNAPSHOT_VERSION_MISMATCH` | Incompatible snapshot found | `PLATFORM` | `False` | None | No | Triggers isolation quarantine. |
 | `ACHIEVEMENT_UNLOCKED` | Career milestone achieved | `AUDIT_SYSTEM` | `True` | Prestige points awarded | No | Records permanent career achievement. |
 | `COSMETIC_UNLOCKED` | Player spends prestige on an office cosmetic | `VP_OF_INFRA` | `True` | Prestige points deducted | No | Unlocks visual office customization. |
+| `SESSION_ARCHIVED_AND_PURGED` | `POST /api/session/reset` on a session that had a ledger or had ticked, written into the **new** session's ledger right after the reset | `PLATFORM` | `True` | None | No | Closes the reset gap: the purged session's ledger is summarized and checksummed into `archived_audit_ledgers` first (`archive_id`, `purged_session_id`, `final_tick`, `final_status`, `final_budget`, `event_count`, `incident_count`, `events_by_type`, `ledger_checksum`). Not written on a first boot with nothing to archive. |
+| `TRAFFIC_THROTTLED` | Player fires the emergency traffic throttle on a failing service (`POST /api/services/{id}/throttle`) | `VP_OF_INFRA` | `True` | Direct deduction (\$600) | Yes | Sheds ~50% of the service's requests for a short window; does **not** resolve the incident (`service_id`, `incident_id`, `cost`, `window_ticks`). |
+| `STATUS_PAGE_UPDATED` | Player publishes a public status-page stage (`POST /api/incidents/{id}/status-update`) | `VP_OF_INFRA` | `False` when the announced stage is not backed by the incident record (misleading), else `True` | None (happiness `+2.0` when truthful; reputation `-3.0` when misleading) | Yes | Records `stage` (`investigating` / `identified` / `mitigating`), `truthful`, `happiness_delta`, `reputation_delta`. |
+| `ENGINEER_LEVELED_UP` | An on-duty, competency-matched engineer's XP crosses a level threshold after a full resolution | `PLATFORM` | `True` | None | No | Records `engineer_id`, `level`, `xp`. |
 
-A full session reset emits **no** event: there is no `SESSION_RESET` type, and the reset removes the prior session's rows (see Document 03, § 2.1).
+A full session reset still removes the prior session's `audit_logs` rows (ORM cascade), but it no longer does so silently: `SESSION_ARCHIVED_AND_PURGED` is written to the fresh ledger and a summary row with a SHA-256 content checksum of the purged ledger is kept in `archived_audit_ledgers` (see Document 03, § 2.1).
 
 ---
 
 ## 3. Representative JSON Payload Schemas
 
-Every financial event (`RUNBOOK_EXECUTED`, `UNATTENDED_ALERT_VIOLATION`, `DILEMMA_RESOLVED`, `ENGINEER_HIRED`, `UPGRADE_PURCHASED`, `INFRASTRUCTURE_NODE_PLACED`, `AI_AUDITOR_VERDICT_APPLIED`) also carries `amount` (signed: negative = debit) and `balance_after`.
+Every financial event (`RUNBOOK_EXECUTED`, `UNATTENDED_ALERT_VIOLATION`, `DILEMMA_RESOLVED`, `ENGINEER_HIRED`, `UPGRADE_PURCHASED`, `INFRASTRUCTURE_NODE_PLACED`, `TRAFFIC_THROTTLED`, `AI_AUDITOR_VERDICT_APPLIED`) also carries `amount` (signed: negative = debit) and `balance_after`.
 
 ### 3.1 `INCIDENT_RAISED`
 ```json

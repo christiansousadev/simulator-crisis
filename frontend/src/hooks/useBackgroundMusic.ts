@@ -6,8 +6,10 @@ import {
   MusicTension,
   setMusicDefcon,
   setMusicMode,
+  setAmbienceTension,
   setMusicTension,
   startAmbientMusic,
+  startDatacenterAmbience,
   unlockAudio,
 } from "../utils/sound";
 
@@ -27,6 +29,7 @@ export function useBackgroundMusic() {
     const handleFirstGesture = () => {
       unlockAudio();
       startAmbientMusic();
+      startDatacenterAmbience();
       window.removeEventListener("pointerdown", handleFirstGesture);
       window.removeEventListener("keydown", handleFirstGesture);
     };
@@ -54,4 +57,9 @@ export function useBackgroundMusic() {
     else if (activeIncidentCount >= 1) tension = "tense";
     setMusicTension(tension);
   }, [activeIncidentCount, featureFreezeActive, status]);
+
+  // the machine-room bed tightens with the DEFCON level (5 = calm, 1 = imminent collapse)
+  useEffect(() => {
+    setAmbienceTension((5 - defcon) / 4);
+  }, [defcon]);
 }

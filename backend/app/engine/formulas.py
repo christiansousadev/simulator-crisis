@@ -186,15 +186,54 @@ def unavailability_factor(status: str, latency_ms: float, error_rate: float) -> 
     return 0.0
 
 
-def instant_sla_percentage(services: Iterable[Dict[str, Any]]) -> float:
-    """COMPUTE INSTANTANEOUS TICK AVAILABILITY AS A 0-100 PERCENTAGE"""
+# --- circadian load (formula 4) -------------------------------------------
+#
+# the simulated clock reads 08:00 at tick 0 (1 tick = 1 hour; the frontend's officeClock.ts mirrors
+# CLOCK_START_HOUR). traffic peaks at lunch and in the evening and collapses overnight, which makes
+# the same outage cost more at peak and gives the quiet small hours their "safe window" feel.
+CLOCK_START_HOUR = 8
+PEAK_TRAFFIC_FACTOR = 1.5
+NIGHT_TRAFFIC_FACTOR = 0.4
+PEAK_HOURS = tuple(range(11, 15)) + tuple(range(19, 22))
+NIGHT_HOURS = tuple(range(1, 6))
+
+
+def hour_of_day(tick: int) -> int:
+    """SIMULATED CLOCK HOUR (0-23) FOR A TICK"""
+    return (tick + CLOCK_START_HOUR) % 24
+
+
+def circadian_traffic_factor(tick: int) -> float:
+    """RELATIVE TRAFFIC LOAD AT THIS TICK'S HOUR: 1.5x AT PEAK, 0.4x OVERNIGHT, 1.0x OTHERWISE"""
+    hour = hour_of_day(tick)
+    if hour in PEAK_HOURS:
+        return PEAK_TRAFFIC_FACTOR
+    if hour in NIGHT_HOURS:
+        return NIGHT_TRAFFIC_FACTOR
+    return 1.0
+
+
+def circadian_hazard_multiplier(traffic_factor: float) -> float:
+    """MULTIPLIER ON FAILURE PROBABILITY: BUSY HOURS STRESS THE MESH (1.2x AT PEAK), QUIET ONES
+    RELAX IT (~0.76x OVERNIGHT). DELIBERATELY SOFTER THAN THE RAW TRAFFIC FACTOR"""
+    return 0.6 + 0.4 * traffic_factor
+
+
+def circadian_surcharge_multiplier(traffic_factor: float) -> float:
+    """MULTIPLIER ON THE PER-TICK INCIDENT SURCHARGE (1.25x AT PEAK, 0.7x OVERNIGHT)"""
+    return 1.0 + 0.5 * (traffic_factor - 1.0)
+
+
+def instant_sla_percentage(services: Iterable[Dict[str, Any]], traffic_factor: float = 1.0) -> float:
+    """COMPUTE INSTANTANEOUS TICK AVAILABILITY AS A 0-100 PERCENTAGE. traffic_factor SCALES EACH
+    SERVICE'S UNAVAILABILITY (CAPPED AT TOTAL OUTAGE): AN OUTAGE AT PEAK HURTS MORE USERS"""
     total_weight = 0.0
     weighted_unavailability = 0.0
     for srv in services:
         weight = service_weight(srv["tier"])
         total_weight += weight
-        weighted_unavailability += weight * unavailability_factor(
-            srv["status"], srv["latency_ms"], srv["error_rate"]
+        weighted_unavailability += weight * min(
+            1.0, traffic_factor * unavailability_factor(srv["status"], srv["latency_ms"], srv["error_rate"])
         )
     if total_weight == 0.0:
         return 100.0
@@ -403,6 +442,20 @@ def tech_debt_exposure_multiplier(dependents: int) -> float:
     return 1.0 + 0.05 * dependents
 
 
+# --- emergency traffic throttling (formula 6) -------------------------------
+#
+# shedding half the requests buys time, it does not fix the cause: latency/errors drop at once and
+# the incident bleeds half as fast for a short window, but nothing resolves and the runbook is still
+# needed. one throttle per service per cooldown.
+THROTTLE_COST = 600.0
+THROTTLE_COOLDOWN_TICKS = 6
+THROTTLE_WINDOW_TICKS = 4
+THROTTLE_LATENCY_FACTOR = 0.6
+THROTTLE_ERROR_FACTOR = 0.7
+THROTTLE_SURCHARGE_FACTOR = 0.5
+THROTTLE_TECH_DEBT_DELTA = 1
+
+
 # --- investigation reward (forward-looking only, never rewrites elapsed history) -------
 
 TRIAGE_WRONG_ATTEMPT_STRESS = 3.0
@@ -425,6 +478,42 @@ SPECIALIST_QUALITY_STRESS_EROSION = 0.70
 SPECIALIST_QUALITY_FLOOR = 0.30
 
 
+# --- engineer progression (formula 5) --------------------------------------
+#
+# xp is earned by fully resolving an incident on the service an on-duty engineer is both assigned to
+# and specialised for. levels give a small, capped edge: slightly better coverage quality and a
+# slower stress build-up.
+ENGINEER_LEVEL_XP_THRESHOLDS = (0, 2, 5, 9, 14)
+ENGINEER_MAX_LEVEL = len(ENGINEER_LEVEL_XP_THRESHOLDS)
+ENGINEER_LEVEL_QUALITY_BONUS = 0.04
+ENGINEER_LEVEL_STRESS_REDUCTION = 0.06
+XP_PER_SPECIALIST_RESOLUTION = 1
+XP_CLEAN_TRIAGE_BONUS = 1
+XP_CLEAN_TRIAGE_ACCURACY = 0.78
+
+
+def engineer_level(xp: int) -> int:
+    """LEVEL (1..ENGINEER_MAX_LEVEL) FOR AN XP TOTAL"""
+    level = 1
+    for index, threshold in enumerate(ENGINEER_LEVEL_XP_THRESHOLDS):
+        if xp >= threshold:
+            level = index + 1
+    return level
+
+
+def xp_to_next_level(xp: int) -> Optional[int]:
+    """XP STILL NEEDED FOR THE NEXT LEVEL, None AT THE CAP"""
+    level = engineer_level(xp)
+    if level >= ENGINEER_MAX_LEVEL:
+        return None
+    return ENGINEER_LEVEL_XP_THRESHOLDS[level] - xp
+
+
+def level_stress_multiplier(xp: int) -> float:
+    """MULTIPLIER ON STRESS GAIN FOR AN ENGINEER'S LEVEL (1.0 AT LEVEL 1)"""
+    return 1.0 - ENGINEER_LEVEL_STRESS_REDUCTION * (engineer_level(xp) - 1)
+
+
 def competency_match(engineer: Optional[Dict[str, Any]], competency_map: Dict[str, str], service_id: str) -> bool:
     """WHETHER AN ASSIGNED ENGINEER'S CORE COMPETENCY MATCHES THE SERVICE THEY'RE COVERING"""
     return bool(engineer) and competency_map.get(service_id) == engineer["core_competency"]
@@ -436,7 +525,8 @@ def specialist_quality(engineer: Optional[Dict[str, Any]], competency_map: Dict[
         return 0.0
     base = 1.0 if competency_match(engineer, competency_map, service_id) else SPECIALIST_MISMATCH_BASE_QUALITY
     stress_factor = max(SPECIALIST_QUALITY_FLOOR, 1.0 - engineer["stress_index"] / 100.0 * SPECIALIST_QUALITY_STRESS_EROSION)
-    return round(base * stress_factor, 3)
+    level_bonus = ENGINEER_LEVEL_QUALITY_BONUS * (engineer_level(engineer.get("xp", 0)) - 1)
+    return round(min(1.0, base * stress_factor + level_bonus), 3)
 
 
 def specialist_burn_multiplier(quality: float) -> float:

@@ -6,6 +6,7 @@ import {
   AuditLogEntry,
   CareerRecord,
   CareerSummary,
+  CausalChain,
   CosmeticCatalogEntry,
   CustomScenarioConfig,
   DifficultyId,
@@ -65,6 +66,8 @@ export interface InterviewTurnResponse {
   adjustment_cap?: number;
   applied?: boolean;
   transcript_turn: number;
+  // "offline" when the deterministic rules auditor answered (no LLM key / API unreachable)
+  source?: "llm" | "offline";
 }
 
 export interface InterviewHistoryResponse {
@@ -115,6 +118,15 @@ export const api = {
   acknowledgeIncident: (incidentId: string) =>
     request(`/api/incidents/${incidentId}/acknowledge`, { method: "POST" }),
 
+  throttleService: (serviceId: string) =>
+    request(`/api/services/${serviceId}/throttle`, { method: "POST" }),
+
+  postStatusUpdate: (incidentId: string, stage: "investigating" | "identified" | "mitigating") =>
+    request<{ success: boolean; truthful: boolean; stage: string; happiness_delta: number; reputation_delta: number }>(
+      `/api/incidents/${incidentId}/status-update`,
+      { method: "POST", body: JSON.stringify({ stage }) }
+    ),
+
   getMitigationCatalog: () => request("/api/mitigations/catalog"),
 
   executeMitigation: (actionId: string, serviceId: string) =>
@@ -124,7 +136,7 @@ export const api = {
     }),
 
   generatePostmortem: (incidentId: string) =>
-    request<{ incident_id: string; markdown: string; saved_to: string }>(
+    request<{ incident_id: string; markdown: string; saved_to: string; causal_chain?: CausalChain }>(
       `/api/audits/postmortem/${incidentId}`
     ),
 

@@ -2,7 +2,7 @@
 // what has focus; it answers with the single action to run (or none). Keeping this free of the DOM
 // and the store is what makes the modal / title / typing rules unit-testable.
 
-export type DockTabId = "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics";
+export type DockTabId = "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics" | "warroom";
 
 // dialogs that are not on the modal stack yet (owned by other areas); closed through the store
 export type LegacyModal = "triage" | "replay" | "postMortem" | "incident" | "onboarding";
@@ -43,6 +43,7 @@ const DOCK_KEYS: Record<string, DockTabId> = {
   r: "roster",
   a: "achievements",
   g: "metrics",
+  w: "warroom",
 };
 
 // order a stack of legacy dialogs is dismissed in (the one drawn on top goes first)

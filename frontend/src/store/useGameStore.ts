@@ -2,7 +2,9 @@ import { create } from "zustand";
 import { detectBrowserLanguage, Language, loadStoredLanguage, persistLanguage } from "../i18n/language";
 import { loadLanguage } from "../i18n/loadLanguage";
 import { isLanguageReady, TRANSLATIONS } from "../i18n/translations";
-import { ActiveScenario, DilemmaOffer, Incident, ScenarioObjective, TelemetryState } from "../types/game";
+import { moduleRange, TutorialModule } from "../components/tutorial/tutorialSteps";
+import { ActiveScenario, CausalChain, DilemmaOffer, Incident, ScenarioObjective, TelemetryState } from "../types/game";
+import { readAcademyDone, writeAcademyDone } from "../utils/academyProgress";
 import { auditKpiInputs } from "../utils/auditKpi";
 import { countDependents } from "../utils/incidentImpact";
 import { KpiId } from "../utils/kpiBands";
@@ -133,6 +135,9 @@ function persistFlag(key: string, value: boolean) {
 
 export type ScreenShakeMagnitude = "light" | "heavy";
 
+export type DockTabId = "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics" | "warroom";
+export type StageView = "office" | "graph";
+
 // one boardroom-tv sample derived from a tick's service snapshot, never sent by the backend
 export interface MetricsSample {
   tick: number;
@@ -245,7 +250,7 @@ interface GameStore {
   connected: boolean;
   selectedServiceId: string | null;
   selectedIncident: Incident | null;
-  postMortem: { incidentId: string; markdown: string } | null;
+  postMortem: { incidentId: string; markdown: string; causalChain?: CausalChain | null } | null;
   resolvedHistory: Incident[];
   floatingTexts: FloatingText[];
   runAnimations: RunAnimation[];
@@ -281,14 +286,21 @@ interface GameStore {
   screenShakeSeq: number;
   screenShakeMagnitude: ScreenShakeMagnitude;
   impactFlashSeq: number;
-  dockTab: "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics";
+  dockTab: DockTabId;
+  // second dock tab kept open beside the active one (split view); null when nothing is pinned
+  pinnedDockTab: DockTabId | null;
   dockCollapsed: boolean;
+  // the main stage: the isometric office or the service dependency graph
+  stageView: StageView;
   highContrast: boolean;
   colorblindSafe: boolean;
   reducedMotionPref: ReducedMotionPref;
 
   setReducedMotionPref: (pref: ReducedMotionPref) => void;
-  setDockTab: (tab: "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics") => void;
+  setDockTab: (tab: DockTabId) => void;
+  pinDockTab: (tab: DockTabId | null) => void;
+  setStageView: (view: StageView) => void;
+  toggleStageView: () => void;
   setDockCollapsed: (collapsed: boolean) => void;
   toggleDockCollapsed: () => void;
   setTelemetry: (telemetry: TelemetryState) => void;
@@ -296,7 +308,7 @@ interface GameStore {
   selectService: (serviceId: string | null) => void;
   openIncidentDetail: (incident: Incident) => void;
   closeIncidentDetail: () => void;
-  openPostMortem: (incidentId: string, markdown: string) => void;
+  openPostMortem: (incidentId: string, markdown: string, causalChain?: CausalChain | null) => void;
   closePostMortem: () => void;
   pushFloatingText: (text: string, tone: FloatingTextTone) => void;
   dismissFloatingText: (id: string) => void;
@@ -310,7 +322,16 @@ interface GameStore {
   closeScenarioBriefing: () => void;
   setLanguage: (language: Language) => void;
   setActiveDilemma: (dilemma: DilemmaOffer | null) => void;
-  openOnboarding: () => void;
+  // starts a Flight Academy module (default: module 1); every module begins at its own first step
+  openOnboarding: (module?: TutorialModule) => void;
+  academyOpen: boolean;
+  openAcademy: () => void;
+  closeAcademy: () => void;
+  glossaryOpen: boolean;
+  openGlossary: () => void;
+  closeGlossary: () => void;
+  academyDone: number[];
+  markAcademyModuleDone: (module: number) => void;
   closeOnboarding: () => void;
   patchTutorial: (patch: Partial<TutorialProgress>) => void;
   completeTutorialStep: (stepId: string) => void;
@@ -378,6 +399,8 @@ export const useGameStore = create<GameStore>((set) => ({
   screenShakeMagnitude: "light",
   impactFlashSeq: 0,
   dockTab: "incidents",
+  pinnedDockTab: null,
+  stageView: "office",
   dockCollapsed: false,
   highContrast: loadStoredFlag(HIGH_CONTRAST_STORAGE_KEY),
   colorblindSafe: loadStoredFlag(COLORBLIND_SAFE_STORAGE_KEY),
@@ -744,7 +767,7 @@ export const useGameStore = create<GameStore>((set) => ({
   selectService: (serviceId) => set({ selectedServiceId: serviceId }),
   openIncidentDetail: (incident) => set({ selectedIncident: incident }),
   closeIncidentDetail: () => set({ selectedIncident: null }),
-  openPostMortem: (incidentId, markdown) => set({ postMortem: { incidentId, markdown } }),
+  openPostMortem: (incidentId, markdown, causalChain = null) => set({ postMortem: { incidentId, markdown, causalChain } }),
   closePostMortem: () => set({ postMortem: null }),
   pushFloatingText: (text, tone) =>
     set((state) => ({
@@ -794,7 +817,27 @@ export const useGameStore = create<GameStore>((set) => ({
   },
   setActiveDilemma: (dilemma) => set({ activeDilemma: dilemma }),
   // every open starts at step 1; every close path (Escape, skip, finish) resets it again
-  openOnboarding: () => set({ onboardingOpen: true, tutorialOfferPending: false, tutorial: INITIAL_TUTORIAL_PROGRESS }),
+  openOnboarding: (module = 1) =>
+    set({
+      onboardingOpen: true,
+      academyOpen: false,
+      tutorialOfferPending: false,
+      tutorial: { ...INITIAL_TUTORIAL_PROGRESS, stepIndex: moduleRange(module).start },
+    }),
+  academyOpen: false,
+  openAcademy: () => set({ academyOpen: true }),
+  closeAcademy: () => set({ academyOpen: false }),
+  glossaryOpen: false,
+  openGlossary: () => set({ glossaryOpen: true }),
+  closeGlossary: () => set({ glossaryOpen: false }),
+  academyDone: readAcademyDone(),
+  markAcademyModuleDone: (module) =>
+    set((state) => {
+      if (state.academyDone.includes(module)) return state;
+      const academyDone = [...state.academyDone, module].sort();
+      writeAcademyDone(academyDone);
+      return { academyDone };
+    }),
   closeOnboarding: () => {
     try {
       localStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
@@ -853,7 +896,11 @@ export const useGameStore = create<GameStore>((set) => ({
     persistFlag(HIGH_CONTRAST_STORAGE_KEY, value);
     set({ highContrast: value });
   },
-  setDockTab: (tab) => set({ dockTab: tab, dockCollapsed: false }),
+  // selecting the pinned tab swaps the pin out, so one tab is never shown twice in the split view
+  setDockTab: (tab) => set((state) => ({ dockTab: tab, dockCollapsed: false, pinnedDockTab: state.pinnedDockTab === tab ? null : state.pinnedDockTab })),
+  pinDockTab: (tab) => set({ pinnedDockTab: tab }),
+  setStageView: (view) => set({ stageView: view }),
+  toggleStageView: () => set((state) => ({ stageView: state.stageView === "office" ? "graph" : "office" })),
   setDockCollapsed: (collapsed) => set({ dockCollapsed: collapsed }),
   toggleDockCollapsed: () => set((state) => ({ dockCollapsed: !state.dockCollapsed })),
   setColorblindSafe: (value) => {

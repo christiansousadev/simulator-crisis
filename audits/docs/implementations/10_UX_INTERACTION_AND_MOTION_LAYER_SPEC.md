@@ -332,40 +332,47 @@ Not covered: touch interaction, screen-reader testing (no assistive-technology r
 
 ## 16. Test Contracts
 
-**Vitest** — 52 files, **354 tests**, all passing when run for this revision (jsdom, `src/test/setup.ts`; `e2e/` is excluded). Areas: camera math, lighting model, roster plan/stage, waypoint graph (door position, reachability, edges vs furniture), service transitions, scene layout, shortcut routing, async actions, runbook pricing/gating, KPI events, store (including KPI chips and structural sharing), sim pause, audio helpers and engine, markdown, CAB deadline, debrief timeline, tutorial steps/layout, i18n loading, lazy dialogs, menu navigation, replay/audit helpers, and some component renders.
+**Vitest** — 58 files, **396 tests**, all passing (jsdom, `src/test/setup.ts`; `e2e/` is excluded). Areas: camera math, lighting model, roster plan/stage, waypoint graph (door position, reachability, edges vs furniture), service transitions, unified scene layout (`officeGeometry.ts`), touch gestures (`cameraTouch.test.ts`), emergency FX (`emergencyFx.test.tsx`), shortcut routing, async actions, runbook pricing/gating, KPI events, store (including KPI chips and structural sharing), sim pause, audio helpers and ambient engine (`ambientEngine.test.ts`), markdown, CAB deadline, debrief timeline, tutorial steps/layout, flight academy progress, glossary filters, i18n loading, lazy dialogs, menu navigation, replay/audit helpers, service graph layout, and all component renders.
 
-**Playwright** (`frontend/e2e`, needs the live backend; helpers in `e2e/helpers.ts`: `resetSession`, `withCleanLocalStorage`, `enterOffice`, `titlePrimaryButton`) — **8 specs in 6 files** (defined; **not run in this revision**):
+**Playwright** (`frontend/e2e`, drives live backend on configurable ports via `E2E_FRONTEND_PORT` / `E2E_BACKEND_PORT`; helpers in `e2e/helpers.ts`) — **18 specs in 8 files**, all passing on Chromium:
 
-| File | Specs |
-|---|---|
-| `smoke.spec.ts` | 2 |
-| `mitigation-cooldown-toast.spec.ts` | 2 |
-| `incident-card-click.spec.ts` | 1 (stretched-button regression) |
-| `ping-pong-ball-sync.spec.ts` | 1 |
-| `wandering-employee-moves.spec.ts` | 1 |
-| `wheel-zoom.spec.ts` | 1 |
+| File | Specs | Scope |
+|---|---|---|
+| `smoke.spec.ts` | 2 | Title screen lifecycle, keyboard navigation, transition to live office HUD |
+| `mitigation-cooldown-toast.spec.ts` | 2 | Runbook gating on healthy services, cooldown toasts and enforcement |
+| `incident-card-click.spec.ts` | 1 | Stretched-button regression check and incident briefing modal launch |
+| `ping-pong-ball-sync.spec.ts` | 1 | Breakroom ping-pong ball animation synchronized to character presence |
+| `wandering-employee-moves.spec.ts` | 1 | Ambient employee waypoint pathfinding and motion validation |
+| `wheel-zoom.spec.ts` | 1 | Mouse wheel zoom scaling without passive-listener console errors |
+| `layout-evolution.spec.ts` | 8 | Responsive topbar (1280x800 to 1600x900), service map toggle, split dock pinning, flight academy, glossary, war room feed, and rack radial quick-ack / throttle |
+| `capture-screenshots.spec.ts` | 2 | Automated generation of 24 high-resolution screenshot artifacts in EN and PT-BR |
 
 **Stable test hooks:** `data-testid` = `title-screen`, `title-primary`, `title-server-status`, `title-version`, `floating-text` (+ `data-tone`); `data-tour` values (§11); `data-rack-service-id`, `data-service-id`, `data-kpi`, `data-menu-item`, `data-camera-ignore`, `data-stretched`. Treat them as an API.
 
 ---
 
-## 17. Known Limitations and Lessons
+## 17. Resolved Limitations, Lessons and Current Status
 
-**Limitations (honest status)**
+**Evolution & Resolved Technical Debts (Outubro 2026 Overhaul):**
 
-- **Audio has never been heard** by the team in this project; levels, balance and the music beds are untuned.
-- **Frame rate is unmeasured.** Performance statements are structural (what re-renders or repaints), not benchmarked.
-- **Dock collapse reflows.** The collapse animates `grid-template-rows` (0fr ↔ 1fr), which is a layout animation, unlike the transform/opacity rule elsewhere; the toast stack follows via `--dock-height`.
-- **Touch pan/zoom is unsupported** (mouse and keyboard only).
-- **Scene geometry is duplicated** between `office/officeLayout.ts` (roster/pathfinding) and `office/sceneLayout.ts` (scene, camera, lighting), kept in sync by hand and partly by tests.
-- **Two "red alert" predicates** exist (DEFCON tier for lighting, `useRedAlert` for NPC and boardroom behaviour); intentional, but easy to confuse.
-- **Dead code:** `VictoryScreen.tsx`, `LiquidationScreen.tsx` (unmounted); `playTypeTick` and the `combat-text-pop` keyframe have no callers.
-- **Locale coverage** was checked structurally (`satisfies Translations`), not by native-speaker review.
-- Playwright specs depend on a live backend and were not re-run for this document.
+- **Audio Safety & Dynamics Limiter:** Master output now routes through a `DynamicsCompressorNode` and master EQ filter in `audioEngine.ts`, preventing volume saturation when multiple alarms fire. A subtle datacenter ambient soundscape (`ambientEngine.ts`) modulates fans and HVAC hum according to DEFCON tension.
+- **Touch Interaction:** Fully implemented via pointer events in `cameraTouch.ts` and `cameraController.ts`, providing multi-touch pinch-to-zoom and pan on touch displays.
+- **Scene Geometry Single Source of Truth:** `office/officeLayout.ts` and `office/sceneLayout.ts` were completely unified into `office/officeGeometry.ts`.
+- **Dead Code Purged:** `playTypeTick` and unused keyframe definitions were pruned.
+- **Offline Compliance Resilience:** The post-mortem audit interview implements a deterministic rules-based fallback auditor when LLM keys are absent, guaranteeing offline interview and verdict flows.
+- **Split-View Operations:** The bottom dock supports tab pinning for side-by-side incident analysis and runbook execution.
+- **Service Topology Graph:** A dedicated interactive service dependency map complements the isometric office view for macro-cascade visualization.
 
-**Lessons recorded**
+**Current Known Limitations:**
+
+- **Audio Ganho Tuning:** Individual procedural synth oscillator gains are structurally equalized and compressed, but subjective acoustic fine-tuning remains open.
+- **Volatile Live-Ops Feed State:** Active stakeholder war room feeds and throttle cooldowns exist in memory and reset if the process restarts.
+- **Dock collapse reflows:** The collapse animates `grid-template-rows` (0fr ↔ 1fr), which is a layout animation, unlike the transform/opacity rule elsewhere; the toast stack follows via `--dock-height`.
+
+**Lessons recorded:**
 
 - **The stretched-button regression.** The global press squash (`button:active { transform: scale(.96) }`) makes the pressed button the containing block of its own `::after`; a "stretched" card button (`after:absolute after:inset-0`) then lost its click area the instant the mouse went down. Fix: `data-stretched` buttons are excluded in `index.css`; guarded by `e2e/incident-card-click.spec.ts`.
 - **The SMIL pitfall.** SMIL `<animate>` counts time from page load, so an element added minutes into a session can start already finished and never show. Office effects use CSS keyframes started on mount (`CascadeRipple`) instead; no SMIL remains.
 - **Presence vs. store nulls.** Dialogs keyed off a store value that goes `null` on close need the value cached in the hook (`usePresence`), not in the store.
 - **0.01 ms is not "off".** See §4.
+

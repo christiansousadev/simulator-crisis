@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { evolutionEn } from "../../i18n/evolution";
+import { evolutionPt } from "../../i18n/locales/pt-BR/evolution";
 import { INITIAL_TUTORIAL_PROGRESS, TutorialProgress, useGameStore } from "../../store/useGameStore";
 import { Incident } from "../../types/game";
 import {
@@ -10,7 +12,9 @@ import {
   nextStepIndex,
   pickNaturalIncident,
   prevStepIndex,
+  moduleRange,
   resolveSelector,
+  TUTORIAL_MODULES,
   TUTORIAL_STEPS,
   TutorialSnapshot,
 } from "./tutorialSteps";
@@ -94,22 +98,47 @@ describe("tutorial snapshot and completion predicates", () => {
 describe("tutorial navigation", () => {
   const index = (id: string) => TUTORIAL_STEPS.findIndex((s) => s.id === id);
 
-  it("walks the steps in order", () => {
+  it("walks the steps of a module in order", () => {
     expect(nextStepIndex(0, snap())).toBe(1);
-    expect(nextStepIndex(index("acknowledge"), snap())).toBe(index("investigate"));
+    expect(nextStepIndex(index("investigate"), snap())).toBe(index("findCause"));
     expect(prevStepIndex(3, snap())).toBe(2);
   });
 
-  it("finishes (null) past the last step and never goes below 0", () => {
+  it("finishes (null) at the end of each module and never goes below its first step", () => {
+    expect(nextStepIndex(index("acknowledge"), snap())).toBeNull();
+    expect(nextStepIndex(index("recap"), snap())).toBeNull();
     expect(nextStepIndex(TUTORIAL_STEPS.length - 1, snap())).toBeNull();
     expect(prevStepIndex(0, snap())).toBe(0);
+    expect(prevStepIndex(index("investigate"), snap())).toBe(index("investigate"));
+  });
+
+  it("lays the steps out as four contiguous modules", () => {
+    expect(TUTORIAL_MODULES).toEqual([1, 2, 3, 4]);
+    let covered = 0;
+    for (const module of TUTORIAL_MODULES) {
+      const { start, count } = moduleRange(module);
+      expect(count).toBeGreaterThan(0);
+      expect(start).toBe(covered);
+      expect(TUTORIAL_STEPS.slice(start, start + count).every((s) => s.module === module)).toBe(true);
+      covered += count;
+    }
+    expect(covered).toBe(TUTORIAL_STEPS.length);
+  });
+
+  it("every step has copy in every locale", () => {
+    for (const locale of [evolutionEn, evolutionPt]) expect(locale.academy.modules).toHaveLength(TUTORIAL_MODULES.length);
+    const ids = TUTORIAL_STEPS.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("skips incident-bound steps when no incident could be created, in both directions", () => {
     const none = snap({ incidents: [], progress: { incidentId: null, incidentPhase: "failed", incidentSource: null } });
     expect(none.noIncident).toBe(true);
-    expect(nextStepIndex(index("rack"), none)).toBe(index("governance"));
-    expect(prevStepIndex(index("governance"), none)).toBe(index("rack"));
+    // module 1 has nothing left to do without an incident, so it ends right after the rack
+    expect(nextStepIndex(index("rack"), none)).toBeNull();
+    expect(prevStepIndex(index("acknowledge"), none)).toBe(index("rack"));
+    // module 3 never needed an incident
+    expect(nextStepIndex(index("governance"), none)).toBe(index("cab"));
   });
 
   it("keeps the incident steps while the practice incident is still being created", () => {

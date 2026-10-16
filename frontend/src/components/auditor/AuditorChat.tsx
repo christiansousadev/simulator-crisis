@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, KeyRound, RotateCcw, Scale, Send } from "lucide-react";
-import { KeyboardEvent, useCallback, useEffect, useReducer, useRef } from "react";
+import { KeyboardEvent, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useTranslation } from "../../i18n/useTranslation";
 import { api } from "../../services/api";
@@ -54,6 +54,8 @@ export default function AuditorChat({ incidentId }: { incidentId: string }) {
   const reduced = useReducedMotion();
   const pushFloatingText = useGameStore((s) => s.pushFloatingText);
   const [state, dispatch] = useReducer(auditorReducer, undefined, initialAuditorState);
+  // true once a turn was answered by the deterministic offline auditor instead of an LLM
+  const [offline, setOffline] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // resume a saved interview; a 404 (none yet) or any failure just means a fresh conversation
@@ -82,6 +84,7 @@ export default function AuditorChat({ incidentId }: { incidentId: string }) {
       playUiConfirmSound();
       try {
         const response = await api.conductInterview(incidentId, message);
+        setOffline(response.source === "offline");
         dispatch({ type: "reply", response });
         if (isFinalVerdict(response.verdict)) playStampSound();
       } catch (err) {
@@ -148,6 +151,15 @@ export default function AuditorChat({ incidentId }: { incidentId: string }) {
         <div>
           <h3 className="text-sm font-bold font-heading tracking-wide text-white">{copy.heading}</h3>
           <p className="text-xs text-slate-400 leading-relaxed mt-0.5">{copy.intro}</p>
+          {offline && (
+            <p
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"
+              title={copy.offlineHint}
+              data-testid="auditor-offline-badge"
+            >
+              {copy.offlineBadge}
+            </p>
+          )}
         </div>
       </div>
 

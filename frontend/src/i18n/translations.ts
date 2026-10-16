@@ -5,6 +5,7 @@ import { hudEn, HudCopy } from "./hud";
 import { officeLifeEn, OfficeLifeCopy } from "./officeLife";
 import { uiGapsEn, UiGapsCopy } from "./uiGaps";
 import { flowEn, FlowStrings } from "./flowStrings";
+import { evolutionEn, EvolutionCopy } from "./evolution";
 
 // mitigation action ids mirror app.engine.formulas.MITIGATION_CATALOG on the backend
 export type MitigationActionId = "rollback" | "scale_replicas" | "circuit_breaker" | "emergency_patch";
@@ -37,7 +38,12 @@ export type TutorialStepId =
   | "runbooks"
   | "mitigate"
   | "recap"
-  | "governance";
+  | "governance"
+  | "cab"
+  | "warRoom"
+  | "buildMode"
+  | "hiring"
+  | "resilience";
 export type TutorialCauseKey = "deploy_regression" | "capacity_saturation" | "dependency_fault" | "acute_defect";
 
 export interface Translations {
@@ -47,6 +53,7 @@ export interface Translations {
   hud: HudCopy;
   officeLife: OfficeLifeCopy;
   uiGaps: UiGapsCopy;
+  evolution: EvolutionCopy;
   common: {
     close: string;
     none: string;
@@ -554,6 +561,7 @@ const en: Translations = {
   hud: hudEn,
   officeLife: officeLifeEn,
   uiGaps: uiGapsEn,
+  evolution: evolutionEn,
   common: { close: "Close", none: "none", target: "Target", day: "Day", collapseDock: "Collapse dock", expandDock: "Expand dock", more: "More" },
   status: { healthy: "Healthy", degraded: "Degraded", down: "Down" },
   severities: {
@@ -953,6 +961,26 @@ const en: Translations = {
         title: "Keep the SLA alive",
         body: "The shield is your SLA and the meter is your error budget. Burn the budget and a feature freeze locks risky runbooks; drop below the SLA and regulators fine you. Keep both healthy through the monthly audit.",
       },
+      cab: {
+        title: "The CAB dilemmas",
+        body: "Every 40 to 60 ticks the Change Advisory Board puts a dilemma in front of you. Each choice trades cash, tech debt and reputation, and some leave a hazard window behind. Read the trade-off before you pick.",
+      },
+      warRoom: {
+        title: "The war room",
+        body: "On serious incidents the CEO, support and the board write in. Publish an honest update on the public status page: it calms customers. Announcing progress that has not happened costs reputation.",
+      },
+      buildMode: {
+        title: "Build Mode",
+        body: "Open Build Mode to install hardware on the racks: a Redis cache cuts latency, a Kafka queue isolates cascades, a read replica and NGINX lower failure odds. Resilience is bought before the outage.",
+      },
+      hiring: {
+        title: "The right engineer on the right rack",
+        body: "Open the Roster tab. A specialist whose competency matches the service they cover catches trouble early, recovers faster and gains levels from clean fixes. A mismatched or exhausted engineer does not.",
+      },
+      resilience: {
+        title: "Mission complete",
+        body: "You now know the whole loop: detect, investigate, fix, communicate and harden. Replay any module from the help button, and keep the glossary open when a term is new.",
+      },
     },
     recap: { mtta: "Time to acknowledge", mttr: "Time to recover", spent: "Money spent", notMeasured: "n/a" },
     cheatSheet: {
@@ -1195,7 +1223,7 @@ const en: Translations = {
 };
 
 // every key whose copy lives in its own per-namespace module; a locale assembles core + these four
-export type NamespaceKey = "auditorChat" | "flow" | "gameplayModals" | "hud" | "officeLife" | "uiGaps";
+export type NamespaceKey = "auditorChat" | "flow" | "gameplayModals" | "hud" | "officeLife" | "uiGaps" | "evolution";
 // the locale modules type their inline dictionary against this, then assemble the full Translations
 export type CoreTranslations = Omit<Translations, NamespaceKey>;
 

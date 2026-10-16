@@ -26,7 +26,7 @@ vulnerabilities waiting to be reported:
   per-client isolation and no WebSocket origin check. State is also pushed to all connected
   clients after every successful state-changing command, not only on ticks.
 - **Optional AI Auditor (LLM) integration.** Disabled until `LLM_API_KEY` is set (the interview
-  route answers `503` meanwhile). When enabled, the incident dossier and the player's messages are
+  route is answered by the offline rules auditor meanwhile). When enabled, the incident dossier and the player's messages are
   sent to whatever endpoint `LLM_API_BASE_URL` names, with the key as a Bearer token; there is no
   allow-list for that URL and no authentication in front of the route, so anyone who can reach
   the API can spend the configured key (bounded only by the in-process 10 calls / 60 s per-IP

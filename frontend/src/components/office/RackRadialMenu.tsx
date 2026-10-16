@@ -1,9 +1,12 @@
 import type { KeyboardEvent } from "react";
 import { memo } from "react";
-import { Crosshair, FileSearch, Terminal, X } from "lucide-react";
+import { BellRing, Crosshair, FileSearch, Gauge, Terminal, X } from "lucide-react";
+import { useAcknowledgeIncident } from "../../hooks/useAcknowledgeIncident";
 import { useTranslation } from "../../i18n/useTranslation";
+import { api } from "../../services/api";
 import { useGameStore } from "../../store/useGameStore";
 import { Service } from "../../types/game";
+import { playErrorSound, playSuccessSound } from "../../utils/sound";
 import { project } from "./isoMath";
 import "./officeLife.css";
 
@@ -25,6 +28,22 @@ function RackRadialMenu({ service, gridX, gridY, onFocusRack, onClose }: RackRad
   const incident = useGameStore((s) => s.telemetry.active_incidents.find((i) => i.service_id === service.id));
   const openTriageTerminal = useGameStore((s) => s.openTriageTerminal);
   const openIncidentDetail = useGameStore((s) => s.openIncidentDetail);
+  const { acknowledge, isAcknowledging } = useAcknowledgeIncident();
+
+  // tactical shortcut: shed load now. The server owns cost, cooldown and effect; a rejection (no
+  // funds, on cooldown) comes back as its own message
+  const throttle = async () => {
+    const store = useGameStore.getState();
+    try {
+      await api.throttleService(service.id);
+      playSuccessSound();
+      store.pushFloatingText(t.evolution.radial.throttleOk(service.name), "info");
+    } catch (err) {
+      playErrorSound();
+      store.pushFloatingText(err instanceof Error && err.message ? err.message : t.evolution.radial.throttleFailed, "danger");
+    }
+  };
+  const canAcknowledge = incident?.status === "active" && !isAcknowledging(incident.id);
 
   // center anchor of this rack in isometric SVG space
   const center = project(gridX + 0.35, gridY + 0.35, 0.5);
@@ -60,6 +79,28 @@ function RackRadialMenu({ service, gridX, gridY, onFocusRack, onClose }: RackRad
       disabled: !incident,
       onClick: () => {
         if (incident) openIncidentDetail(incident);
+      },
+    },
+    {
+      id: "ack",
+      label: t.evolution.radial.quickAck,
+      icon: BellRing,
+      angle: -45,
+      color: canAcknowledge ? "#34d399" : "#64748b",
+      disabled: !canAcknowledge,
+      onClick: () => {
+        if (incident) void acknowledge(incident);
+      },
+    },
+    {
+      id: "throttle",
+      label: t.evolution.radial.throttle,
+      icon: Gauge,
+      angle: 45,
+      color: incident ? "#fb923c" : "#64748b",
+      disabled: !incident,
+      onClick: () => {
+        if (incident) void throttle();
       },
     },
     {

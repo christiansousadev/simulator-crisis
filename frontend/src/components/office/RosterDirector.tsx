@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useGameStore } from "../../store/useGameStore";
 import { planTargets, workedServiceIds } from "./rosterPlan";
-import { rosterChoreographer } from "./rosterStage";
+import { isRedAlertLevel, selectDefconLevel } from "../../utils/defcon";
+import { rosterChoreographer, setRosterUrgency } from "./rosterStage";
 
 // a hire this young (in ticks) walks in through reception; anyone older was already on the books
 export const FRESH_HIRE_TICKS = 2;
@@ -17,6 +18,12 @@ export default function RosterDirector() {
   );
   const workedKey = useGameStore((s) => workedServiceIds(s.telemetry.active_incidents).join(","));
   const reduced = useReducedMotion();
+  // on red alert (DEFCON 2 or worse) engineers run instead of walking
+  const urgent = useGameStore((s) => isRedAlertLevel(selectDefconLevel(s)));
+  useEffect(() => {
+    setRosterUrgency(urgent);
+    return () => setRosterUrgency(false);
+  }, [urgent]);
 
   useEffect(() => {
     const { telemetry } = useGameStore.getState();

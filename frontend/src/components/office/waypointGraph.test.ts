@@ -7,7 +7,7 @@ import {
   SERVER_ROOM_DOOR,
   SERVER_ROOM_ORIGIN,
   walkBlockers,
-} from "./officeLayout";
+} from "./officeGeometry";
 import {
   NODE,
   OFFICE_GRAPH,

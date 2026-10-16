@@ -45,6 +45,16 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 <td align="center"><sub>Árvore de Upgrades</sub></td>
 <td align="center"><sub>Debrief Pós-Partida</sub></td>
 </tr>
+<tr>
+<td width="33%"><img src="./docs/screenshots/service-map-pt.png" alt="Mapa de dependências dos microsserviços"></td>
+<td width="33%"><img src="./docs/screenshots/war-room-pt.png" alt="Sala de Guerra e status page pública com stakeholders"></td>
+<td width="33%"><img src="./docs/screenshots/flight-academy-pt.png" alt="SRE Flight Academy: módulos de treinamento interativo"></td>
+</tr>
+<tr>
+<td align="center"><sub>Mapa de Serviços</sub></td>
+<td align="center"><sub>Sala de Guerra & Status Page</sub></td>
+<td align="center"><sub>SRE Flight Academy</sub></td>
+</tr>
 </table>
 
 ---
@@ -142,8 +152,8 @@ O IncidentZero adota **Arquitetura Autoritativa no Servidor**:
 - **Backend:** Python 3.12, FastAPI, motor de ticks determinístico (1 tick = 1 hora no jogo), SQLAlchemy, SQLite, Pydantic v2. Testado com pytest.
 - **Migrações de Banco de Dados:** O [Alembic](https://alembic.sqlalchemy.org/) controla o versionamento do schema e aplica migrações automaticamente na inicialização (`alembic upgrade head`).
 - **Stream de Telemetria:** Canal bidirecional WebSocket (`/ws/telemetry`) transmitindo deltas de tick, estados dos racks, métricas operacionais e alertas.
-- **Ledger de Compliance:** Log de auditoria somente de inserção, persistido no SQLite, rastreando 34 tipos distintos de eventos operacionais e de governança.
-- **Integração com IA (Opcional):** A entrevista do auditor no post-mortem fala com qualquer endpoint chat-completions compatível com OpenAI (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`). Sem chave, a rota da entrevista responde 503; não há modo offline.
+- **Ledger de Compliance:** Log de auditoria somente de inserção, persistido no SQLite, rastreando 38 tipos distintos de eventos operacionais e de governança.
+- **Integração com IA (Opcional):** A entrevista do auditor no post-mortem fala com qualquer endpoint chat-completions compatível com OpenAI (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`). Sem chave (ou se a API estiver fora do ar), um auditor offline determinístico por regras responde no lugar, identificado como "Auditor offline por regras" na interface, com os mesmos tetos de veredito.
 
 Consulte o [ARCHITECTURE.md](./ARCHITECTURE.md) (em inglês) para diagramas técnicos completos, fórmulas matemáticas e schemas do banco de dados.
 
@@ -238,7 +248,7 @@ A suíte Playwright (`frontend/e2e/`) valida os fluxos reais da interface contra
 
 ## Principais Endpoints da API
 
-O backend disponibiliza mais de 35 endpoints REST em 14 roteadores de domínio, além do canal WebSocket. A documentação interativa pode ser explorada em `http://localhost:8000/docs`.
+O backend disponibiliza 39 endpoints REST em 14 roteadores de domínio, além do canal WebSocket. A documentação interativa pode ser explorada em `http://localhost:8000/docs`.
 
 | Roteador | Caminho Base | Descrição |
 |---|---|---|
@@ -290,6 +300,17 @@ simulator-crisis/
 ```
 
 ---
+
+## Evolução Sistêmica
+
+- **Carga circadiana:** as horas simuladas definem um fator de tráfego (1,5x nos picos de almoço e noite, 0,4x de madrugada) que escala o impacto no SLA, a chance de falha e a sobretaxa de incidentes.
+- **Sala de guerra:** um feed de stakeholders (CEO, suporte, jurídico, conselho) cobra você em incidentes graves; publique atualizações honestas na status page ou perca reputação por anunciar um progresso que não aconteceu.
+- **Níveis de engenheiros:** especialistas ganham XP com resoluções limpas e compatíveis e ficam melhores e mais calmos.
+- **Atalhos táticos:** o menu radial do rack oferece reconhecimento imediato e limitação de tráfego de emergência.
+- **Visões e layout:** grafo de dependências dos serviços, dock dividido com abas fixadas e terminal de logs acoplável; a barra superior mantém todo medidor crítico visível até 1280 px.
+- **Academia de Voo SRE:** quatro módulos de tutorial independentes, glossário pesquisável e a visão causal "por que falhou" no post-mortem.
+- **Lacunas de auditoria fechadas:** o reset de sessão agora arquiva e verifica por checksum o ledger descartado e registra `SESSION_ARCHIVED_AND_PURGED`; o auditor de IA tem modo offline determinístico.
+- **Sensação de jogo:** varredura de alerta vermelho no piso, engenheiros correndo com laptops, executivos em pânico, pulsos de dados nos cabos, faíscas e fumaça nos racks, bus master com EQ e limitador, ambiência de datacenter e gestos de pinça/arrastar no escritório.
 
 ## Limitações Conhecidas
 

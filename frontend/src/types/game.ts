@@ -35,6 +35,8 @@ export interface Incident {
   triage_solved: boolean;
   // 0..1 quality of the investigation, only present once triage is solved (drives the cost discount)
   triage_accuracy?: number | null;
+  // 0 = nothing published on the public status page yet; 1..3 = investigating / identified / mitigating
+  status_page_rank?: number;
 }
 
 export interface AuditLogEntry {
@@ -110,6 +112,10 @@ export interface Engineer {
   stamina: number;
   on_call_status: OnCallStatus;
   hired_at_tick: number;
+  // progression, owned by the backend (formulas.engineer_level); optional for older frames
+  xp?: number;
+  level?: number;
+  xp_to_next?: number | null;
 }
 
 // scripted crisis scenarios, mirrors backend.app.engine.scenarios
@@ -288,6 +294,34 @@ export interface TelemetryState {
   active_scenario: ActiveScenario | null;
   difficulty: DifficultyId;
   reputation: number;
+  // circadian load (formulas.circadian_traffic_factor): 1.5 at peak, 0.4 overnight, 1.0 otherwise
+  traffic_factor?: number;
+  clock_hour?: number;
+  stakeholder_feed?: StakeholderMessage[];
+  // service_id -> tick the emergency throttle was last fired
+  throttle_cooldowns?: Record<string, number>;
+}
+
+// mirrors backend audits._build_causal_chain: the teaching view of why an incident happened
+export interface CausalChain {
+  service_id: string;
+  root_cause: string | null;
+  cause_category: "deploy_regression" | "capacity_saturation" | "dependency_fault" | "acute_defect" | null;
+  downstream_service_ids: string[];
+  best_runbook_id: string | null;
+  runbooks_used: string[];
+  fully_resolved: boolean;
+}
+
+export interface StakeholderMessage {
+  id: string;
+  tick: number;
+  incident_id: string;
+  service_id: string;
+  severity: IncidentSeverity;
+  kind: "ceo_inquiry" | "support_surge" | "legal_sla" | "board_pressure";
+  sender: "CEO" | "SUPPORT" | "LEGAL" | "BOARD";
+  answered: boolean;
 }
 
 // difficulty presets, mirrors app.engine.simulator.DIFFICULTY_PRESETS

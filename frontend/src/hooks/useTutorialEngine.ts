@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildSnapshot,
+  moduleRange,
   nextStepIndex,
   pickNaturalIncident,
   prevStepIndex,
   TUTORIAL_STEPS,
-  TUTORIAL_STEP_COUNT,
   TutorialEnv,
   TutorialSnapshot,
   TutorialStepDef,
@@ -103,6 +103,7 @@ const ENV: TutorialEnv = {
   closeIncidentDetail: () => {
     if (useGameStore.getState().selectedIncident) useGameStore.getState().closeIncidentDetail();
   },
+  showOffice: () => useGameStore.getState().setStageView("office"),
   ensureIncident,
   captureCooldownBaseline: () => {
     const s = useGameStore.getState();
@@ -124,6 +125,7 @@ export function useTutorialEngine(): TutorialEngine {
   const [leaving, setLeaving] = useState(false);
 
   const step = TUTORIAL_STEPS[Math.min(index, TUTORIAL_STEPS.length - 1)];
+  const { start: moduleStart, count: moduleCount } = moduleRange(step.module);
   const snapshot = useMemo(
     () => buildSnapshot({ activeIncidents, progress, triageIncidentId, cooldowns }),
     [activeIncidents, progress, triageIncidentId, cooldowns]
@@ -213,7 +215,11 @@ export function useTutorialEngine(): TutorialEngine {
   const advance = useCallback(() => {
     const st = useGameStore.getState();
     const next = nextStepIndex(st.tutorial.stepIndex, readSnapshot());
-    if (next === null) leave();
+    if (next === null) {
+      // reaching the end of a module (not bailing out with "leave") counts as completing it
+      st.markAcademyModuleDone(TUTORIAL_STEPS[st.tutorial.stepIndex].module);
+      leave();
+    }
     else st.patchTutorial({ stepIndex: next });
   }, [leave]);
 
@@ -261,15 +267,16 @@ export function useTutorialEngine(): TutorialEngine {
 
   return {
     step,
-    index,
-    total: TUTORIAL_STEP_COUNT,
+    // position shown to the player is relative to the module being played
+    index: index - moduleStart,
+    total: moduleCount,
     snapshot,
     stepDone,
     success,
     alreadyHeld,
     waiting: step.kind === "action" && !stepDone && !success && !satisfied,
     preparing: step.id === "rack" && snapshot.phase === "creating",
-    canBack: index > 0,
+    canBack: index > moduleStart,
     isLast: nextStepIndex(index, snapshot) === null,
     leaving,
     mismatchActionId,

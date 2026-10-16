@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "achievements",
     "unlocked_cosmetics",
     "career_records",
+    "archived_audit_ledgers",
     "alembic_version",
 }
 

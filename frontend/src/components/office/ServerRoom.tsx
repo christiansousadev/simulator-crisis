@@ -3,7 +3,7 @@ import { memo } from "react";
 import { useServiceTransitions } from "../../hooks/useServiceTransitions";
 import { IncidentSeverity, Service } from "../../types/game";
 import BuildPlacementGhost from "./BuildPlacementGhost";
-import { SERVER_DOOR_OFFSET } from "./officeLayout";
+import { SERVER_DOOR_OFFSET } from "./officeGeometry";
 import { SlidingGlassDoor } from "./OfficeProps";
 import { useRosterStage } from "./rosterStage";
 import ServerRack from "./ServerRack";

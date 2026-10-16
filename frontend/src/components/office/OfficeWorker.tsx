@@ -41,6 +41,8 @@ interface OfficeWorkerProps {
   leaning?: boolean;
   /** easing of the walk transition; walkers use "linear" so a constant pace reads as walking */
   transitionEasing?: string;
+  /** a laptop clutched in the front hand: an engineer rushing to a failing rack */
+  carriesLaptop?: boolean;
   /** fade the sprite in when it first mounts (a new hire arriving) */
   fadeIn?: boolean;
   /** when set, a click runs this (after the banter bubble) and stops there instead of bubbling to the canvas */
@@ -150,6 +152,7 @@ function OfficeWorker({
   leaning = false,
   transitionEasing = "ease-in-out",
   fadeIn = false,
+  carriesLaptop = false,
   onActivate,
 }: OfficeWorkerProps) {
   const t = useTranslation();
@@ -247,6 +250,14 @@ function OfficeWorker({
         <line x1={SHOULDER_R[0]} y1={SHOULDER_R[1]} x2={hands.right[0]} y2={hands.right[1]} stroke={skinTone} strokeWidth={3.4} strokeLinecap="round" />
 
         <Torso role={role} shirtColor={shirtColor} />
+
+        {carriesLaptop && (
+          <g data-testid="worker-laptop" transform={`translate(${hands.right[0] + 1.5} ${hands.right[1] - 2})`}>
+            <rect x={-1} y={-1} width={9} height={6} rx={0.8} fill="#0f172a" stroke="#475569" strokeWidth={0.5} />
+            <rect x={0.2} y={0.1} width={6.6} height={3.6} rx={0.4} fill="#22d3ee" opacity={0.85} />
+            <rect x={-2} y={5} width={11} height={1.4} rx={0.5} fill="#334155" />
+          </g>
+        )}
 
         {badge && (
           <>

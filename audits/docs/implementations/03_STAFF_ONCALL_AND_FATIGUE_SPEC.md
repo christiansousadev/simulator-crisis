@@ -37,6 +37,9 @@ Each engineer is represented on `SimulationEngine` and persisted to SQLite via `
 | `stamina` | number | `0`–`100` | Energy/endurance capacity metric (starts at `100`). |
 | `on_call_status` | string enum | `"on_duty"` \| `"off_duty"` \| `"resting"` | Shift rotation state. |
 | `hired_at_tick` | integer | — | Provenance tick count. |
+| `xp` | integer | $\ge 0$ | Cumulative experience gained from full specialist incident resolutions (starts at `0`). |
+| `level` | integer | $1$–$5$ | Seniority level derived from XP thresholds (`formulas.engineer_level`), providing up to $+0.15$ specialist coverage bonus. |
+| `xp_to_next` | integer | — | XP remaining to reach the next seniority rank (`formulas.xp_to_next_level`). |
 
 ### 2.2 Compounding Fatigue and Specialist Quality Formulas
 

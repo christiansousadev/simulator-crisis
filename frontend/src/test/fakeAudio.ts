@@ -75,6 +75,7 @@ class FakeFilter extends FakeNode {
   type = "lowpass";
   frequency = new FakeParam(350);
   Q = new FakeParam(1);
+  gain = new FakeParam(0);
 }
 class FakeCompressor extends FakeNode {
   threshold = new FakeParam(-24);

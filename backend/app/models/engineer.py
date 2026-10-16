@@ -18,5 +18,6 @@ class Engineer(Base):
     stamina = Column(Integer, nullable=False, default=100)
     on_call_status = Column(String(20), nullable=False, default="on_duty")
     hired_at_tick = Column(Integer, nullable=False)
+    xp = Column(Integer, nullable=False, default=0, server_default="0")
 
     session = relationship("GameSession", back_populates="engineers")

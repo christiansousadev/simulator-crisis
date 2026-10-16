@@ -44,7 +44,7 @@ export default function PauseMenuModal() {
   const showTitleScreen = useGameStore((s) => s.showTitleScreen);
   const openScenarioSelect = useGameStore((s) => s.openScenarioSelect);
   const openSettings = useGameStore((s) => s.openSettings);
-  const openOnboarding = useGameStore((s) => s.openOnboarding);
+  const openAcademy = useGameStore((s) => s.openAcademy);
   const tick = useGameStore((s) => s.telemetry.tick);
   const sla = useGameStore((s) => s.telemetry.sla_percentage);
   const budget = useGameStore((s) => s.telemetry.budget);
@@ -187,7 +187,7 @@ export default function PauseMenuModal() {
             label={t.flow.cheatSheet}
             onClick={() => {
               closePauseMenu();
-              openOnboarding();
+              openAcademy();
             }}
           />
 

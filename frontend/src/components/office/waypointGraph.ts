@@ -1,7 +1,7 @@
 // corridor waypoint graph and a* pathfinding for sprites moving across the isometric office.
 // nodes are authored along the aisles, hallways and doorways the scene really has, so a sprite that
 // follows an edge never clips through a desk, a rack or a sofa (waypointGraph.test.ts samples every
-// edge against the furniture footprints in officeLayout.ts to keep that true).
+// edge against the furniture footprints in officeGeometry.ts to keep that true).
 //
 // the graph is the movement layer for the hired-engineer roster (rosterStage.ts): engineers enter at
 // the reception door, walk to their desk, to the vault when their service has an incident being
@@ -19,7 +19,7 @@ import {
   SERVER_ROOM_DOOR,
   deskOrigin,
   rackOrigin,
-} from "./officeLayout";
+} from "./officeGeometry";
 
 export interface GraphNode {
   id: string;

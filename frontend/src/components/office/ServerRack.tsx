@@ -137,6 +137,7 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
   const wrenchAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height * 0.6);
   const fanAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height + 0.03);
   const sparkAnchor = project(x + RACK_WIDTH * 0.3, y + RACK_DEPTH, height * 0.55);
+  const topAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height + 0.02);
   const floorReflectionAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, 0.025);
   const baseAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, 0);
 
@@ -319,6 +320,40 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
               className="animate-spark-flicker"
               style={{ animationDelay: "0.35s" }}
             />
+            {/* electrical discharge from the top: short bright streaks flung outwards, out of phase */}
+            {[
+              { dx: -9, dy: -7, delay: 0 },
+              { dx: 8, dy: -9, delay: 0.17 },
+              { dx: -4, dy: -12, delay: 0.33 },
+              { dx: 11, dy: -4, delay: 0.5 },
+            ].map((s, i) => (
+              <line
+                key={`top-spark-${i}`}
+                x1={topAnchor.x}
+                y1={topAnchor.y}
+                x2={topAnchor.x + s.dx}
+                y2={topAnchor.y + s.dy}
+                stroke="#fef08a"
+                strokeWidth={1}
+                strokeLinecap="round"
+                className="ol-spark-burst"
+                data-testid="rack-top-spark"
+                style={{ animationDelay: `${s.delay}s` }}
+              />
+            ))}
+            {/* dense smoke column venting from the top, wider and slower than the vent wisps below */}
+            {[0, 0.6, 1.2, 1.8].map((delay, i) => (
+              <circle
+                key={`top-smoke-${i}`}
+                cx={topAnchor.x + (i % 2 === 0 ? -2.5 : 2.5)}
+                cy={topAnchor.y - 2}
+                r={3.4 + i * 0.5}
+                fill="#475569"
+                opacity={0.55}
+                className="ol-smoke-plume"
+                style={{ animationDelay: `${delay}s` }}
+              />
+            ))}
             {[0, 0.4, 0.8].map((delay, i) => (
               <circle
                 key={`smoke-${i}`}

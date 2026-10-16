@@ -4,7 +4,7 @@ import { useBuildGhost } from "./buildGhost";
 import IsoBox from "./IsoBox";
 import { NODE_COLORS } from "./InfrastructureNodeSprite";
 import { project } from "./isoMath";
-import { infrastructureSlot } from "./officeLayout";
+import { infrastructureSlot } from "./officeGeometry";
 import "./officeLife.css";
 
 // A TRANSLUCENT PREVIEW OF THE ARMED MODULE ON THE SHELF SLOT IT WILL LAND ON. placement is slot-based

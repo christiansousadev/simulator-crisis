@@ -1,4 +1,4 @@
-import { AlertTriangle, BarChart2, ChevronDown, ChevronUp, MoreHorizontal, ScrollText, Trophy, TrendingUp, Users, Wrench } from "lucide-react";
+import { AlertTriangle, BarChart2, ChevronDown, ChevronUp, MessageSquareWarning, MoreHorizontal, Pin, PinOff, ScrollText, Trophy, TrendingUp, Users, Wrench } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { prefetchCatalogs } from "../../hooks/useCatalogs";
@@ -6,7 +6,7 @@ import { DockBadges, useDockBadges } from "../../hooks/useDockBadges";
 import { useChangeSeq } from "../../hooks/useChangeSeq";
 import { usePresenceFlag } from "../../hooks/usePresence";
 import { useTranslation } from "../../i18n/useTranslation";
-import { useGameStore } from "../../store/useGameStore";
+import { DockTabId, useGameStore } from "../../store/useGameStore";
 import HudPopover from "../common/HudPopover";
 import AchievementsPanel from "../dock/AchievementsPanel";
 import AuditTicker from "../dock/AuditTicker";
@@ -15,13 +15,15 @@ import IncidentsPanel from "../dock/IncidentsPanel";
 import MetricsPanel from "../dock/MetricsPanel";
 import MitigationsPanel from "../dock/MitigationsPanel";
 import UpgradesTreePanel from "../dock/UpgradesTreePanel";
+import WarRoomPanel from "../dock/WarRoomPanel";
 
-type DockTab = "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics";
+type DockTab = DockTabId;
 
 // the three most-used tabs stay directly on the bar; the rest live behind "more" to avoid overflow
 const PRIMARY_TAB_IDS: DockTab[] = ["incidents", "directives", "compliance"];
 
-const PANEL_HEIGHT = "h-56";
+// shorter on 768p-class screens so the office keeps room to breathe
+const PANEL_HEIGHT = "h-56 [@media(max-height:820px)]:h-44";
 const COLLAPSE_MS = 340;
 
 interface TabDef {
@@ -70,6 +72,27 @@ const TAB_BASE =
 const TAB_ACTIVE = "bg-cyan-950/60 text-cyan-300";
 const TAB_IDLE = "text-slate-300 hover:bg-slate-900/60 hover:text-slate-100";
 
+function DockPanel({ tab }: { tab: DockTab }) {
+  switch (tab) {
+    case "incidents":
+      return <IncidentsPanel />;
+    case "directives":
+      return <MitigationsPanel />;
+    case "compliance":
+      return <AuditTicker />;
+    case "upgrades":
+      return <UpgradesTreePanel />;
+    case "roster":
+      return <EngineerRosterPanel />;
+    case "achievements":
+      return <AchievementsPanel />;
+    case "metrics":
+      return <MetricsPanel />;
+    case "warroom":
+      return <WarRoomPanel />;
+  }
+}
+
 // COMPACT TABBED TYCOON DOCK: INCIDENTS, DIRECTIVES AND COMPLIANCE ON THE BAR, THE REST UNDER "MORE"
 export default memo(function BottomDock() {
   const t = useTranslation();
@@ -77,6 +100,8 @@ export default memo(function BottomDock() {
   const collapsed = useGameStore((s) => s.dockCollapsed);
   const selectTab = useGameStore((s) => s.setDockTab);
   const toggleCollapsed = useGameStore((s) => s.toggleDockCollapsed);
+  const pinnedTab = useGameStore((s) => s.pinnedDockTab);
+  const pinDockTab = useGameStore((s) => s.pinDockTab);
   const badges: DockBadges = useDockBadges(activeTab === "achievements" && !collapsed);
   const [moreOpen, setMoreOpen] = useState(false);
   const { mounted: panelMounted } = usePresenceFlag(!collapsed, COLLAPSE_MS);
@@ -97,9 +122,11 @@ export default memo(function BottomDock() {
       { id: "roster", label: t.staff.header, icon: Users, hotkey: "R", badge: badges.roster, badgeLabel: t.hud.dock.badge.roster(badges.roster), badgeTone: "bg-amber-600" },
       { id: "achievements", label: t.achievements.header, icon: Trophy, hotkey: "A", badge: badges.achievements, badgeLabel: t.hud.dock.badge.achievements(badges.achievements), badgeTone: "bg-yellow-600" },
       { id: "metrics", label: t.hud.dock.metrics, icon: BarChart2, hotkey: "G", badge: 0, badgeLabel: "", badgeTone: "" },
+      { id: "warroom", label: t.evolution.warRoom.header, icon: MessageSquareWarning, hotkey: "W", badge: activeTab === "warroom" ? 0 : badges.warroom, badgeLabel: `${t.evolution.warRoom.header}: ${badges.warroom}`, badgeTone: "bg-amber-600" },
     ],
     [t, badges, activeTab]
   );
+  const tabLabels = Object.fromEntries(allTabs.map((tab) => [tab.id, tab.label])) as Record<DockTab, string>;
   const primaryTabs = allTabs.filter((tab) => PRIMARY_TAB_IDS.includes(tab.id));
   const moreTabs = allTabs.filter((tab) => !PRIMARY_TAB_IDS.includes(tab.id));
   const activeIsInMore = moreTabs.some((tab) => tab.id === activeTab);
@@ -210,6 +237,29 @@ export default memo(function BottomDock() {
           )}
         </div>
 
+        <div className="flex shrink-0 items-center gap-1">
+        {pinnedTab ? (
+          <button
+            type="button"
+            onClick={() => pinDockTab(null)}
+            title={t.evolution.dock.unpin}
+            aria-label={t.evolution.dock.unpin}
+            className="flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-950/40 px-1.5 py-1 text-caption font-semibold text-cyan-300 transition-colors hover:bg-cyan-950/70"
+          >
+            <PinOff className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden hd:inline">{t.evolution.dock.pinnedLabel(tabLabels[pinnedTab])}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => pinDockTab(activeTab)}
+            title={t.evolution.dock.pin}
+            aria-label={t.evolution.dock.pin}
+            className="flex items-center rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-900/60 hover:text-slate-100"
+          >
+            <Pin className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -222,6 +272,7 @@ export default memo(function BottomDock() {
           <Hotkey>D</Hotkey>
           {collapsed ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
         </button>
+        </div>
       </div>
 
       <HudPopover
@@ -264,14 +315,15 @@ export default memo(function BottomDock() {
       <div className={`grid transition-[grid-template-rows] duration-slow ease-out-expo ${collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
         <div className="min-h-0 overflow-hidden">
           {panelMounted && (
-            <div key={activeTab} className={`${PANEL_HEIGHT} animate-panel-in`}>
-              {activeTab === "incidents" && <IncidentsPanel />}
-              {activeTab === "directives" && <MitigationsPanel />}
-              {activeTab === "compliance" && <AuditTicker />}
-              {activeTab === "upgrades" && <UpgradesTreePanel />}
-              {activeTab === "roster" && <EngineerRosterPanel />}
-              {activeTab === "achievements" && <AchievementsPanel />}
-              {activeTab === "metrics" && <MetricsPanel />}
+            <div className={`${PANEL_HEIGHT} flex`}>
+              {pinnedTab && pinnedTab !== activeTab && (
+                <div key={`pin-${pinnedTab}`} className="min-w-0 flex-1 basis-0 overflow-hidden border-r border-cyan-500/20 animate-panel-in">
+                  <DockPanel tab={pinnedTab} />
+                </div>
+              )}
+              <div key={activeTab} className="min-w-0 flex-1 basis-0 overflow-hidden animate-panel-in">
+                <DockPanel tab={activeTab} />
+              </div>
             </div>
           )}
         </div>

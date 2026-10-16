@@ -147,8 +147,8 @@ const IncidentCard = memo(function IncidentCard({ item, service, dependents, cur
 
         {ghost && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-slate-950/60">
-            <span className="rounded border-2 border-emerald-400 px-3 py-0.5 font-heading text-xl font-extrabold uppercase tracking-[0.25em] text-emerald-300 animate-stamp-in">
-              {t.hud.incidents.resolvedStamp}
+            <span className="rounded border-2 border-emerald-400 px-3 py-0.5 font-heading text-lg font-extrabold uppercase tracking-[0.2em] text-emerald-300 animate-stamp-in">
+              [{t.hud.incidents.resolvedStamp}: T+{inc.mttr_seconds}]
             </span>
           </div>
         )}

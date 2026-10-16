@@ -2,6 +2,7 @@ import type { Translations } from "../../translations";
 import { auditorChatEs } from "./auditorChat";
 import { core } from "./core";
 import { dynamicEs } from "./dynamic";
+import { evolutionEs } from "./evolution";
 import { flowEs } from "./flow";
 import { gameplayModalsEs } from "./gameplayModals";
 import { hudEs } from "./hud";
@@ -12,6 +13,7 @@ import { uiGapsEs } from "./uiGaps";
 // implements every key of the Translations interface (a missing or mistyped key fails tsc)
 export const translations = {
   ...core,
+  evolution: evolutionEs,
   flow: flowEs,
   auditorChat: auditorChatEs,
   gameplayModals: gameplayModalsEs,

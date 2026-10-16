@@ -1,0 +1,19 @@
+/* the dependency edges flow from the upstream service toward its dependents; reduced motion zeroes
+   the animation in index.css, leaving a plain dashed line as the correct final state */
+@keyframes sm-flow {
+  to { stroke-dashoffset: -24; }
+}
+.sm-edge-flow {
+  stroke-dasharray: 6 6;
+  animation: sm-flow 1.2s linear infinite;
+}
+.sm-edge-flow-fast {
+  animation-duration: 0.5s;
+}
+@keyframes sm-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.95; }
+}
+.sm-node-pulse {
+  animation: sm-pulse 1.1s ease-in-out infinite;
+}

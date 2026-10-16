@@ -1,6 +1,7 @@
 """aggregate model imports so Base.metadata is aware of every table"""
 
 from app.models.achievement import Achievement
+from app.models.archived_ledger import ArchivedAuditLedger
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.career import CareerRecord
@@ -21,6 +22,7 @@ __all__ = [
     "Incident",
     "MitigationAction",
     "AuditLog",
+    "ArchivedAuditLedger",
     "PurchasedUpgrade",
     "DilemmaEvent",
     "Engineer",

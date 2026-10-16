@@ -7,8 +7,9 @@ import { defineConfig, devices } from "@playwright/test";
 // preventDefault() was silently a no-op. Every spec here started life as an ad-hoc manual
 // Playwright check during a debugging session; this file is where that verification work stays
 // instead of being thrown away once the bug is fixed.
-export const FRONTEND_PORT = 5173;
-export const BACKEND_PORT = 8000;
+// overridable so the suite can run on a machine where 8000/5173 are taken (E2E_FRONTEND_PORT / E2E_BACKEND_PORT)
+export const FRONTEND_PORT = Number(process.env.E2E_FRONTEND_PORT ?? 5173);
+export const BACKEND_PORT = Number(process.env.E2E_BACKEND_PORT ?? 8000);
 export const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 
 export default defineConfig({
@@ -35,13 +36,14 @@ export default defineConfig({
   // the same prerequisite the README's "Testing & CI" section already states for pytest.
   webServer: [
     {
-      command: "npm run dev -- --port 5173 --strictPort",
+      command: `npm run dev -- --port ${FRONTEND_PORT} --strictPort`,
+      env: { VITE_API_URL: `http://localhost:${BACKEND_PORT}`, VITE_WS_URL: `ws://localhost:${BACKEND_PORT}/ws/telemetry` },
       url: `http://localhost:${FRONTEND_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
     {
-      command: "python -m uvicorn app.main:app --host 127.0.0.1 --port 8000",
+      command: `python -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       cwd: "../backend",
       url: `${BACKEND_URL}/api/health`,
       reuseExistingServer: !process.env.CI,

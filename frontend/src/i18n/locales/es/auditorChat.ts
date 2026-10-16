@@ -41,6 +41,8 @@ export const auditorChatEs = {
   appliedToastUnknown: "Veredicto aplicado",
   applyHint: "Solo un veredicto final con un monto distinto de cero se puede aplicar, una vez por incidente.",
   applyFailed: (message) => `No se pudo aplicar el veredicto: ${message}`,
+  offlineBadge: "Auditor sin conexión por reglas",
+  offlineHint: "Ningún modelo de IA respondió este turno: un motor determinista de reglas revisó el registro del incidente. Los techos del veredicto son los mismos.",
   notConfiguredTitle: "El auditor de IA no está configurado en este servidor",
   notConfiguredBody:
     "La entrevista necesita un proveedor de LLM. Sin clave, esta función queda apagada y el resto del juego no se ve afectado.",

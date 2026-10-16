@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import random
 import threading
@@ -9,11 +10,12 @@ from typing import Any, Deque, Dict, List, Optional, Set
 from fastapi import WebSocket
 
 from app.core.database import SessionLocal
-from app.engine import achievements, cosmetics, dilemmas, formulas, infrastructure, staff, upgrades
+from app.engine import achievements, cosmetics, dilemmas, formulas, infrastructure, staff, upgrades, war_room
 from app.engine.event_generator import build_audit_entry, build_incident, cause_category_for_root_cause
 from app.engine.scenarios import SCENARIO_REGISTRY
 from app.engine.scenarios.custom_scenario import CustomScenario
 from app.models.achievement import Achievement
+from app.models.archived_ledger import ArchivedAuditLedger
 from app.models.audit import AuditLog
 from app.models.career import CareerRecord
 from app.models.cosmetic import UnlockedCosmetic
@@ -74,6 +76,7 @@ _LEDGER_RECONSTRUCTION_MAP: Dict[str, Any] = {
     "RUNBOOK_EXECUTED": ("mitigation_cost", lambda d: d.get("incident_id") or d.get("service_id")),
     "UNATTENDED_ALERT_VIOLATION": ("regulatory_fine", lambda d: d.get("incident_id")),
     "AI_AUDITOR_VERDICT_APPLIED": ("regulatory_fine", lambda d: d.get("incident_id")),
+    "TRAFFIC_THROTTLED": ("mitigation_cost", lambda d: d.get("incident_id")),
     "DILEMMA_RESOLVED": ("dilemma_outcome", lambda d: d.get("dilemma_id")),
     "ENGINEER_HIRED": ("hiring_cost", lambda d: d.get("engineer_id")),
     "UPGRADE_PURCHASED": ("upgrade_purchase", lambda d: d.get("upgrade_id")),
@@ -159,6 +162,12 @@ class SimulationEngine:
         # no cooldown enforcement of its own, so a scripted client could fire a runbook every
         # tick regardless of MITIGATION_CATALOG's declared cooldown_ticks
         self.mitigation_last_fired_tick: Dict[str, int] = {}
+
+        # emergency traffic throttling: service_id -> tick it was last fired (in-memory by design)
+        self.throttle_last_tick: Dict[str, int] = {}
+        # stakeholder war-room feed (newest last), capped at war_room.STAKEHOLDER_FEED_LIMIT
+        self.stakeholder_feed: List[Dict[str, Any]] = []
+        self.traffic_factor: float = formulas.circadian_traffic_factor(0)
 
         # error budget governance
         self._error_budget_history: List[float] = []
@@ -472,6 +481,9 @@ class SimulationEngine:
                     "stamina": e.stamina,
                     "on_call_status": e.on_call_status,
                     "hired_at_tick": e.hired_at_tick,
+                    "xp": int(e.xp or 0),
+                    "level": formulas.engineer_level(int(e.xp or 0)),
+                    "xp_to_next": formulas.xp_to_next_level(int(e.xp or 0)),
                 }
                 for e in db.query(Engineer).filter(Engineer.session_id == self.session_id).all()
             ]
@@ -775,6 +787,7 @@ class SimulationEngine:
             "stamina": int(eng["stamina"]),
             "on_call_status": eng["on_call_status"],
             "hired_at_tick": eng["hired_at_tick"],
+            "xp": int(eng.get("xp", 0)),
         }
 
     def _persist_session_scalars(self, db: Optional[Any] = None) -> None:
@@ -815,6 +828,58 @@ class SimulationEngine:
             db.commit()
         finally:
             db.close()
+
+    def _archive_session_ledger(self) -> Optional[Dict[str, Any]]:
+        """PERSIST A SUMMARY + CONTENT CHECKSUM OF THE CURRENT SESSION'S AUDIT LEDGER INTO
+        archived_audit_ledgers (WHICH SURVIVES THE RESET'S CASCADE DELETE) AND RETURN THE DETAILS
+        OF THE SESSION_ARCHIVED_AND_PURGED EVENT. RETURNS None WHEN THERE IS NOTHING WORTH
+        ARCHIVING (FIRST BOOT: NO TICKS PLAYED AND NO LEDGER ROWS)."""
+        with self._db_write_lock:
+            db = SessionLocal()
+            try:
+                rows = (
+                    db.query(AuditLog)
+                    .filter(AuditLog.session_id == self.session_id)
+                    .order_by(AuditLog.timestamp.asc(), AuditLog.id.asc())
+                    .all()
+                )
+                if not rows and self.current_tick == 0:
+                    return None
+                by_type: Dict[str, int] = {}
+                digest = hashlib.sha256()
+                for row in rows:
+                    by_type[row.event_type] = by_type.get(row.event_type, 0) + 1
+                    digest.update(f"{row.id}|{row.tick}|{row.event_type}|{row.actor}|{row.details_json}".encode("utf-8"))
+                archive_id = f"arc-{uuid.uuid4().hex[:8]}"
+                checksum = digest.hexdigest()
+                summary = {
+                    "archive_id": archive_id,
+                    "purged_session_id": self.session_id,
+                    "final_tick": self.current_tick,
+                    "final_status": self.status,
+                    "final_budget": round(self.budget, 2),
+                    "event_count": len(rows),
+                    "incident_count": len(self.incidents),
+                    "events_by_type": by_type,
+                    "ledger_checksum": checksum,
+                }
+                db.add(
+                    ArchivedAuditLedger(
+                        id=archive_id,
+                        session_id=self.session_id,
+                        final_tick=self.current_tick,
+                        final_status=self.status,
+                        final_budget=float(self.budget),
+                        event_count=len(rows),
+                        incident_count=len(self.incidents),
+                        ledger_checksum=checksum,
+                        summary_json=json.dumps(summary),
+                    )
+                )
+                db.commit()
+                return summary
+            finally:
+                db.close()
 
     def _build_snapshot_kwargs(self):
         """MATERIALIZE session/service/incident/engineer STATE INTO PLAIN, SELF-CONTAINED KWARGS
@@ -1159,6 +1224,10 @@ class SimulationEngine:
             "unlocked_cosmetics": sorted(self.unlocked_cosmetics),
             "difficulty": self.difficulty,
             "reputation": round(self.reputation, 1),
+            "traffic_factor": self.traffic_factor,
+            "clock_hour": formulas.hour_of_day(self.current_tick),
+            "stakeholder_feed": self.stakeholder_feed[-12:],
+            "throttle_cooldowns": dict(self.throttle_last_tick),
             "active_scenario": (
                 {
                     "scenario_id": self.active_scenario.scenario_id,
@@ -1202,8 +1271,13 @@ class SimulationEngine:
             self.start()
 
     def reset(self, scenario_id: Optional[str] = None, player_id: Optional[str] = None, difficulty: Optional[str] = None):
-        """RESTART THE SIMULATION FROM A CLEAN STATE, OPTIONALLY INTO A SCRIPTED SCENARIO"""
+        """RESTART THE SIMULATION FROM A CLEAN STATE, OPTIONALLY INTO A SCRIPTED SCENARIO.
+
+        The prior session's governance ledger is archived BEFORE the cascade delete in
+        _persist_bootstrap, and a SESSION_ARCHIVED_AND_PURGED event is appended to the fresh
+        ledger afterwards, so a manual restart never silently erases audit history."""
         self.pause()
+        archive_summary = self._archive_session_ledger()
         if player_id and player_id != self.player_id:
             self.player_id = player_id
             self._load_career_progress()
@@ -1226,6 +1300,9 @@ class SimulationEngine:
         self.purchased_upgrade_ids = set()
         self.pending_pre_alerts = []
         self.mitigation_last_fired_tick = {}
+        self.throttle_last_tick = {}
+        self.stakeholder_feed = []
+        self.traffic_factor = formulas.circadian_traffic_factor(0)
 
         self._error_budget_history = []
         self.error_budget_remaining_ratio = 1.0
@@ -1264,6 +1341,8 @@ class SimulationEngine:
         self._recovered_from_snapshot = False
 
         self._persist_bootstrap()
+        if archive_summary is not None:
+            self._log_audit_event("SESSION_ARCHIVED_AND_PURGED", "PLATFORM", archive_summary, True)
         self.start()
 
     async def _run_loop(self):
@@ -1289,7 +1368,8 @@ class SimulationEngine:
 
     def _update_simulation_tick(self):
         """EXECUTE SYSTEMIC DEGRADATION, BURN RATES, INCIDENT PENALTIES AND CASCADE RISK"""
-        instant_sla = formulas.instant_sla_percentage(self.services)
+        self.traffic_factor = formulas.circadian_traffic_factor(self.current_tick)
+        instant_sla = formulas.instant_sla_percentage(self.services, traffic_factor=self.traffic_factor)
         self._sla_window.append(instant_sla)
         self.sla_percentage = formulas.clamp_percentage(sum(self._sla_window) / len(self._sla_window))
         self._update_error_budget_tracking()
@@ -1297,6 +1377,7 @@ class SimulationEngine:
         self._apply_budget_burn()
         self._apply_happiness_drift()
         self._progress_incidents()
+        self._progress_stakeholders()
         self._apply_quiet_period_refactor()
         self._evaluate_random_failures()
 
@@ -1392,6 +1473,9 @@ class SimulationEngine:
             quality = formulas.specialist_quality(assigned, staff.SERVICE_COMPETENCY_MAP, inc["service_id"])
             effective_mttr = inc["mttr_seconds"] * formulas.specialist_burn_multiplier(quality)
             surcharge = formulas.incident_surcharge(inc["severity"], effective_mttr)
+            surcharge *= formulas.circadian_surcharge_multiplier(self.traffic_factor)
+            if inc.get("throttled_until_tick", -1) >= self.current_tick:
+                surcharge *= formulas.THROTTLE_SURCHARGE_FACTOR
             self._apply_financial_event(category="incident_surcharge", amount=-surcharge, reference=inc["id"])
             # the real, running total actually charged against this specific incident -- read
             # back verbatim by the postmortem pipeline instead of being reconstructed later
@@ -1401,6 +1485,9 @@ class SimulationEngine:
         """DRIFT USER HAPPINESS BASED ON OUTAGE SEVERITY AND ALERT FATIGUE"""
         dampener = 0.75 if "espresso_machine" in self.purchased_upgrade_ids else 1.0
         any_down_or_degraded = any(s["status"] != "healthy" for s in self.services)
+        # silence on a serious incident accelerates the decline; a published update softens it
+        open_incidents = [i for i in self.incidents if i["status"] in ("active", "acknowledged")]
+        dampener *= war_room.communication_decay_multiplier(open_incidents, self.current_tick)
         self.user_happiness = formulas.happiness_after_outage_drift(self.user_happiness, any_down_or_degraded, dampener)
 
         for inc in self.incidents:
@@ -1503,6 +1590,7 @@ class SimulationEngine:
                 formulas.specialist_quality(self._engineer_for_service(srv["id"]), staff.SERVICE_COMPETENCY_MAP, srv["id"])
             )
             failure_probability *= temporary_hazard_multiplier
+            failure_probability *= formulas.circadian_hazard_multiplier(self.traffic_factor)
             if "multi_az_clusters" in self.purchased_upgrade_ids:
                 failure_probability *= 0.60
             if self._infrastructure_nodes_for(srv["id"], "db_read_replica"):
@@ -1536,6 +1624,8 @@ class SimulationEngine:
         incident["tech_debt_at_creation"] = self.tech_debt
         incident["tech_debt_at_resolution"] = None
         incident["accrued_surcharge"] = 0.0
+        # 0 = nothing published on the status page yet (see war_room.STATUS_STAGES)
+        incident["status_page_rank"] = 0
         srv["status"] = "down" if incident["severity"] == "P1_CRITICAL" else "degraded"
         srv["latency_ms"] = random.randint(850, 2400)
         if self._infrastructure_nodes_for(srv["id"], "redis_cache"):
@@ -1844,6 +1934,7 @@ class SimulationEngine:
             for inc in unacked:
                 gain = formulas.stress_gain_for_unacked_alarm(eng["stress_index"], inc["severity"])
                 gain *= formulas.specialist_stress_gain_multiplier(matched)
+                gain *= formulas.level_stress_multiplier(eng.get("xp", 0))
                 if "ergonomic_chairs" in self.purchased_upgrade_ids:
                     gain *= 0.80
                 eng["stress_index"] = formulas.clamp_percentage(eng["stress_index"] + gain)
@@ -1890,6 +1981,147 @@ class SimulationEngine:
             compliance_flag=True,
         )
         return {"success": True, "engineer": eng}
+
+    # --- engineer progression ---------------------------------------------
+
+    def _award_engineer_xp(self, service_id: str, triage_accuracy: float, db: Any) -> None:
+        """GRANT XP TO THE ON-DUTY, SPECIALISED ENGINEER ASSIGNED TO A SERVICE JUST RESOLVED BY A
+        RUNBOOK, AND LEDGER A LEVEL-UP. THE CALLER HOLDS _db_write_lock, SO THE AUDIT WRITE MUST JOIN
+        ITS db SESSION INSTEAD OF TAKING THE (NON-REENTRANT) LOCK AGAIN"""
+        eng = self._engineer_for_service(service_id)
+        if not eng or eng["on_call_status"] != "on_duty":
+            return
+        if not formulas.competency_match(eng, staff.SERVICE_COMPETENCY_MAP, service_id):
+            return
+        before = formulas.engineer_level(eng.get("xp", 0))
+        gained = formulas.XP_PER_SPECIALIST_RESOLUTION
+        if triage_accuracy >= formulas.XP_CLEAN_TRIAGE_ACCURACY:
+            gained += formulas.XP_CLEAN_TRIAGE_BONUS
+        eng["xp"] = eng.get("xp", 0) + gained
+        eng["level"] = formulas.engineer_level(eng["xp"])
+        eng["xp_to_next"] = formulas.xp_to_next_level(eng["xp"])
+        # persisted by the next snapshot write (engineers are part of every tick snapshot); the
+        # level-up audit event below is the durable, immediate record
+        if eng["level"] > before:
+            self._log_audit_event(
+                event_type="ENGINEER_LEVELED_UP",
+                actor="PLATFORM",
+                details={"engineer_id": eng["id"], "level": eng["level"], "xp": eng["xp"]},
+                compliance_flag=True,
+                db=db,
+            )
+
+    # --- emergency traffic throttling -------------------------------------
+
+    def throttle_service(self, service_id: str) -> Dict[str, Any]:
+        """SHED ~50% OF A FAILING SERVICE'S TRAFFIC: LATENCY AND ERRORS DROP AT ONCE AND THE OPEN
+        INCIDENT BLEEDS HALF AS FAST FOR A SHORT WINDOW. NOTHING IS RESOLVED -- A RUNBOOK STILL IS
+        NEEDED. COSTS CASH AND ONE TECH-DEBT POINT, PER-SERVICE COOLDOWN."""
+        srv = next((s for s in self.services if s["id"] == service_id), None)
+        if not srv:
+            return {"success": False, "error": "Service not found"}
+        inc = next(
+            (i for i in self.incidents if i["service_id"] == service_id and i["status"] in ("active", "acknowledged")),
+            None,
+        )
+        if not inc or srv["status"] == "healthy":
+            return {"success": False, "error": "No open incident on this service"}
+        last = self.throttle_last_tick.get(service_id)
+        if last is not None and self.current_tick - last < formulas.THROTTLE_COOLDOWN_TICKS:
+            remaining = formulas.THROTTLE_COOLDOWN_TICKS - (self.current_tick - last)
+            return {"success": False, "error": f"Throttle on cooldown: {remaining} tick(s) remaining"}
+        if self.budget < formulas.THROTTLE_COST:
+            return {"success": False, "error": "Insufficient budget runway"}
+
+        srv["latency_ms"] = max(45, int(srv["latency_ms"] * formulas.THROTTLE_LATENCY_FACTOR))
+        srv["error_rate"] = max(0.0001, srv["error_rate"] * formulas.THROTTLE_ERROR_FACTOR)
+        inc["throttled_until_tick"] = self.current_tick + formulas.THROTTLE_WINDOW_TICKS
+        self.throttle_last_tick[service_id] = self.current_tick
+        self.tech_debt = formulas.clamp_tech_debt(self.tech_debt + formulas.THROTTLE_TECH_DEBT_DELTA)
+        self._apply_financial_event(
+            category="mitigation_cost",
+            amount=-formulas.THROTTLE_COST,
+            reference=inc["id"],
+            audit_event_type="TRAFFIC_THROTTLED",
+            audit_details={
+                "service_id": service_id,
+                "incident_id": inc["id"],
+                "cost": formulas.THROTTLE_COST,
+                "window_ticks": formulas.THROTTLE_WINDOW_TICKS,
+            },
+        )
+        return {"success": True, "service": srv, "budget": self.budget}
+
+    # --- war room: stakeholder feed and status page -------------------------
+
+    def _progress_stakeholders(self) -> None:
+        """QUEUE THE STAKEHOLDER MESSAGES NOW DUE FOR EVERY OPEN SERIOUS INCIDENT"""
+        sent = {(m["incident_id"], m["kind"]) for m in self.stakeholder_feed}
+        for inc in self.incidents:
+            if inc["status"] not in ("active", "acknowledged"):
+                continue
+            for due in war_room.due_stakeholder_messages(inc, self.current_tick, sent):
+                self.stakeholder_feed.append(
+                    {
+                        "id": f"msg-{uuid.uuid4().hex[:6]}",
+                        "tick": self.current_tick,
+                        "incident_id": inc["id"],
+                        "service_id": inc["service_id"],
+                        "severity": inc["severity"],
+                        "kind": due["kind"],
+                        "sender": due["sender"],
+                        "answered": False,
+                    }
+                )
+                sent.add((inc["id"], due["kind"]))
+        if len(self.stakeholder_feed) > war_room.STAKEHOLDER_FEED_LIMIT:
+            self.stakeholder_feed = self.stakeholder_feed[-war_room.STAKEHOLDER_FEED_LIMIT :]
+
+    def post_status_update(self, incident_id: str, stage: str) -> Dict[str, Any]:
+        """PUBLISH A STATUS-PAGE UPDATE FOR AN OPEN INCIDENT. A TRUTHFUL, FORWARD-MOVING UPDATE
+        SOOTHES CUSTOMERS AND ANSWERS PENDING STAKEHOLDERS; ANNOUNCING PROGRESS THAT HAS NOT
+        HAPPENED COSTS REPUTATION AND IS LEDGERED AS A COMPLIANCE FLAG."""
+        if stage not in war_room.STATUS_STAGES:
+            return {"success": False, "error": "Unknown status stage"}
+        inc = next((i for i in self.incidents if i["id"] == incident_id and i["status"] in ("active", "acknowledged")), None)
+        if not inc:
+            return {"success": False, "error": "Incident not found or already resolved"}
+        rank = war_room.stage_rank(stage)
+        if rank <= inc.get("status_page_rank", 0):
+            return {"success": False, "error": "The status page already shows this stage or a later one"}
+
+        truthful = war_room.is_truthful(stage, inc)
+        inc["status_page_rank"] = rank
+        reputation_delta = 0.0
+        happiness_delta = 0.0
+        if truthful:
+            happiness_delta = war_room.STATUS_UPDATE_HAPPINESS_BONUS
+            self.user_happiness = formulas.clamp_percentage(self.user_happiness + happiness_delta)
+            for msg in self.stakeholder_feed:
+                if msg["incident_id"] == incident_id:
+                    msg["answered"] = True
+        else:
+            reputation_delta = -war_room.STATUS_LIE_REPUTATION_PENALTY
+            self.reputation = formulas.clamp_percentage(self.reputation + reputation_delta)
+        self._log_audit_event(
+            event_type="STATUS_PAGE_UPDATED",
+            actor="VP_OF_INFRA",
+            details={
+                "incident_id": incident_id,
+                "stage": stage,
+                "truthful": truthful,
+                "happiness_delta": happiness_delta,
+                "reputation_delta": reputation_delta,
+            },
+            compliance_flag=truthful,
+        )
+        return {
+            "success": True,
+            "truthful": truthful,
+            "stage": stage,
+            "happiness_delta": happiness_delta,
+            "reputation_delta": reputation_delta,
+        }
 
     # --- player actions -------------------------------------------------
 
@@ -2185,6 +2417,8 @@ class SimulationEngine:
                             self._persist_incident(inc, db=db)
                             resolved_count += 1
                     self._resolved_incident_count += resolved_count
+                    if resolved_count:
+                        self._award_engineer_xp(service_id, triage_accuracy, db)
                     self.incidents = [i for i in self.incidents if i["status"] != "resolved"]
 
                 self._apply_financial_event(

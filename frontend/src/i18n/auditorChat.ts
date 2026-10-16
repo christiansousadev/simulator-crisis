@@ -36,6 +36,8 @@ export interface AuditorChatCopy {
   appliedToastUnknown: string;
   applyHint: string;
   applyFailed: (message: string) => string;
+  offlineBadge: string;
+  offlineHint: string;
   notConfiguredTitle: string;
   notConfiguredBody: string;
   notConfiguredHowTo: string;
@@ -89,6 +91,8 @@ export const auditorChatEn: AuditorChatCopy = {
   appliedToastUnknown: "Verdict applied",
   applyHint: "Only a final verdict with a non-zero amount can be applied, once per incident.",
   applyFailed: (message) => `Could not apply the verdict: ${message}`,
+  offlineBadge: "Offline rules auditor",
+  offlineHint: "No AI model answered this turn: a deterministic rules engine reviewed the incident record. Verdict ceilings are the same.",
   notConfiguredTitle: "The AI auditor is not configured on this server",
   notConfiguredBody: "The interview needs an LLM provider. Without a key this feature stays off and the rest of the game is unaffected.",
   notConfiguredHowTo:

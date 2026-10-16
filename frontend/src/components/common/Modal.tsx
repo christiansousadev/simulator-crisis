@@ -32,6 +32,8 @@ interface ModalProps {
   backdropClass?: string;
   panelClass?: string;
   closeOnBackdrop?: boolean;
+  // non-modal side drawer: no backdrop, the rest of the screen stays clickable, Tab may leave it
+  docked?: boolean;
   // element to focus when the dialog opens; defaults to the first focusable control
   initialFocusRef?: RefObject<HTMLElement>;
   children: ReactNode;
@@ -54,6 +56,7 @@ export default function Modal({
   backdropClass = "bg-slate-950/75 backdrop-blur-sm",
   panelClass = "",
   closeOnBackdrop = true,
+  docked = false,
   initialFocusRef,
   children,
 }: ModalProps) {
@@ -96,7 +99,7 @@ export default function Modal({
       onClose();
       return;
     }
-    if (e.key !== "Tab") return;
+    if (e.key !== "Tab" || docked) return;
     const panel = panelRef.current;
     if (!panel) return;
     const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
@@ -118,22 +121,26 @@ export default function Modal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 ${LAYER_Z[layer]} flex items-center justify-center p-4 ${backdropClass} ${
-        closing ? "animate-backdrop-out pointer-events-none" : "animate-backdrop-in"
-      }`}
+      className={
+        docked
+          ? `pointer-events-none fixed inset-y-0 right-0 ${LAYER_Z[layer]} flex w-full max-w-xl items-stretch justify-end p-3 pb-[calc(var(--dock-height,0px)+0.75rem)] pt-20`
+          : `fixed inset-0 ${LAYER_Z[layer]} flex items-center justify-center p-4 ${backdropClass} ${
+              closing ? "animate-backdrop-out pointer-events-none" : "animate-backdrop-in"
+            }`
+      }
       onMouseDown={(e) => {
-        if (closeOnBackdrop && onClose && e.target === e.currentTarget) onClose();
+        if (!docked && closeOnBackdrop && onClose && e.target === e.currentTarget) onClose();
       }}
       onKeyDown={onKeyDown}
     >
       <div
         ref={panelRef}
         role={role}
-        aria-modal="true"
+        aria-modal={docked ? undefined : "true"}
         aria-label={labelledBy ? undefined : title}
         aria-labelledby={labelledBy}
         tabIndex={-1}
-        className={`w-full ${SIZE[size]} max-h-[90vh] flex flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl outline-none overflow-hidden ${
+        className={`${docked ? "pointer-events-auto h-full" : "max-h-[90vh]"} w-full ${docked ? "" : SIZE[size]} flex flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl outline-none overflow-hidden ${
           closing ? "animate-modal-out" : "animate-modal-in"
         } ${panelClass}`}
       >

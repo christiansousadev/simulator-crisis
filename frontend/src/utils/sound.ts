@@ -37,6 +37,7 @@ export {
   stopAmbientMusic,
 } from "./musicEngine";
 export type { DefconInput, MusicMode, MusicTension } from "./musicEngine";
+export { isAmbiencePlaying, setAmbienceTension, startDatacenterAmbience, stopDatacenterAmbience } from "./ambientEngine";
 
 // CURRENT AUDIO STATE FOR TESTS AND DIAGNOSTICS
 export function getAudioDebug(): AudioEngineDebug & { music: MusicDebug } {
@@ -222,7 +223,6 @@ export function stopCriticalHeartbeat() {
 // PUBLIC API FOR MENU/HUD/MODAL FEEDBACK. All of these ride the `ui` bus.
 
 const HOVER_MIN_GAP_MS = 60;
-const TYPE_TICK_MIN_GAP_MS = 28;
 
 // VERY QUIET TICK WHEN THE POINTER ENTERS A MENU BUTTON (AT MOST ONE PER 60 MS)
 export function playUiHoverSound() {
@@ -334,11 +334,4 @@ export function playErrorSound() {
     filter: { type: "lowpass" as const, freq: 900 },
   });
   playToneSequence([buzz(0), buzz(0.13)], "ui");
-}
-
-// VERY SHORT KEYSTROKE TICK FOR TYPEWRITER TEXT, RATE-LIMITED SO FAST TYPING STAYS SOFT
-export function playTypeTick() {
-  if (!allowRate("type-tick", TYPE_TICK_MIN_GAP_MS)) return;
-  playTone({ freq: 1700 + Math.random() * 900, type: "square", duration: 0.012, gain: 0.008, bus: "ui" });
-  clickNoise(0.012, 3200, 0.01, "ui");
 }

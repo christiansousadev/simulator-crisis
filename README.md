@@ -43,6 +43,16 @@ The core gameplay loop mirrors production incident lifecycle:
 <td align="center"><sub>Tech Tree Upgrades</sub></td>
 <td align="center"><sub>Interactive Tutorial</sub></td>
 </tr>
+<tr>
+<td width="33%"><img src="./docs/screenshots/service-map.png" alt="Service dependency graph map view"></td>
+<td width="33%"><img src="./docs/screenshots/war-room.png" alt="War Room live stakeholder communications and public status page"></td>
+<td width="33%"><img src="./docs/screenshots/flight-academy.png" alt="SRE Flight Academy 4-module interactive curriculum"></td>
+</tr>
+<tr>
+<td align="center"><sub>Service Dependency Map</sub></td>
+<td align="center"><sub>War Room & Status Page</sub></td>
+<td align="center"><sub>SRE Flight Academy</sub></td>
+</tr>
 </table>
 
 ---
@@ -140,8 +150,8 @@ IncidentZero enforces a **Server-Authoritative Architecture**:
 - **Backend:** Python 3.12, FastAPI, deterministic tick loop engine (1 tick = 1 virtual hour), SQLAlchemy, SQLite, Pydantic v2. Tested via pytest.
 - **Database Migrations:** [Alembic](https://alembic.sqlalchemy.org/) manages schema versions and runs automatic migrations on startup (`alembic upgrade head`).
 - **Telemetry Stream:** Bidirectional WebSocket (`/ws/telemetry`) streaming live tick deltas, rack states, metrics, and incident notifications.
-- **Compliance Audit Ledger:** Append-only SQLite event log tracking 34 distinct governance and operational event types.
-- **AI Integration (Optional):** The post-mortem auditor interview talks to any OpenAI-compatible chat-completions endpoint (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`). Without a key the interview route answers 503; there is no offline fallback.
+- **Compliance Audit Ledger:** Append-only SQLite event log tracking 38 distinct governance and operational event types.
+- **AI Integration (Optional):** The post-mortem auditor interview talks to any OpenAI-compatible chat-completions endpoint (`LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`). Without a key (or if the API is unreachable) a deterministic offline rules auditor answers instead, labelled "Offline rules auditor" in the UI, with the same verdict ceilings.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete technical blueprints, mathematical formulas, and database schemas.
 
@@ -236,13 +246,13 @@ The Playwright test suite (`frontend/e2e/`) verifies real browser interactions a
 
 ## Key API Endpoints
 
-The backend provides 35+ REST endpoints across 14 domain routers in addition to the live WebSocket stream. Explore the interactive documentation at `http://localhost:8000/docs`.
+The backend provides 39 REST endpoints across 14 domain routers in addition to the live WebSocket stream. Explore the interactive documentation at `http://localhost:8000/docs`.
 
 | Router | Base Path | Description |
 |---|---|---|
 | Sessions | `/api/session/*`, `/api/health` | Simulation lifecycle (start/pause/reset), speed control, state snapshots |
-| Services | `/api/services` | Service mesh topology and health status |
-| Incidents | `/api/incidents/*` | Incident streams, acknowledgment, investigation, log triage |
+| Services | `/api/services`, `/api/services/{id}/throttle` | Service mesh topology and health status; emergency traffic throttling |
+| Incidents | `/api/incidents/*` | Incident streams, acknowledgment, investigation, log triage, public status-page updates |
 | Mitigations | `/api/mitigations/*` | Runbook mitigation catalog and execution |
 | Audits | `/api/audits/*` | Compliance audit ledger, Markdown/PDF post-mortems, AI defense interview |
 | Upgrades | `/api/upgrades/*` | Tech tree upgrades across Observability, Resilience, and Facilities |
@@ -289,10 +299,23 @@ simulator-crisis/
 
 ---
 
+## Systemic Evolution Pass
+
+- **Circadian load:** simulated hours drive a traffic factor (1.5x at lunch and evening peaks, 0.4x overnight) that scales SLA impact, failure hazard and incident surcharge.
+- **War room:** a stakeholder feed (CEO, support, legal, board) pages you during serious incidents; publish honest status-page updates to soothe customers, or lose reputation for announcing progress that has not happened.
+- **Engineer levels:** specialists gain XP from clean, matched resolutions and become better and calmer.
+- **Tactical shortcuts:** the rack radial menu offers an immediate acknowledge and an emergency traffic throttle.
+- **Views and layout:** a service dependency graph view, a pinnable split dock and a dockable log terminal; the top bar keeps every critical meter visible down to 1280 px.
+- **SRE Flight Academy:** four independent tutorial modules (detect, investigate, govern, harden), a searchable glossary and a causal "why it failed" view in the post-mortem.
+- **Audit gaps closed:** a session reset now archives and checksums the purged ledger and records `SESSION_ARCHIVED_AND_PURGED`; the AI auditor has a deterministic offline mode.
+- **Feel:** red-alert floor sweep, running engineers with laptops, panicking executives, cable data pulses, rack sparks and smoke, a compressed/EQ'd master bus with a datacenter ambience bed, and pinch/pan touch gestures on the office.
+
 ## Current Known Limitations
 
 - **Single-Operator Context:** Designed as an immersive single-player workstation simulation; there is currently no multi-tenant authentication or remote user role segregation.
 - **Local Persistence Scope:** Career records, achievements, and the Hall of Fame are stored locally within the instance's SQLite database.
+- **Audio levels:** the audio was never tuned by ear for this project; the new master EQ, limiter and ambience bed are safety and structure, the individual gains still need a listening pass.
+- **Not persisted:** throttle cooldowns, the stakeholder feed and each incident's status-page stage are in-memory and reset on a server restart.
 - **Snapshot Versioning:** Corrupted or structurally incompatible session snapshots from older schema versions are quarantined automatically rather than presenting an interactive repair UI.
 
 ---

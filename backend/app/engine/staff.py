@@ -50,4 +50,7 @@ def build_engineer(session_id: str, core_competency: str, assigned_service_id: O
         "stamina": 100,
         "on_call_status": "on_duty",
         "hired_at_tick": current_tick,
+        "xp": 0,
+        "level": 1,
+        "xp_to_next": 2,
     }

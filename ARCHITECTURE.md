@@ -160,15 +160,16 @@ The product of all multipliers is clamped once, at the end, to $[0, 0.65]$.
 | `game_sessions` | One live session row (`incidentzero-alpha`): budget, SLA, TDI, happiness, status, tick, difficulty, reputation, scenario state, cooldowns, hazard windows, RNG state, the 720-sample SLA window and the error-budget history (full crash-resume snapshot, `schema_version`). |
 | `services` | The five fixed microservices and their live health. |
 | `incidents` | Incident lifecycle plus frozen forensic facts (`tech_debt_at_creation/resolution`, `accrued_surcharge`, triage state, the log stream and its answer key). |
-| `audit_logs` | Append-only governance ledger (34 event types; see the data dictionary). |
-| `engineers`, `purchased_upgrades`, `dilemma_events`, `infrastructure_nodes` | Session-scoped roster, tech-tree purchases, CAB history and placed build-mode nodes. |
+| `audit_logs` | Append-only governance ledger (38 event types; see the data dictionary). |
+| `engineers`, `purchased_upgrades`, `dilemma_events`, `infrastructure_nodes` | Session-scoped roster (with XP), tech-tree purchases, CAB history and placed build-mode nodes. |
+| `archived_audit_ledgers` | Checksummed summaries of ledgers purged by a session reset; not FK-linked to the session, so they survive the purge. |
 | `achievements`, `unlocked_cosmetics`, `career_records` | Permanent career progression; **not** deleted by a session reset. |
 | `mitigation_actions` | Declared by the initial migration but unused: the runbook catalog is served from `formulas.MITIGATION_CATALOG`. |
 
 Session-scoped rows are removed with their session by the ORM cascade on reset (SQLite's `foreign_keys` pragma is off). Routine per-tick burn and surcharges are not written to the ledger; discrete financial events are (see Document 01, § 5.4).
 
 ### 4.2 Wire Contracts
-- **REST:** 37 routes under `/api/**` in 14 routers (the authoritative table is Document 01, § 4). Request bodies are Pydantic models in `backend/app/schemas/`; refusals return `400`/`404`/`409` (plus `422` validation, `429` and `503` on the AI interview route) with an engine error text.
+- **REST:** 39 routes under `/api/**` in 14 routers (the authoritative table is Document 01, § 4). Request bodies are Pydantic models in `backend/app/schemas/`; refusals return `400`/`404`/`409` (plus `422` validation, `429` and `503` on the AI interview route) with an engine error text.
 - **WebSocket `/ws/telemetry`:** one `TICK_BROADCAST` frame per tick, on connect and after every successful state-changing command (`app/core/state_push.py`), plus event frames `DILEMMA_OFFERED`, `PRE_ALERT_WARNING`, `ACHIEVEMENT_UNLOCKED`. The `TICK_BROADCAST` shape is `SimulationEngine.get_state_payload()` (annotated example in Document 01, § 3.3; TypeScript mirror in `frontend/src/types/game.ts`). The triage answer key (`log_lines`, `root_cause_line_id`) is stripped and `root_cause` is withheld until triage is solved.
 - **Runbook, upgrade, achievement and cosmetic catalogs:** served from code (`GET /api/*/catalog`); the engine ships 4 runbooks, 6 upgrades, 4 infrastructure node types, 12 achievements and 3 cosmetics.
 - **Scenarios:** six registered (`black_friday_rush`, `chaos_engineering_drill`, `ddos_global`, `deployment_rollback`, `ransomware_infiltration`, `third_party_outage`) plus the player-configured `custom` scenario, plus the sandbox (no scenario).
@@ -219,7 +220,7 @@ The frontend holds no simulation math: it renders the latest backend snapshot an
 
 - **Backend entry:** `backend/app/main.py` runs Alembic to `head`, creates the single `SimulationEngine`, starts the tick loop and mounts the 14 REST routers and the WebSocket router. A pure ASGI middleware re-broadcasts state after each successful `POST`/`DELETE`. CORS is wide open by design (local demo; see [`SECURITY.md`](./SECURITY.md)).
 - **Engine authority:** `SimulationEngine` owns all mutable game state and is the only place `budget` changes (`_apply_financial_event`); `formulas.py` is pure; scenarios plug in through `ScenarioEngine` hooks.
-- **Optional AI auditor:** `audits.py` calls an OpenAI-compatible chat-completions endpoint configured by `LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`; with an empty key the interview route answers `503` and the rest of the game is unaffected.
+- **Optional AI auditor:** `audits.py` calls an OpenAI-compatible chat-completions endpoint configured by `LLM_API_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL_ID`; with an empty key (or an unreachable API) the interview is answered by the deterministic, clearly-labelled offline rules auditor in `app/engine/offline_auditor.py`.
 - **Frontend entry:** `main.tsx` loads the stored language, then renders `App` (or `LiveOpsView` for `/live-ops`). Production build is Vite with a PWA shell (`vite-plugin-pwa`) and stable `vendor-react` / `locale-*` chunks.
 
 ---

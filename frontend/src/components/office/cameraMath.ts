@@ -136,6 +136,22 @@ export function isCameraSettled(cam: Camera, vel: Camera, target: Camera): boole
 }
 
 // WHEEL DELTA -> MULTIPLICATIVE ZOOM FACTOR (line/page delta modes are normalised to pixels)
+// TWO-FINGER PINCH: THE SCALE THE FINGERS ASK FOR, FROM THE SCALE AT THE START OF THE GESTURE AND THE
+// RATIO OF THE CURRENT FINGER SPREAD TO THE STARTING ONE. A degenerate (zero / non-finite) start spread
+// leaves the scale alone instead of dividing by zero.
+export function pinchScale(startScale: number, startSpread: number, spread: number): number {
+  if (!(startSpread > 0) || !Number.isFinite(spread) || spread < 0) return clampScale(startScale);
+  return clampScale(startScale * (spread / startSpread));
+}
+
+export function pointerSpread(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+export function pointerMidpoint(a: Point, b: Point): Point {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
 export function wheelZoomFactor(deltaY: number, deltaMode = 0): number {
   const px = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
   return Math.exp(-clamp(px, -600, 600) * 0.0015);

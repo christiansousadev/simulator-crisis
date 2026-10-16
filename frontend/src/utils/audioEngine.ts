@@ -1,7 +1,7 @@
 // shared web audio graph: ONE lazily created AudioContext, a bus layout and the synth primitives
 // (enveloped oscillators and filtered noise bursts) every sound effect is built from.
 //
-//   sfx / ui / music buses -> master gain (mute) -> soft limiter -> destination
+//   sfx / ui / music buses -> master gain (mute) -> rumble cut -> comfort shelf -> limiter -> destination
 //
 // No audio files, no dependencies; everything degrades silently when web audio is unavailable
 // (jsdom, locked-down browsers, autoplay policy before the first gesture).
@@ -62,6 +62,10 @@ const MUSIC_MUTED_STORAGE_KEY = "incidentzero.music_muted";
 // the pads sit well below the effects, so the music slider maps onto a quieter bus
 const MUSIC_BUS_SCALE = 0.5;
 const BUS_RAMP_SECONDS = 0.03;
+// master EQ (see buildGraph)
+const MASTER_RUMBLE_CUT_HZ = 30;
+const MASTER_SHELF_HZ = 6500;
+const MASTER_SHELF_DB = -2.5;
 // one-shots past this many concurrent voices are dropped instead of piling up
 const MAX_ONE_SHOT_VOICES = 48;
 const SILENT = 0.0001;
@@ -225,7 +229,19 @@ function buildGraph(Ctor: ContextCtor): AudioGraph {
   limiter.ratio.value = 6;
   limiter.attack.value = 0.004;
   limiter.release.value = 0.22;
-  master.connect(limiter);
+  // master EQ ahead of the limiter: drop sub-bass rumble nothing in the game needs (it only eats
+  // headroom) and take a little edge off the bright alarm tones, so a stack of stingers stays
+  // comfortable instead of piercing. both run before the limiter so it sees the final spectrum
+  const rumbleCut = ctx.createBiquadFilter();
+  rumbleCut.type = "highpass";
+  rumbleCut.frequency.value = MASTER_RUMBLE_CUT_HZ;
+  const comfortShelf = ctx.createBiquadFilter();
+  comfortShelf.type = "highshelf";
+  comfortShelf.frequency.value = MASTER_SHELF_HZ;
+  comfortShelf.gain.value = MASTER_SHELF_DB;
+  master.connect(rumbleCut);
+  rumbleCut.connect(comfortShelf);
+  comfortShelf.connect(limiter);
   limiter.connect(ctx.destination);
 
   const sfx = ctx.createGain();

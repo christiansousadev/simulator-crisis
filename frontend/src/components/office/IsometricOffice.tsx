@@ -61,7 +61,7 @@ import {
   SERVER_ROOM_SIZE,
   WALL_HEIGHT,
   pickCrisisServiceId,
-} from "./sceneLayout";
+} from "./officeGeometry";
 
 // ambient patrol loop along the y~8.4 hallway between the engineering bay and the lounge / reception.
 // (the old loop ran at y 6.2-6.7, straight through the seated desk row and its chairs)
@@ -651,6 +651,7 @@ export default function IsometricOffice() {
         )}
 
         <button
+          data-tour="build-toggle"
           onClick={(e) => {
             e.stopPropagation();
             toggleBuildMode();

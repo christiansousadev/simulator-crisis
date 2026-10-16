@@ -107,7 +107,7 @@ export default function IncidentResolutionSummary() {
     async (incidentId: string) => {
       try {
         const result = await api.generatePostmortem(incidentId);
-        openPostMortem(result.incident_id, result.markdown);
+        openPostMortem(result.incident_id, result.markdown, result.causal_chain);
       } catch {
         pushFloatingText(t.ledger.postmortemUnavailable, "warning");
       }

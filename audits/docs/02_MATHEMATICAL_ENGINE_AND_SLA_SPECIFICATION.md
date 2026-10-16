@@ -351,3 +351,40 @@ $$
   - Runbook cost discount: $\text{Accuracy} \times 50\%$ (`TRIAGE_COST_DISCOUNT_MAX`), in every mode.
   - Runbook effectiveness bonus: $+0.15 \times \text{Accuracy}$, additive (`TRIAGE_EFFECTIVENESS_BONUS_MAX`), only where the effectiveness matrix applies (§ 3.2).
 - **Invariant:** MTTA and MTTR values are strictly elapsed historical tick counts and **never** decrease retroactively upon triage completion.
+
+
+---
+
+## 6. Formula 6 — Circadian Load, Throttling, Engineer Levels and Public Communication
+
+Added by the systemic-evolution pass. Every rule below is evaluated by the backend (`formulas.py`, `war_room.py`, `simulator.py`); the client only renders the results.
+
+### 6.1 Circadian Traffic Factor
+
+The simulated clock reads 08:00 at tick 0 (`CLOCK_START_HOUR = 8`, mirrored by the frontend's `officeClock.ts`); `hour = (tick + 8) mod 24`.
+
+$$
+F_{traffic}(h) = \begin{cases} 1.5 & h \in [11,14] \cup [19,21] \text{ (peak)} \\ 0.4 & h \in [1,5] \text{ (overnight)} \\ 1.0 & \text{otherwise} \end{cases}
+$$
+
+Its three consumers, applied each tick (`SimulationEngine.traffic_factor`):
+
+- **SLA impact** — each service's unavailability is scaled and capped: $U_i' = \min(1, F \cdot U_i)$ before the weighted average of § 1.2, so the same outage costs more availability at peak and less overnight.
+- **Failure hazard** — one more multiplier in the chain of § 2.3: $0.6 + 0.4F$ (1.2x at peak, 0.76x overnight), applied before the single probability cap.
+- **Incident surcharge** — the per-tick surcharge of § 4.2 is multiplied by $1 + 0.5(F-1)$ (1.25x at peak, 0.7x overnight).
+
+`traffic_factor` and `clock_hour` are part of every telemetry frame.
+
+### 6.2 Emergency Traffic Throttle
+
+`SimulationEngine.throttle_service`: requires an open incident on a non-healthy service, \$600 (`THROTTLE_COST`), +1 TDI, a 6-tick per-service cooldown (kept in memory, not persisted). Effects: latency x0.6, error rate x0.7, and for the next 4 ticks (`throttled_until_tick`) the incident's surcharge is multiplied by 0.5. It never resolves the incident or touches `mttr`.
+
+### 6.3 Engineer Progression
+
+XP is granted in `apply_mitigation` only when a runbook **fully** resolves an incident and the engineer assigned to that service is on duty and competency-matched: +1 XP, +1 more when the investigation accuracy was at least 0.78. Levels follow thresholds $(0, 2, 5, 9, 14) \to$ levels 1-5 (`engineer_level`). Each level above 1 adds +0.04 to the specialist quality score of § 5.1 (capped at 1.0) and multiplies stress gain by $1 - 0.06(L-1)$. A level-up writes `ENGINEER_LEVELED_UP`. `engineers.xp` is persisted and restored.
+
+### 6.4 Stakeholder Pressure and the Status Page
+
+- Open P1/P2 incidents trigger stakeholder messages by incident age: CEO at +1 tick, Support at +3 (both P1 and P2), Legal at +6 and the Board at +10 (P1 only), each once per incident (`war_room.STAKEHOLDER_SCHEDULE`). The feed is capped at 30 entries; telemetry carries the latest 12.
+- `post_status_update` advances an incident's `status_page_rank` (1 investigating, 2 identified, 3 mitigating). `identified` is truthful only when the root cause was confirmed; `mitigating` only once the incident is acknowledged; `investigating` always. Truthful: +2.0 user happiness and every pending message of that incident is marked answered. Misleading: -3.0 reputation and `compliance_flag = False`.
+- The per-tick happiness decay of § 4.4 is multiplied by `communication_decay_multiplier`: 1.5 while any open P1/P2 incident has gone more than 3 ticks without a status post, 0.6 while all of them have one, 1.0 otherwise.

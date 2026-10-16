@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useGameStore } from "../../store/useGameStore";
+import { isRedAlertLevel, selectDefconLevel } from "../../utils/defcon";
 import { deriveWorkerMood } from "./engineerMood";
 import OfficeWorker, { WorkerMood } from "./OfficeWorker";
 import { deskScreenColor } from "./officeLifeUtils";
@@ -35,6 +36,8 @@ function PathfindingEmployee({ view, onSelect }: PathfindingEmployeeProps) {
     serviceId ? s.runAnimations.some((a) => a.serviceId === serviceId && a.kind === "mitigate") : false
   );
 
+  const redAlert = useGameStore((s) => isRedAlertLevel(selectDefconLevel(s)));
+
   if (!engineer) return null;
 
   const look = appearanceFor(view.id);
@@ -49,6 +52,10 @@ function PathfindingEmployee({ view, onSelect }: PathfindingEmployeeProps) {
   } else {
     mood = deriveWorkerMood(engineer, hasAlarm, investigating, mitigating);
   }
+
+  // red alert: whoever is on their feet and heading for (or standing at) a failing rack hurries with a laptop
+  const rushing = redAlert && hasAlarm && !view.seated && view.place !== "lounge" && view.place !== "entering" && engineer.on_call_status === "on_duty";
+  if (rushing && mood === "idle") mood = "running";
 
   // an acknowledged alert makes the engineer stand and lean in at their own desk; the desk stays put
   const leaning = acknowledging && atDesk && view.seated;
@@ -77,6 +84,7 @@ function PathfindingEmployee({ view, onSelect }: PathfindingEmployeeProps) {
       transitionMs={view.hopMs > 0 ? view.hopMs : 220}
       transitionEasing="linear"
       fadeIn={view.nodeId === NODE.entrance}
+      carriesLaptop={rushing}
       name={engineer.name}
       workerStatusText={statusText}
       onActivate={serviceId && atDesk && onSelect ? () => onSelect(serviceId) : undefined}

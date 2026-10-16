@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deskGridPosition, pickCrisisServiceId } from "./sceneLayout";
+import { deskGridPosition, pickCrisisServiceId } from "./officeGeometry";
 
 const services = [
   { id: "srv-auth", status: "healthy" as const },

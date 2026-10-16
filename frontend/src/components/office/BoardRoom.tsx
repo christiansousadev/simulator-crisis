@@ -58,7 +58,7 @@ export default function BoardRoom({ originX, originY }: BoardRoomProps) {
         seated={!redAlert && seatedBack}
         facing="right"
         transitionMs={EXEC_WALK_MS}
-        mood="idle"
+        mood={redAlert ? "panic" : "idle"}
       />
       <OfficeWorker
         x={redAlert ? originX + 3.3 : originX + 1.22}
@@ -70,7 +70,7 @@ export default function BoardRoom({ originX, originY }: BoardRoomProps) {
         seated={!redAlert && seatedBack}
         facing="right"
         transitionMs={EXEC_WALK_MS}
-        mood="idle"
+        mood={redAlert ? "panic" : "idle"}
       />
 
       {/* standing visitor with a briefcase */}

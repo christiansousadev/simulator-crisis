@@ -92,3 +92,16 @@ Runbook execution executes within an atomic database transaction under `self._db
 - Debits cash and records the `RUNBOOK_EXECUTED` event in `AuditLog` explicitly tagged with `incident_id`.
 - Reconstructs financial ledger entries reliably from audit history upon session resume.
 
+---
+
+## 5. Tactical Directives: Emergency Traffic Throttling
+
+Beyond the standard 4 catalog runbooks, operators can fire an immediate **Emergency Traffic Throttle** via `POST /api/services/{service_id}/throttle` or the server-rack radial menu (`THROTTLE` button):
+
+- **Mechanics:** Drops approximately 50% of the target service's incoming requests for a 3-tick window, dampening latency and error rates.
+- **Surcharge Relief:** Cuts the open incident's per-tick financial surcharge accumulation in half while active.
+- **Non-Resolution Guarantee:** Throttling does **not** heal or resolve the incident; a root-cause-compatible runbook is still strictly required to return the service to healthy and close the incident.
+- **Costs & Cooldown:** Deducts \$600.00 cash, adds $+1$ TDI point, and enforces a per-service cooldown.
+- **Governance Audit:** Emits `TRAFFIC_THROTTLED` (`actor="VP_OF_INFRA"`, `compliance_flag=True`) tagged with `incident_id`, `service_id`, `cost`, and `window_ticks`.
+
+

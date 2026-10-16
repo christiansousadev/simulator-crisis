@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.engine import formulas
+from app.engine import formulas, offline_auditor
+from app.engine.event_generator import cause_category_for_root_cause
 from app.models.audit import AuditLog
 from app.models.incident import Incident
 from app.models.session import GameSession
@@ -332,9 +333,51 @@ async def generate_postmortem(incident_id: str, request: Request) -> Dict[str, A
         markdown = _render_template(dossier)
         report_path = _persist_report(incident_id, markdown)
 
-        return {"incident_id": incident_id, "markdown": markdown, "saved_to": str(report_path)}
+        return {
+            "incident_id": incident_id,
+            "markdown": markdown,
+            "saved_to": str(report_path),
+            "causal_chain": _build_causal_chain(dossier, request.app.state.engine.services),
+        }
     finally:
         db.close()
+
+
+def _downstream_services(service_id: str, services: List[Dict[str, Any]]) -> List[str]:
+    """EVERY SERVICE THAT (TRANSITIVELY) DEPENDS ON service_id, NEAREST FIRST -- THE PATH A FAILURE
+    CASCADES ALONG"""
+    seen: List[str] = []
+    frontier = [service_id]
+    while frontier:
+        current = frontier.pop(0)
+        for srv in services:
+            if current in srv.get("dependencies", []) and srv["id"] not in seen and srv["id"] != service_id:
+                seen.append(srv["id"])
+                frontier.append(srv["id"])
+    return seen
+
+
+def _build_causal_chain(dossier: Dict[str, Any], services: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """TEACHING VIEW OF WHY THE INCIDENT HAPPENED: THE CONFIRMED CAUSE CATEGORY, THE FAILED SERVICE,
+    THE SERVICES DOWNSTREAM OF IT THAT A FAILURE COULD DRAG ALONG, AND WHICH RUNBOOK FITS THE CAUSE
+    BEST. THE CAUSE IS ONLY REPORTED WHEN THE PLAYER CONFIRMED IT (SAME RULE AS THE DOSSIER)."""
+    category = cause_category_for_root_cause(dossier["root_cause"]) if dossier["root_cause_confirmed"] else None
+    best_runbook = None
+    if category:
+        best_runbook = max(
+            formulas.MITIGATION_EFFECTIVENESS,
+            key=lambda action_id: formulas.MITIGATION_EFFECTIVENESS[action_id].get(category, 0.0),
+        )
+    used = [m["action"] for m in dossier["mitigations"]]
+    return {
+        "service_id": dossier["service_id"],
+        "root_cause": dossier["root_cause"],
+        "cause_category": category,
+        "downstream_service_ids": _downstream_services(dossier["service_id"], services),
+        "best_runbook_id": best_runbook,
+        "runbooks_used": used,
+        "fully_resolved": any(m["fully_resolved"] for m in dossier["mitigations"]),
+    }
 
 
 def _render_template(dossier: Dict[str, Any]) -> str:
@@ -583,10 +626,8 @@ def _build_postmortem_pdf(dossier: Dict[str, Any], session_sla_percentage: Optio
 
 @router.post("/api/audits/postmortem/{incident_id}/interview")
 async def conduct_interview(incident_id: str, payload: InterviewMessageRequest, request: Request) -> Dict[str, Any]:
-    """CONDUCT ONE TURN OF AN LLM-DRIVEN REGULATORY DEFENSE INTERVIEW FOR A RESOLVED INCIDENT"""
-    if not settings.LLM_API_KEY:
-        raise HTTPException(status_code=503, detail="AI Auditor interview service is not configured")
-
+    """CONDUCT ONE TURN OF A REGULATORY DEFENSE INTERVIEW FOR A RESOLVED INCIDENT -- LLM-DRIVEN WHEN A KEY IS
+    CONFIGURED, OTHERWISE (OR IF THE MODEL API FAILS) THE DETERMINISTIC OFFLINE AUDITOR"""
     client_key = request.client.host if request.client else "unknown"
     _check_interview_rate_limit(client_key)
 
@@ -622,6 +663,8 @@ async def conduct_interview(incident_id: str, payload: InterviewMessageRequest, 
             "adjustment_cap": _adjustment_cap(auditor_response["verdict"], incident.severity),
             "applied": _verdict_already_applied(incident_id),
             "transcript_turn": len(transcript) // 2,
+            # "llm" or "offline": the deterministic rules auditor answers without a key or API
+            "source": auditor_response.get("source", "llm"),
         }
     finally:
         db.close()
@@ -815,7 +858,10 @@ _MAX_AUDITOR_REPLY_CHARS = 4000
 
 
 async def _invoke_auditor_llm(context: Dict[str, Any], transcript: List[Dict[str, str]]) -> Dict[str, Any]:
-    """INVOKE THE LLM AUDITOR PERSONA WITH THE COMPILED DOSSIER AND CONVERSATION HISTORY"""
+    """INVOKE THE LLM AUDITOR PERSONA WITH THE COMPILED DOSSIER AND CONVERSATION HISTORY. WITHOUT
+    AN API KEY, OR WHEN THE MODEL API IS UNREACHABLE, THE OFFLINE RULE-BASED AUDITOR ANSWERS INSTEAD."""
+    if not settings.LLM_API_KEY:
+        return offline_auditor.respond(context, transcript)
     messages = [
         {"role": "system", "content": AUDITOR_SYSTEM_PROMPT},
         {"role": "system", "content": f"INCIDENT DOSSIER (ground truth, JSON):\n{json.dumps(context, indent=2)}"},
@@ -844,7 +890,9 @@ async def _invoke_auditor_llm(context: Dict[str, Any], transcript: List[Dict[str
             "verdict": verdict,
             "regulatory_fine_adjustment": float(parsed.get("regulatory_fine_adjustment", 0.0)),
         }
-    except (httpx.HTTPError, json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError):
+    except httpx.HTTPError:
+        return offline_auditor.respond(context, transcript)
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError):
         # malformed or unreachable model response -- including an empty "choices" array, a
         # non-object top-level JSON value, or a non-numeric regulatory_fine_adjustment -- fails
         # into a neutral holding pattern rather than crashing the interview or fabricating a
@@ -901,6 +949,7 @@ def _persist_interview_event(db: OrmSession, incident_id: str, auditor_response:
                     "verdict": auditor_response["verdict"],
                     "proposed_amount": round(proposed_amount, 2),
                     "eligible_amount": round(eligible_amount, 2),
+                    "source": auditor_response.get("source", "llm"),
                 }
             ),
             compliance_flag=auditor_response["verdict"] != "NON_COMPLIANT",

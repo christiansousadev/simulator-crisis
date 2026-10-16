@@ -7,7 +7,11 @@ import type { Incident } from "../../types/game";
 // the game state, so the whole flow is unit-testable without a DOM.
 
 export type TutorialPlacement = "auto" | "top" | "bottom" | "left" | "right" | "center";
-export type TutorialDockTab = "incidents" | "directives";
+export type TutorialDockTab = "incidents" | "directives" | "warroom" | "roster";
+
+// the four Flight Academy modules; every step belongs to exactly one and a module is a contiguous run
+export type TutorialModule = 1 | 2 | 3 | 4;
+export const TUTORIAL_MODULES: readonly TutorialModule[] = [1, 2, 3, 4];
 
 // a css selector, optionally searched only inside the dock card of the tutorial incident
 export type TargetSpec = string | { selector: string; inIncidentCard: true };
@@ -34,12 +38,14 @@ export interface TutorialEnv {
   openTriageTerminal: (incidentId: string) => void;
   closeTriageTerminal: () => void;
   closeIncidentDetail: () => void;
+  showOffice: () => void;
   ensureIncident: () => void;
   captureCooldownBaseline: () => void;
 }
 
 export interface TutorialStepDef {
   id: TutorialStepId;
+  module: TutorialModule;
   // "action" steps wait for the player to do the real thing, "info" steps just need Next
   kind: "info" | "action";
   // tried in order; with `union` every target found is merged into one hole
@@ -59,6 +65,7 @@ const INCIDENT_CARD = '[data-tour="incident-card"]';
 export const TUTORIAL_STEPS: TutorialStepDef[] = [
   {
     id: "welcome",
+    module: 1,
     kind: "info",
     targets: [],
     placement: "center",
@@ -69,6 +76,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "rack",
+    module: 1,
     kind: "info",
     // the server rack itself (where the alert badge pulses); the desk is only a fallback
     targets: ['[data-rack-service-id="{service}"]', '[data-service-id="{service}"]'],
@@ -81,6 +89,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "card",
+    module: 1,
     kind: "info",
     targets: [INCIDENT_CARD],
     placement: "top",
@@ -93,6 +102,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "acknowledge",
+    module: 1,
     kind: "action",
     targets: [{ selector: '[data-tour="incident-ack"]', inIncidentCard: true }, INCIDENT_CARD],
     placement: "top",
@@ -106,6 +116,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "investigate",
+    module: 2,
     kind: "action",
     targets: [{ selector: '[data-tour="incident-investigate"]', inIncidentCard: true }, INCIDENT_CARD],
     placement: "top",
@@ -114,10 +125,13 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     onEnter: (env) => {
       env.closeIncidentDetail();
       env.showDock("incidents");
+      // module 2 can be started on its own from the academy menu: make sure there is an incident
+      env.ensureIncident();
     },
   },
   {
     id: "findCause",
+    module: 2,
     kind: "action",
     targets: ['[data-tour="triage-lines"]', { selector: '[data-tour="incident-investigate"]', inIncidentCard: true }],
     placement: "right",
@@ -132,6 +146,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "runbooks",
+    module: 2,
     kind: "info",
     targets: ['[data-tour="runbook-grid"]'],
     placement: "top",
@@ -146,6 +161,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "mitigate",
+    module: 2,
     kind: "action",
     targets: ['[data-tour="runbook-rollback"]', '[data-tour="runbook-grid"]'],
     placement: "top",
@@ -160,6 +176,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "recap",
+    module: 2,
     kind: "info",
     targets: ['[data-tour="cash-counter"]', '[data-kpi="budget"]', '[data-tour="topbar-kpis"]'],
     placement: "bottom",
@@ -171,6 +188,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
   },
   {
     id: "governance",
+    module: 3,
     kind: "info",
     targets: ['[data-kpi="sla"]', '[data-kpi="errorBudget"]'],
     union: true,
@@ -180,9 +198,74 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
       env.closeIncidentDetail();
     },
   },
+  {
+    id: "cab",
+    module: 3,
+    kind: "info",
+    targets: [],
+    placement: "center",
+    onEnter: (env) => {
+      env.closeTriageTerminal();
+      env.closeIncidentDetail();
+    },
+  },
+  {
+    id: "warRoom",
+    module: 3,
+    kind: "info",
+    targets: ['[data-tour="bottom-dock"]'],
+    placement: "top",
+    onEnter: (env) => {
+      env.closeTriageTerminal();
+      env.closeIncidentDetail();
+      env.showDock("warroom");
+    },
+  },
+  {
+    id: "buildMode",
+    module: 4,
+    kind: "info",
+    targets: ['[data-tour="build-toggle"]'],
+    placement: "auto",
+    onEnter: (env) => {
+      env.closeTriageTerminal();
+      env.closeIncidentDetail();
+      env.showOffice();
+    },
+  },
+  {
+    id: "hiring",
+    module: 4,
+    kind: "info",
+    targets: ['[data-tour="bottom-dock"]'],
+    placement: "top",
+    onEnter: (env) => {
+      env.closeTriageTerminal();
+      env.closeIncidentDetail();
+      env.showDock("roster");
+    },
+  },
+  {
+    id: "resilience",
+    module: 4,
+    kind: "info",
+    targets: [],
+    placement: "center",
+    onEnter: (env) => {
+      env.closeTriageTerminal();
+      env.closeIncidentDetail();
+    },
+  },
 ];
 
 export const TUTORIAL_STEP_COUNT = TUTORIAL_STEPS.length;
+
+// FIRST STEP INDEX AND STEP COUNT OF A MODULE (steps of one module are contiguous in TUTORIAL_STEPS)
+export function moduleRange(module: TutorialModule): { start: number; count: number } {
+  const start = TUTORIAL_STEPS.findIndex((s) => s.module === module);
+  const count = TUTORIAL_STEPS.filter((s) => s.module === module).length;
+  return { start: Math.max(0, start), count };
+}
 
 // a runbook fired since the baseline was captured shows up as a changed cooldown entry
 export function detectRunbookAttempt(
@@ -229,15 +312,19 @@ function isSkipped(step: TutorialStepDef, snapshot: TutorialSnapshot): boolean {
 // NEXT/PREVIOUS STEP, SKIPPING THE INCIDENT-BOUND ONES WHEN THERE IS NO INCIDENT TO WORK WITH.
 // next() returns null past the last step (= finish), prev() never goes below 0.
 export function nextStepIndex(from: number, snapshot: TutorialSnapshot): number | null {
+  const module = TUTORIAL_STEPS[from]?.module;
   let i = from + 1;
-  while (i < TUTORIAL_STEPS.length && isSkipped(TUTORIAL_STEPS[i], snapshot)) i += 1;
-  return i >= TUTORIAL_STEPS.length ? null : i;
+  while (i < TUTORIAL_STEPS.length && TUTORIAL_STEPS[i].module === module && isSkipped(TUTORIAL_STEPS[i], snapshot)) i += 1;
+  // a module ends where the next module (or the end of the list) begins
+  return i >= TUTORIAL_STEPS.length || TUTORIAL_STEPS[i].module !== module ? null : i;
 }
 
 export function prevStepIndex(from: number, snapshot: TutorialSnapshot): number {
+  const module = TUTORIAL_STEPS[from]?.module;
+  const first = module ? moduleRange(module).start : 0;
   let i = from - 1;
-  while (i > 0 && isSkipped(TUTORIAL_STEPS[i], snapshot)) i -= 1;
-  return Math.max(0, i);
+  while (i > first && isSkipped(TUTORIAL_STEPS[i], snapshot)) i -= 1;
+  return Math.max(first, i);
 }
 
 // WHICH COPY VARIANT A STEP SHOWS: "alt" covers the fallback and the not-resolved cases

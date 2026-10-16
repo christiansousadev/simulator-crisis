@@ -8,6 +8,8 @@ export interface DockBadges {
   roster: number;
   upgrades: number;
   achievements: number;
+  // stakeholder messages still waiting for a status-page update
+  warroom: number;
 }
 
 // PER-TAB ACTIVITY COUNTS FOR THE DOCK: open incidents, stressed engineers, upgrades the cash can buy
@@ -19,6 +21,7 @@ export function useDockBadges(achievementsVisible: boolean): DockBadges {
   const upgrades = useGameStore((s) => countAffordableUpgrades(s.telemetry.budget, s.telemetry.purchased_upgrades));
   const unlocked = useGameStore((s) => s.telemetry.achievements_unlocked);
   const tick = useGameStore((s) => s.telemetry.tick);
+  const warroom = useGameStore((s) => (s.telemetry.stakeholder_feed ?? []).filter((m) => !m.answered && s.telemetry.active_incidents.some((i) => i.id === m.incident_id)).length);
 
   // ids the player has already seen. null until the first real frame, so loading a run that already
   // has achievements does not light the badge up
@@ -34,5 +37,5 @@ export function useDockBadges(achievementsVisible: boolean): DockBadges {
   }, [unlocked, tick, achievementsVisible]);
 
   const achievements = seen ? unlocked.filter((id) => !seen.has(id)).length : 0;
-  return { incidents, roster, upgrades, achievements };
+  return { incidents, roster, upgrades, achievements, warroom };
 }

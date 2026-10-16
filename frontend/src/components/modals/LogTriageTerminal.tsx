@@ -1,4 +1,4 @@
-import { ArrowLeft, Terminal } from "lucide-react";
+import { ArrowLeft, PanelRightClose, PanelRightOpen, Terminal } from "lucide-react";
 import { KeyboardEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { translateLogLine, translateRootCause } from "../../i18n/dynamicContent";
@@ -51,6 +51,7 @@ export default function LogTriageTerminal() {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [reloadKey, setReloadKey] = useState(0);
+  const [docked, setDocked] = useState(false);
   const [revealed, setRevealed] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ tone: "wrong" | "error"; text: string } | null>(null);
@@ -206,6 +207,7 @@ export default function LogTriageTerminal() {
       labelledBy={TITLE_ID}
       layer="system"
       size="lg"
+      docked={docked}
       backdropClass="bg-slate-950/85 backdrop-blur-sm"
       panelClass="!border-2 !border-emerald-500/40 !bg-black font-mono"
     >
@@ -216,7 +218,18 @@ export default function LogTriageTerminal() {
         onClose={close}
         closeLabel={t.common.close}
         className="!border-emerald-500/30 !bg-emerald-500/5"
-      />
+      >
+        <button
+          type="button"
+          onClick={() => setDocked((v) => !v)}
+          aria-pressed={docked}
+          title={docked ? t.evolution.triage.undock : t.evolution.triage.dock}
+          aria-label={docked ? t.evolution.triage.undock : t.evolution.triage.dock}
+          className="ml-1 rounded p-1 text-emerald-400 transition-colors hover:bg-emerald-500/10"
+        >
+          {docked ? <PanelRightClose className="h-4 w-4" aria-hidden /> : <PanelRightOpen className="h-4 w-4" aria-hidden />}
+        </button>
+      </ModalHeader>
 
       {/* instruction + live SLA bleed */}
       <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 border-b border-emerald-500/20">

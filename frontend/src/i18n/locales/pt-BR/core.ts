@@ -400,6 +400,26 @@ export const core = {
         title: "Mantenha o SLA de pé",
         body: "O escudo é o seu SLA e o medidor é o orçamento de erro. Estoure o orçamento e um congelamento de funcionalidades trava os runbooks arriscados; caia abaixo do SLA e os reguladores multam você. Mantenha os dois saudáveis até a auditoria mensal.",
       },
+      cab: {
+        title: "Os dilemas do CAB",
+        body: "A cada 40 a 60 ticks o Comitê de Mudanças coloca um dilema à sua frente. Cada escolha troca caixa, dívida técnica e reputação, e algumas deixam uma janela de risco para trás. Leia o trade-off antes de escolher.",
+      },
+      warRoom: {
+        title: "A sala de guerra",
+        body: "Em incidentes graves o CEO, o suporte e o conselho escrevem. Publique uma atualização honesta na status page pública: ela acalma os clientes. Anunciar um progresso que não aconteceu custa reputação.",
+      },
+      buildMode: {
+        title: "Modo Build",
+        body: "Abra o Modo Build para instalar hardware nos racks: um cache Redis reduz a latência, uma fila Kafka isola cascatas, uma réplica de leitura e o NGINX diminuem a chance de falha. Resiliência se compra antes da queda.",
+      },
+      hiring: {
+        title: "O engenheiro certo no rack certo",
+        body: "Abra a aba Equipe. Um especialista cuja competência combina com o serviço que cobre percebe problemas cedo, recupera mais rápido e sobe de nível com correções limpas. Um engenheiro desalinhado ou exausto não.",
+      },
+      resilience: {
+        title: "Missão cumprida",
+        body: "Agora você conhece o ciclo todo: detectar, investigar, corrigir, comunicar e reforçar. Refaça qualquer módulo pelo botão de ajuda e deixe o glossário à mão quando um termo for novo.",
+      },
     },
     recap: { mtta: "Tempo até reconhecer", mttr: "Tempo até recuperar", spent: "Dinheiro gasto", notMeasured: "n/d" },
     cheatSheet: {

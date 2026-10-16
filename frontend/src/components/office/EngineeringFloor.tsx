@@ -6,7 +6,7 @@ import { DeskLamp, GroundShadow, PcTower } from "./OfficeProps";
 import IsoBox from "./IsoBox";
 import RosterDirector from "./RosterDirector";
 import RosterWalkers from "./RosterWalkers";
-import { DESK_ORDER, DESK_SLOTS, RESERVE_SLOTS } from "./officeLayout";
+import { DESK_ORDER, DESK_SLOTS, RESERVE_SLOTS } from "./officeGeometry";
 import { useRosterStage } from "./rosterStage";
 import { reserveSeatNodeId } from "./waypointGraph";
 

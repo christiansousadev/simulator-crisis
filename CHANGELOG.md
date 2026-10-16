@@ -6,6 +6,30 @@ version numbers since this project hasn't tagged releases yet.
 
 ## [Unreleased]
 
+### Added (systemic evolution)
+
+- Deterministic offline auditor for the post-mortem interview (no more `503` without an LLM key);
+  replies are labelled `source: "offline"` and clamp to the same verdict ceilings.
+- Session reset archives and checksums the purged ledger (`archived_audit_ledgers`) and records
+  `SESSION_ARCHIVED_AND_PURGED`; new ledger events `TRAFFIC_THROTTLED`, `STATUS_PAGE_UPDATED`,
+  `ENGINEER_LEVELED_UP` (38 event types).
+- Circadian load (peak 1.5x / overnight 0.4x) over SLA impact, failure hazard and surcharge;
+  emergency traffic throttle; stakeholder feed and public status page; engineer XP and levels
+  (migration adds `engineers.xp`).
+- Service dependency graph view, pinnable split dock, dockable log terminal, compact top bar down
+  to 1280 px, war-room dock tab (`W`).
+- SRE Flight Academy (four tutorial modules), searchable glossary, causal chain view in the
+  post-mortem (`causal_chain` on the post-mortem response).
+- Red-alert floor sweep, running/panicking staff, cable data pulses, rack sparks and smoke,
+  master EQ + limiter, datacenter ambience bed, pinch/pan touch gestures.
+- `E2E_FRONTEND_PORT` / `E2E_BACKEND_PORT` to run the Playwright suite when 5173/8000 are taken.
+
+### Removed
+
+- `officeLayout.ts` and `sceneLayout.ts` (merged into `officeGeometry.ts`), the unused
+  `playTypeTick` sound. (`VictoryScreen`, `LiquidationScreen` and the `combat-text-pop` keyframe were
+  already gone from the tree.)
+
 ### Added (UX overhaul)
 
 - Spring-damped office camera (zoom toward the cursor, drag inertia, keyboard control), minimap

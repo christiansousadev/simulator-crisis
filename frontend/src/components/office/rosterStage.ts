@@ -47,6 +47,13 @@ interface Runtime {
   busyUntil: number;
 }
 
+// at red alert the whole floor runs: same graph, roughly double the pace
+export const RUN_SPEED_TILES_PER_S = 3.2;
+let rosterUrgent = false;
+export function setRosterUrgency(urgent: boolean): void {
+  rosterUrgent = urgent;
+}
+
 // a short beat at the reception desk, and the gap between a layer handoff and the next hop
 export const CHECK_IN_PAUSE_MS = 1100;
 export const HANDOFF_MS = 90;
@@ -224,7 +231,7 @@ export class RosterChoreographer {
       return;
     }
     const from = rt.view;
-    const hopMs = hopDurationMs(from, step.node);
+    const hopMs = hopDurationMs(from, step.node, rosterUrgent ? RUN_SPEED_TILES_PER_S : undefined);
     rt.view = {
       ...from,
       nodeId: step.node.id,

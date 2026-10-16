@@ -115,11 +115,60 @@ def test_get_interview_survives_a_corrupt_verdict_cache(client, interviews_dir, 
     assert body["regulatory_fine_adjustment"] == 0.0
 
 
-def test_interview_post_503_without_llm_key(client, interviews_dir, incident_id, monkeypatch):
+def test_interview_post_falls_back_to_offline_auditor_without_llm_key(client, interviews_dir, incident_id, monkeypatch):
     monkeypatch.setattr(settings, "LLM_API_KEY", "")
     resp = client.post(f"/api/audits/postmortem/{incident_id}/interview", json={"message": "hi"})
-    assert resp.status_code == 503
-    assert "not configured" in resp.json()["detail"]
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["verdict"] in ("PENDING", "VALID", "JUSTIFIED", "NON_COMPLIANT")
+    assert body["reply"]
+    assert body["source"] == "offline"
+
+
+def test_offline_auditor_is_deterministic_and_reaches_a_verdict():
+    from app.engine import offline_auditor
+
+    context = {
+        "mtta_ticks": 14, "mttr_ticks": 5, "root_cause_confirmed": False, "tech_debt_delta": 8,
+        "mitigations": [{"action": "Hotfix Prod Live", "fully_resolved": True}],
+    }
+    transcript = [{"role": "player", "content": "ok"}]
+    first = offline_auditor.respond(context, transcript)
+    assert first["verdict"] == "PENDING" and "unacknowledged" in first["reply"]
+    assert offline_auditor.respond(context, transcript) == first
+    transcript += [{"role": "auditor", "content": first["reply"]}, {"role": "player", "content": "no"}]
+    transcript += [{"role": "auditor", "content": "q2"}, {"role": "player", "content": "no"}]
+    final = offline_auditor.respond(context, transcript)
+    assert final["verdict"] == "NON_COMPLIANT" and final["regulatory_fine_adjustment"] > 0
+
+
+def test_offline_auditor_clean_record_earns_credit():
+    from app.engine import offline_auditor
+
+    context = {"mtta_ticks": 2, "mttr_ticks": 4, "root_cause_confirmed": True, "tech_debt_delta": 0,
+               "mitigations": [{"action": "Rollback", "fully_resolved": True}]}
+    out = offline_auditor.respond(context, [{"role": "player", "content": "hello"}])
+    assert out["verdict"] == "VALID" and out["regulatory_fine_adjustment"] < 0
+
+
+def test_session_reset_archives_ledger_and_emits_event(client):
+    client.post("/api/session/reset")
+    client.post("/api/session/pause")
+    engine = app.state.engine
+    engine._log_audit_event("INCIDENT_RAISED", "AUTOMATED_MONITOR", {"incident_id": "inc-x"}, True)
+    client.post("/api/session/reset")
+    client.post("/api/session/pause")
+    events = [e for e in engine.audit_logs if e["event_type"] == "SESSION_ARCHIVED_AND_PURGED"]
+    assert len(events) == 1
+    assert events[0]["actor"] == "PLATFORM" and events[0]["details"]["event_count"] >= 1
+    from app.models.archived_ledger import ArchivedAuditLedger
+
+    db = SessionLocal()
+    try:
+        row = db.get(ArchivedAuditLedger, events[0]["details"]["archive_id"])
+        assert row is not None and row.ledger_checksum == events[0]["details"]["ledger_checksum"]
+    finally:
+        db.close()
 
 
 def test_interview_post_rejects_oversized_message(client, interviews_dir, incident_id, monkeypatch):

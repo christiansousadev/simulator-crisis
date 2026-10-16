@@ -101,6 +101,29 @@ describe("AuditorChat", () => {
     expect(toasts[toasts.length - 1]?.text).toContain("US$3,000");
   });
 
+  it("labels turns answered by the offline rules auditor, and not those answered by a model", async () => {
+    const answer = (source: "llm" | "offline") =>
+      mockFetch((method) =>
+        method === "GET"
+          ? noHistory
+          : { status: 200, body: { incident_id: "inc-1", reply: "Noted.", verdict: "PENDING", regulatory_fine_adjustment: 0, transcript_turn: 1, source } }
+      );
+    answer("offline");
+    const { unmount } = render(<AuditorChat incidentId="inc-1" />);
+    await screen.findByText(/No questions yet/);
+    expect(screen.queryByTestId("auditor-offline-badge")).toBeNull();
+    await userEvent.type(screen.getByRole("textbox"), "because the logs showed a bad deploy{Control>}{Enter}{/Control}");
+    expect(await screen.findByTestId("auditor-offline-badge")).toHaveTextContent("Offline rules auditor");
+    unmount();
+
+    answer("llm");
+    render(<AuditorChat incidentId="inc-2" />);
+    await screen.findByText(/No questions yet/);
+    await userEvent.type(screen.getByRole("textbox"), "answer{Control>}{Enter}{/Control}");
+    await screen.findByText("Noted.");
+    expect(screen.queryByTestId("auditor-offline-badge")).toBeNull();
+  });
+
   it("sends with Ctrl+Enter", async () => {
     const calls = mockFetch((method) =>
       method === "GET"

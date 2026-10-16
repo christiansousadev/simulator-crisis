@@ -15,7 +15,7 @@ import {
   SERVER_ROOM_SIZE,
   WALL_HEIGHT,
   deskGridPosition,
-} from "./sceneLayout";
+} from "./officeGeometry";
 import { rackGridPosition } from "./ServerRoom";
 
 // THE LIGHTING LAYERS OF THE OFFICE. Three pieces, all driven by css variables that

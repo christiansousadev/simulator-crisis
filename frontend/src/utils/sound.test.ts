@@ -137,7 +137,7 @@ describe("audio engine", () => {
     expect(localStorage.getItem("incidentzero.music_volume")).toBe("0.8");
   });
 
-  it("rate-limits hover ticks to one per 60 ms and type ticks to one per 28 ms", async () => {
+  it("rate-limits hover ticks to one per 60 ms", async () => {
     const sound = await loadSound();
     sound.unlockAudio();
     const ctx = FakeAudioContext.instances[0];
@@ -153,15 +153,6 @@ describe("audio engine", () => {
     now += 61;
     sound.playUiHoverSound();
     expect(ctx.oscillators).toHaveLength(2);
-
-    const before = ctx.oscillators.length;
-    sound.playTypeTick();
-    now += 5;
-    sound.playTypeTick();
-    expect(ctx.oscillators.length - before).toBe(1);
-    now += 30;
-    sound.playTypeTick();
-    expect(ctx.oscillators.length - before).toBe(2);
   });
 
   it("caps concurrent one-shot voices instead of piling them up", async () => {

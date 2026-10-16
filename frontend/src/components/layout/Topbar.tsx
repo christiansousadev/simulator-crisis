@@ -1,4 +1,4 @@
-import { Award, Building2, ChevronDown, Gamepad2, Gauge, HelpCircle, Pause, Play, Settings } from "lucide-react";
+import { Award, Building2, ChevronDown, Gamepad2, Gauge, HelpCircle, Network, Pause, Play, Settings } from "lucide-react";
 import { memo, useRef, useState } from "react";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -26,7 +26,17 @@ function formatOfficeClock(tick: number, dayLabel: string): string {
 const OfficeClock = memo(function OfficeClock() {
   const t = useTranslation();
   const tick = useGameStore((s) => s.telemetry.tick);
-  return <p className="text-caption leading-tight text-slate-400 tabular-nums">{formatOfficeClock(tick, t.common.day)}</p>;
+  const factor = useGameStore((s) => s.telemetry.traffic_factor ?? 1);
+  const load = factor > 1 ? "peak" : factor < 1 ? "night" : "normal";
+  const tone = load === "peak" ? "text-amber-300" : load === "night" ? "text-sky-300" : "text-slate-400";
+  return (
+    <p className="text-caption leading-tight text-slate-400 tabular-nums">
+      {formatOfficeClock(tick, t.common.day)}
+      <span className={`ml-1.5 hidden min-[1600px]:inline ${tone}`} title={t.evolution.traffic.hint(factor.toFixed(1))}>
+        · {t.evolution.traffic[load]}
+      </span>
+    </p>
+  );
 });
 
 const ConnectionPill = memo(function ConnectionPill() {
@@ -35,7 +45,7 @@ const ConnectionPill = memo(function ConnectionPill() {
   return (
     <div role="status" className="flex shrink-0 items-center gap-1.5 rounded-md bg-slate-800 px-2 py-1 text-caption font-medium sm:px-2.5">
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected ? "bg-emerald-400" : "bg-rose-400 animate-pulse"}`} />
-      <span className="hidden sm:inline">{connected ? t.topbar.live : t.topbar.reconnecting}</span>
+      <span className={connected ? "hidden min-[1600px]:inline" : "hidden sm:inline"}>{connected ? t.topbar.live : t.topbar.reconnecting}</span>
     </div>
   );
 });
@@ -104,7 +114,7 @@ const SecondaryPopover = memo(function SecondaryPopover() {
         }`}
       >
         <Gauge className="h-3.5 w-3.5" aria-hidden />
-        <span className="hidden font-heading uppercase tracking-wider sm:inline">{t.hud.topbar.indicators}</span>
+        <span className="hidden font-heading uppercase tracking-wider min-[1700px]:inline">{t.hud.topbar.indicators}</span>
         <span className="flex items-center gap-0.5" aria-hidden>
           {dots.map((dot, i) => (
             <span key={i} className={`h-1.5 w-1.5 rounded-full transition-colors duration-slow ${dot}`} />
@@ -175,7 +185,7 @@ const SpeedControls = memo(function SpeedControls() {
         }`}
       >
         {isRunning ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
-        {!isRunning && <span className="hidden text-caption font-bold tracking-wide sm:inline">{t.hud.topbar.paused}</span>}
+        {!isRunning && <span className="hidden text-caption font-bold tracking-wide hd:inline">{t.hud.topbar.paused}</span>}
       </button>
       {SPEED_OPTIONS.map((x) => (
         <button
@@ -199,9 +209,11 @@ const SpeedControls = memo(function SpeedControls() {
 export default function Topbar() {
   const t = useTranslation();
   const openScenarioSelect = useGameStore((s) => s.openScenarioSelect);
-  const openOnboarding = useGameStore((s) => s.openOnboarding);
+  const openAcademy = useGameStore((s) => s.openAcademy);
   const openSettings = useGameStore((s) => s.openSettings);
   const openHallOfFame = useGameStore((s) => s.openHallOfFame);
+  const stageView = useGameStore((s) => s.stageView);
+  const toggleStageView = useGameStore((s) => s.toggleStageView);
   // wide screens show the secondary indicators inline; below that they live in the popover. only
   // one copy is ever mounted.
   const wide = useMediaQuery("(min-width: 1720px)");
@@ -216,18 +228,19 @@ export default function Topbar() {
         <div className="shrink-0 rounded-lg border border-sky-500/30 bg-sky-500/15 p-2 text-sky-400">
           <Building2 className="h-5 w-5" aria-hidden />
         </div>
+        {/* the company name only appears once there is room for it next to the full KPI cluster */}
         <div className="hidden md:block">
-          <h1 className="font-heading text-base font-bold leading-tight tracking-wide">IncidentZero Corp.</h1>
+          <h1 className="hidden font-heading min-[1600px]:block text-base font-bold leading-tight tracking-wide">IncidentZero Corp.</h1>
           <OfficeClock />
         </div>
-        <div className="mx-1 hidden h-8 w-px bg-slate-700 sm:block" />
+        <div className="mx-1 hidden h-8 w-px bg-slate-700 min-[1600px]:block" />
         <ConnectionPill />
       </div>
 
       {/* status cluster: the critical ops metrics (threat level, sla, error budget, and cash) share one
           elevated container, every piece fixed-width so nothing re-centers when a label changes */}
       <div className="mx-auto flex min-w-0 shrink items-center justify-center gap-2 sm:gap-3" data-tour="topbar-kpis" role="group" aria-label={t.hud.topbar.kpiCluster}>
-        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-800/50 px-2 py-1 sm:gap-3 sm:px-3">
+        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-800/50 px-2 py-1 hd:gap-3 hd:px-3">
           <DefconMeter />
           <div className="h-9 w-px bg-slate-700" />
           <ConnectedShield />
@@ -243,10 +256,20 @@ export default function Topbar() {
           weight with the metrics above */}
       <div className="relative z-10 flex shrink-0 items-center gap-2">
         <div className="flex items-center gap-1 rounded-lg bg-slate-800 p-1">
+          <button
+            type="button"
+            onClick={toggleStageView}
+            aria-pressed={stageView === "graph"}
+            className={`${iconButton} ${stageView === "graph" ? "bg-cyan-950/60 !text-cyan-300" : ""}`}
+            title={stageView === "graph" ? t.evolution.stage.showOffice : t.evolution.stage.showGraph}
+            aria-label={stageView === "graph" ? t.evolution.stage.showOffice : t.evolution.stage.showGraph}
+          >
+            <Network className="h-4 w-4" aria-hidden />
+          </button>
           <button type="button" onClick={openScenarioSelect} className={iconButton} title={t.topbar.newGame}>
             <Gamepad2 className="h-4 w-4" aria-hidden />
           </button>
-          <button type="button" onClick={openOnboarding} className={iconButton} title={t.topbar.help}>
+          <button type="button" onClick={openAcademy} className={iconButton} title={t.topbar.help}>
             <HelpCircle className="h-4 w-4" aria-hidden />
           </button>
           <button type="button" onClick={openHallOfFame} className={iconButton} title={t.titleScreen.hallOfFame}>

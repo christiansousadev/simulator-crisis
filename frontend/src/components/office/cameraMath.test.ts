@@ -19,7 +19,7 @@ import {
   type Camera,
 } from "./cameraMath";
 import { project } from "./isoMath";
-import { CAMERA_ORIGIN } from "./sceneLayout";
+import { CAMERA_ORIGIN } from "./officeGeometry";
 
 const O = CAMERA_ORIGIN;
 const cam: Camera = { scale: 1.2, x: 30, y: -20 };
