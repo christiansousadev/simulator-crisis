@@ -65,7 +65,7 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
 
       {/* kitchenette counter with water cooler, espresso machine and fridge */}
       <WaterCooler x={originX + 1.7} y={originY + 0.25} />
-      <IsoBox x={originX + 2.05} y={originY + 0.2} z={0} w={0.9} d={0.3} h={0.32} color="#d6d3d1" />
+      <IsoBox x={originX + 2.05} y={originY + 0.2} z={0} w={0.9} d={0.3} h={0.32} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#f8fafc" stroke="rgba(255,255,255,0.12)" highlightTop />
       <EspressoMachine x={originX + 2.15} y={originY + 0.3} z={0.32} steam={espressoBought ? "full" : "light"} />
       <Fridge x={originX + 2.75} y={originY + 0.85} />
 

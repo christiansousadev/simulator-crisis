@@ -28,9 +28,11 @@ This needs no backend cooperation because every `TICK_BROADCAST` frame already c
 
 ## 3. In-Game Presentation Display (`BoardroomMetricsDisplay.tsx`)
 
-`BoardRoom.tsx` mounts `BoardroomMetricsDisplay` as the wall-mounted TV. It is an SVG panel drawing three polylines from `metricsHistory` — average latency (blue), the throughput proxy (green) and error rate (red) — each normalized to its **own** min/max so all three read clearly on one small screen regardless of absolute scale (a series with fewer than two samples draws nothing). Because of that per-series normalization the panel is a trend illustration, not a calibrated chart; it has no axes or numbers.
+`BoardRoom.tsx` mounts `BoardroomMetricsDisplay` as the wall-mounted 4K telemetry screen. It features a heavy titanium mounting frame, header bar with live status beacon (green / red alert pulse), and digital oscilloscope grid lines (`rgba(56,189,248,0.12)`).
 
-The panel's `hasP1` prop receives the boardroom's `redAlert` flag (`useRedAlert()`: the session `status` is `breached`, or a `critical`-tier service is `down`). While it is true the background rect pulses red using the `animate-beacon-flash` keyframe already defined for the server-room emergency beacon.
+The display renders three glowing sparklines from `metricsHistory` — average mesh latency (`#00f0ff` ciano), throughput proxy (`#10b981` esmeralda) and error rate (`#ef4444` vermelho) — each normalized to its own min/max with high visual clarity.
+
+When `hasP1` is triggered (`useRedAlert()`: session `status` is `breached` or a `critical`-tier service is `down`), the header switches to `CRITICAL ALERT // SEV-1 ACTIVE`, the border pulses red, and the screen background adopts an emergency dark-red wash (`animate-beacon-flash`).
 
 ## 4. Standalone Observer Route — `/live-ops`
 

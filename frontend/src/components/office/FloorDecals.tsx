@@ -144,7 +144,7 @@ export const WalkwayGuide = memo(function WalkwayGuide({ axis, fixed, from, to }
   return <IsoBox x={footprint.x} y={footprint.y} z={0.023} w={footprint.w} d={footprint.d} h={0.001} color="#94a3b8" stroke="none" opacity={0.35} />;
 });
 
-// 3D ARCHITECTURAL ISOMETRIC FLOOR SIGNAGE
+// 3D ARCHITECTURAL ISOMETRIC FLOOR SIGNAGE WITH TACTICAL ACCENTS
 export const FloorSignage = memo(function FloorSignage({
   x,
   y,
@@ -164,22 +164,27 @@ export const FloorSignage = memo(function FloorSignage({
       ? `translate(${p.x}, ${p.y}) rotate(26.565) skewX(-30)`
       : `translate(${p.x}, ${p.y}) rotate(-26.565) skewX(30)`;
   return (
-    <text
-      transform={transform}
-      fill={color}
-      style={{
-        fontSize: "8.5px",
-        fontFamily: "'Rajdhani', monospace, sans-serif",
-        fontWeight: 800,
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        opacity: 0.65,
-        userSelect: "none",
-        pointerEvents: "none",
-      }}
-    >
-      {text}
-    </text>
+    <g transform={transform} style={{ pointerEvents: "none", userSelect: "none" }}>
+      {/* Tactical bracket pip */}
+      <circle cx={-5} cy={-2.5} r={1.2} fill={color} opacity={0.8} />
+      <text
+        x={0}
+        y={0}
+        fill={color}
+        style={{
+          fontSize: "8.5px",
+          fontFamily: "'Rajdhani', monospace, sans-serif",
+          fontWeight: 800,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          opacity: 0.75,
+        }}
+      >
+        {text}
+      </text>
+      {/* Accent underline */}
+      <line x1={0} y1={2.5} x2={text.length * 5.5} y2={2.5} stroke={color} strokeWidth={0.6} opacity={0.4} strokeDasharray="3 2" />
+    </g>
   );
 });
 
@@ -193,8 +198,7 @@ const POOL_COLORS: Record<PoolTone, string> = {
   blue: "#60a5fa",
 };
 
-// one radial gradient per tone, shared by every light pool and glow; replaces the old per-pool
-// blur() filter, which forced an offscreen blur pass for each ellipse on every repaint
+// Reusable radial and linear shader gradients, shared by every light pool, rack face, glass sheen, and holographic HUD
 export const LightGradients = memo(function LightGradients() {
   return (
     <>
@@ -205,6 +209,112 @@ export const LightGradients = memo(function LightGradients() {
           <stop offset="100%" stopColor={POOL_COLORS[tone]} stopOpacity={0} />
         </radialGradient>
       ))}
+
+      {/* High-tech brushed metallic chassis gradients */}
+      <linearGradient id="metallicRackFace" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#2a374a" />
+        <stop offset="50%" stopColor="#182334" />
+        <stop offset="100%" stopColor="#0c1322" />
+      </linearGradient>
+
+      <linearGradient id="metallicRackTop" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#3d4f66" />
+        <stop offset="50%" stopColor="#293749" />
+        <stop offset="100%" stopColor="#1e293b" />
+      </linearGradient>
+
+      {/* Tinted tempered glass specular diagonal sheen */}
+      <linearGradient id="rackGlassSheen" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="rgba(255,255,255,0.28)" />
+        <stop offset="25%" stopColor="rgba(56,189,248,0.12)" />
+        <stop offset="50%" stopColor="rgba(255,255,255,0)" />
+        <stop offset="75%" stopColor="rgba(56,189,248,0.1)" />
+        <stop offset="100%" stopColor="rgba(255,255,255,0.05)" />
+      </linearGradient>
+
+      {/* Individual blade server unit tray face */}
+      <linearGradient id="bladeTrayFace" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#283548" />
+        <stop offset="35%" stopColor="#16202e" />
+        <stop offset="100%" stopColor="#0c121d" />
+      </linearGradient>
+
+      {/* Chrome blade ejection handles */}
+      <linearGradient id="bladeHandle" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#94a3b8" />
+        <stop offset="50%" stopColor="#cbd5e1" />
+        <stop offset="100%" stopColor="#475569" />
+      </linearGradient>
+
+      {/* Holographic HUD rings */}
+      <radialGradient id="hologramHudCyan" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#00f0ff" stopOpacity={0.8} />
+        <stop offset="70%" stopColor="#0284c7" stopOpacity={0.3} />
+        <stop offset="100%" stopColor="#0369a1" stopOpacity={0} />
+      </radialGradient>
+
+      <radialGradient id="hologramHudRed" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#ef4444" stopOpacity={0.9} />
+        <stop offset="65%" stopColor="#b91c1c" stopOpacity={0.35} />
+        <stop offset="100%" stopColor="#7f1d1d" stopOpacity={0} />
+      </radialGradient>
+
+      {/* Emerald laser scanline gradient */}
+      <linearGradient id="laserScanGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" stopColor="rgba(16,185,129,0)" />
+        <stop offset="50%" stopColor="rgba(52,211,153,0.3)" />
+        <stop offset="90%" stopColor="rgba(110,231,183,0.9)" />
+        <stop offset="100%" stopColor="#ffffff" />
+      </linearGradient>
+
+      {/* Fiber optic patch lead glow */}
+      <linearGradient id="fiberGlowCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#38bdf8" />
+        <stop offset="50%" stopColor="#00f0ff" />
+        <stop offset="100%" stopColor="#0284c7" />
+      </linearGradient>
+
+      {/* Chrome reflection gradient for espresso machines and chair cylinders */}
+      <linearGradient id="chromeMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#f1f5f9" />
+        <stop offset="25%" stopColor="#94a3b8" />
+        <stop offset="50%" stopColor="#f8fafc" />
+        <stop offset="75%" stopColor="#64748b" />
+        <stop offset="100%" stopColor="#cbd5e1" />
+      </linearGradient>
+
+      {/* Modern dark carbon / slate workstation surface */}
+      <linearGradient id="carbonDeskFace" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#1e293b" />
+        <stop offset="50%" stopColor="#151e2e" />
+        <stop offset="100%" stopColor="#0f172a" />
+      </linearGradient>
+
+      <linearGradient id="carbonDeskTop" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#334155" />
+        <stop offset="60%" stopColor="#243142" />
+        <stop offset="100%" stopColor="#1e293b" />
+      </linearGradient>
+
+      {/* Boardroom tempered executive glass */}
+      <linearGradient id="boardroomGlassTop" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="rgba(56,189,248,0.35)" />
+        <stop offset="40%" stopColor="rgba(15,23,42,0.85)" />
+        <stop offset="70%" stopColor="rgba(14,165,233,0.25)" />
+        <stop offset="100%" stopColor="rgba(15,23,42,0.92)" />
+      </linearGradient>
+
+      {/* Botanical lush foliage gradients */}
+      <linearGradient id="foliageDark" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#15803d" />
+        <stop offset="100%" stopColor="#052e16" />
+      </linearGradient>
+
+      <linearGradient id="foliageLight" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#4ade80" />
+        <stop offset="60%" stopColor="#22c55e" />
+        <stop offset="100%" stopColor="#16a34a" />
+      </linearGradient>
     </>
   );
 });

@@ -27,21 +27,16 @@ interface ServerRackProps {
   onLeave: () => void;
 }
 
-// solid-fill alert badge tones per severity (distinct from severity.ts's translucent pill tones,
-// which are tuned for text badges rather than this small circular "!" marker)
+// solid-fill alert badge tones per severity
 const ALERT_BADGE_TONE: Record<IncidentSeverity, string> = {
-  P1_CRITICAL: "bg-rose-500 border-rose-600 text-white",
-  P2_HIGH: "bg-amber-400 border-amber-500 text-amber-950",
-  P3_MEDIUM: "bg-yellow-300 border-yellow-400 text-yellow-900",
+  P1_CRITICAL: "bg-rose-500 border-rose-600 text-white shadow-[0_0_10px_rgba(244,63,94,0.7)]",
+  P2_HIGH: "bg-amber-400 border-amber-500 text-amber-950 shadow-[0_0_8px_rgba(251,191,36,0.6)]",
+  P3_MEDIUM: "bg-yellow-300 border-yellow-400 text-yellow-900 shadow-[0_0_6px_rgba(253,224,71,0.5)]",
   P4_LOW: "bg-slate-300 border-slate-400 text-slate-800",
 };
 
-// how long the mitigating wrench shows while the server-side action lands, before the recover
-// sequence (or this timeout, if the fix did not clear the service) takes over
 const MITIGATE_SHOWN_MS = 2600;
-// the spawn flash is a 500 ms keyframe; the element is unmounted when it ends
 const RAISED_FLASH_MS = 500;
-// smoke, sparks and the alert badge fade over this long when a rack calms down
 const FX_FADE_MS = 600;
 
 // footprint and height tuned to roughly 1.8-2x a standing office worker sprite (~38px tall)
@@ -55,9 +50,9 @@ const LED_PERIOD_MS: Record<"breathe" | "stutter", number> = { breathe: 3200, st
 
 type BadStatus = "degraded" | "down";
 
-// ISOMETRIC 42U ENTERPRISE SERVER CABINET REPRESENTING ONE MICROSERVICE, WITH LED HEALTH AND INCIDENT FX.
-// state changes are staged rather than snapped: a failing rack shakes once, a recovering rack fades its
-// smoke, runs an emerald scan up its face, brings its LEDs back green in sequence and spins its fan up.
+// HIGH-TECH 42U ENTERPRISE SERVER CABINET REPRESENTING ONE MICROSERVICE:
+// Multi-blade server trays (1U/2U), glowing fiber patch leads, smoked tempered glass door with specular sheen,
+// floating holographic telemetry reticle, and staged incident/recovery VFX.
 function ServerRack({ service, x, y, selected, severity, investigating, dimmed, onSelect, onHover, onLeave }: ServerRackProps) {
   const t = useTranslation();
   const dismissRunAnimation = useGameStore((s) => s.dismissRunAnimation);
@@ -75,7 +70,6 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
     return () => clearTimeout(timer);
   }, [raisedAnim, dismissRunAnimation]);
 
-  // the wrench hands off to the recover sequence the moment the service comes back healthy
   const handedOff = Boolean(recoverAnim);
   useEffect(() => {
     if (!mitigateAnim) return;
@@ -83,8 +77,6 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
     return () => clearTimeout(timer);
   }, [mitigateAnim, handedOff, dismissRunAnimation]);
 
-  // hold the previous status' fx while they fade out. derived during render (not in an effect) so the
-  // frame the status flips never shows a rack with its smoke already gone
   const [prevStatus, setPrevStatus] = useState(status);
   const [held, setHeld] = useState<BadStatus | null>(null);
   if (prevStatus !== status) {
@@ -98,40 +90,80 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
     return () => clearTimeout(timer);
   }, [held]);
 
-  // remembered across renders for the led recolour and the fan spin-up
   const lastBad = useRef<BadStatus>("down");
   if (status !== "healthy") lastBad.current = status;
   const spunUp = useRef(false);
   if (status !== "healthy") spunUp.current = false;
   else if (recoverAnim) spunUp.current = true;
 
-  // anomaly: elevated latency or error rate even while status is still classified as healthy
   const isAnomalous = hasPredictiveDetection && status === "healthy" && (service.latency_ms > 110 || service.error_rate > 0.012);
 
   const height = service.tier === "critical" ? RACK_HEIGHT_CRITICAL : RACK_HEIGHT_STANDARD;
   const pattern = ledPatternFor(status);
   const booting = status === "healthy" && Boolean(recoverAnim);
 
+  // primary diagnosis LEDs
   const ledPoints = useMemo(
-    () => Array.from({ length: LED_COUNT }).map((_, i) => project(x + RACK_WIDTH * 0.72, y + RACK_DEPTH, height * 0.3 + i * 0.2 + 0.1)),
+    () => Array.from({ length: LED_COUNT }).map((_, i) => project(x + RACK_WIDTH * 0.75, y + RACK_DEPTH, height * 0.35 + i * 0.22 + 0.1)),
     [x, y, height]
   );
 
-  // perforated mesh door texture: a faint dot grid across the front-right face
-  const meshPoints = useMemo(() => {
-    const dots = [];
-    const rows = Math.round(height / 0.12);
-    for (let r = 1; r < rows; r++) {
-      dots.push(project(x + RACK_WIDTH * 0.28, y + RACK_DEPTH, r * 0.12));
-    }
-    return dots;
+  // blade server bays on the front face (y + RACK_DEPTH)
+  const bladeCount = service.tier === "critical" ? 8 : 7;
+  const bladeHeight = 0.11;
+  const bladeGap = 0.022;
+  const bladeStartY = 0.1;
+
+  const blades = useMemo(() => {
+    return Array.from({ length: bladeCount }).map((_, i) => {
+      const bz = bladeStartY + i * (bladeHeight + bladeGap);
+      const topLeft = project(x + 0.04, y + RACK_DEPTH, bz + bladeHeight);
+      const topRight = project(x + RACK_WIDTH - 0.04, y + RACK_DEPTH, bz + bladeHeight);
+      const bottomRight = project(x + RACK_WIDTH - 0.04, y + RACK_DEPTH, bz);
+      const bottomLeft = project(x + 0.04, y + RACK_DEPTH, bz);
+      const points = `${topLeft.x},${topLeft.y} ${topRight.x},${topRight.y} ${bottomRight.x},${bottomRight.y} ${bottomLeft.x},${bottomLeft.y}`;
+
+      const leftHandle = project(x + 0.07, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+      const rightHandle = project(x + RACK_WIDTH - 0.07, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+      const pwrLed = project(x + RACK_WIDTH - 0.13, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+      const actLed = project(x + RACK_WIDTH - 0.17, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+      const ventA = project(x + 0.16, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+      const ventB = project(x + 0.23, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+      const ventC = project(x + 0.30, y + RACK_DEPTH, bz + bladeHeight * 0.5);
+
+      return {
+        id: i,
+        points,
+        leftHandle,
+        rightHandle,
+        pwrLed,
+        actLed,
+        vents: [ventA, ventB, ventC],
+      };
+    });
+  }, [x, y, bladeCount]);
+
+  // front tinted glass door polygon
+  const glassPoints = useMemo(() => {
+    const tl = project(x + 0.02, y + RACK_DEPTH + 0.005, height - 0.04);
+    const tr = project(x + RACK_WIDTH - 0.02, y + RACK_DEPTH + 0.005, height - 0.04);
+    const br = project(x + RACK_WIDTH - 0.02, y + RACK_DEPTH + 0.005, 0.05);
+    const bl = project(x + 0.02, y + RACK_DEPTH + 0.005, 0.05);
+    return `${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`;
   }, [x, y, height]);
 
-  // recessed patch panel strip near the base with a row of tiny port outlines
-  const patchPorts = useMemo(
-    () => Array.from({ length: 4 }).map((_, i) => project(x + RACK_WIDTH * (0.2 + i * 0.18), y + RACK_DEPTH, 0.08)),
-    [x, y]
-  );
+  // fiber patch leads curving from top switch
+  const fiberCables = useMemo(() => {
+    const sw1 = project(x + 0.20, y + RACK_DEPTH, height - 0.06);
+    const sw2 = project(x + 0.32, y + RACK_DEPTH, height - 0.06);
+    const target1 = project(x + 0.36, y + RACK_DEPTH, bladeStartY + (bladeHeight + bladeGap) * 2);
+    const target2 = project(x + 0.38, y + RACK_DEPTH, bladeStartY + (bladeHeight + bladeGap) * 4);
+
+    return [
+      `M ${sw1.x},${sw1.y} Q ${sw1.x + 8},${(sw1.y + target1.y) / 2} ${target1.x},${target1.y}`,
+      `M ${sw2.x},${sw2.y} Q ${sw2.x + 10},${(sw2.y + target2.y) / 2} ${target2.x},${target2.y}`,
+    ];
+  }, [x, y, height]);
 
   const bubbleAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height + 0.45);
   const wrenchAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height * 0.6);
@@ -141,7 +173,7 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
   const floorReflectionAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, 0.025);
   const baseAnchor = project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, 0);
 
-  // scan bar: a chevron across the two visible faces, climbing the cabinet
+  // scan bar: a chevron across the two visible faces
   const scanPoints = useMemo(() => {
     const z = 0.04;
     return [project(x, y + RACK_DEPTH, z), project(x + RACK_WIDTH, y + RACK_DEPTH, z), project(x + RACK_WIDTH, y, z)]
@@ -149,11 +181,21 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
       .join(" ");
   }, [x, y]);
 
+  // tactical hexagonal selection pad coordinates on the floor
+  const hexPadPoints = useMemo(() => {
+    const rad = 28;
+    const pts = [];
+    for (let a = 0; a < 6; a++) {
+      const angle = (a * 60 * Math.PI) / 180;
+      pts.push(`${baseAnchor.x + rad * Math.cos(angle)},${baseAnchor.y + (rad * 0.5) * Math.sin(angle)}`);
+    }
+    return pts.join(" ");
+  }, [baseAnchor.x, baseAnchor.y]);
+
   const unhealthy = status !== "healthy";
   const showBadge = unhealthy || held !== null;
   const showDegradedFx = status === "degraded" || held === "degraded";
   const showDownFx = status === "down" || held === "down";
-  // an fx layer that is only here because it is fading out
   const degradedFading = status !== "degraded";
   const downFading = status !== "down";
   const badgeFading = status === "healthy";
@@ -169,59 +211,159 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
       onMouseMove={(e) => onHover(service.id, e)}
       onMouseLeave={onLeave}
       data-rack-service-id={service.id}
-      className="cursor-pointer transition-opacity duration-300"
+      className="cursor-pointer transition-opacity duration-300 select-none group"
       style={{ opacity: dimmed ? 0.35 : 1 }}
     >
-      {/* the ground shadow stays put when the cabinet shakes */}
-      <GroundShadow x={x + RACK_WIDTH / 2} y={y + RACK_DEPTH / 2} rx={16} ry={8} />
+      {/* ground shadow stays put during shake */}
+      <GroundShadow x={x + RACK_WIDTH / 2} y={y + RACK_DEPTH / 2} rx={18} ry={9} />
 
-      {/* localized floor reflection, tinted by the worst active incident's severity so a P1 reads
-          hotter/more saturated than a P2/P3 on the same rack -- confined to this cabinet's tile so
-          several simultaneous incidents never bleed into each other */}
+      {/* tactical hexagonal selection pad on floor */}
+      {selected && (
+        <g pointerEvents="none" className="ol-hex-select">
+          <polygon
+            points={hexPadPoints}
+            fill="none"
+            stroke="#00f0ff"
+            strokeWidth={1.4}
+            strokeDasharray="6 3"
+            opacity={0.8}
+            style={{ filter: "drop-shadow(0 0 6px rgba(0,240,255,0.7))" }}
+          />
+          <polygon
+            points={hexPadPoints}
+            fill="rgba(6,182,212,0.15)"
+            stroke="none"
+          />
+          {/* crosshair ticks at base */}
+          <line x1={baseAnchor.x - 34} y1={baseAnchor.y} x2={baseAnchor.x - 22} y2={baseAnchor.y} stroke="#00f0ff" strokeWidth={1} opacity={0.7} />
+          <line x1={baseAnchor.x + 22} y1={baseAnchor.y} x2={baseAnchor.x + 34} y2={baseAnchor.y} stroke="#00f0ff" strokeWidth={1} opacity={0.7} />
+        </g>
+      )}
+
+      {/* localized floor reflection tinted by severity */}
       {sevTone ? (
         <ellipse
           cx={floorReflectionAnchor.x}
           cy={floorReflectionAnchor.y}
-          rx={sevTone.urgent ? 21 : 18}
-          ry={9}
+          rx={sevTone.urgent ? 24 : 20}
+          ry={10}
           fill={sevTone.glow}
-          opacity={sevTone.urgent ? 0.45 : 0.28}
+          opacity={sevTone.urgent ? 0.55 : 0.35}
           className="animate-glow-pulse"
         />
       ) : (
         status === "down" && (
-          <ellipse cx={floorReflectionAnchor.x} cy={floorReflectionAnchor.y} rx={19} ry={9} fill="#ef4444" opacity={0.4} className="animate-glow-pulse" />
+          <ellipse
+            cx={floorReflectionAnchor.x}
+            cy={floorReflectionAnchor.y}
+            rx={22}
+            ry={10}
+            fill="#ef4444"
+            opacity={0.45}
+            className="animate-glow-pulse"
+          />
         )
       )}
 
-      {/* selection highlight pad on the shared floor */}
-      <IsoBox
-        x={x - 0.06}
-        y={y - 0.06}
-        z={0.024}
-        w={RACK_WIDTH + 0.12}
-        d={RACK_DEPTH + 0.12}
-        h={0.015}
-        color={selected ? "#93c5fd" : "#e7e0d2"}
-        opacity={selected ? 0.9 : 0}
-      />
-
-      {/* everything that belongs to the cabinet itself; a failure shakes this group once */}
+      {/* CABINET ASSEMBLY: shakes once on failure */}
       <g className={failAnim ? "ol-rack-shake" : undefined}>
-        <IsoBox x={x} y={y} z={0.03} w={RACK_WIDTH} d={RACK_DEPTH} h={height} color={CABINET_COLOR[status]} className="ol-tint" />
+        {/* main high-tech brushed metal chassis with bevel highlight */}
+        <IsoBox
+          x={x}
+          y={y}
+          z={0.03}
+          w={RACK_WIDTH}
+          d={RACK_DEPTH}
+          h={height}
+          color={CABINET_COLOR[status]}
+          fillLeft="url(#metallicRackFace)"
+          fillRight="url(#metallicRackFace)"
+          fillTop="url(#metallicRackTop)"
+          highlightTop
+          stroke="rgba(15,23,42,0.85)"
+          strokeWidth={0.8}
+          className="ol-tint"
+        />
 
-        {/* perforated mesh front door texture */}
-        {meshPoints.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={0.8} fill="rgba(0,0,0,0.35)" />
+        {/* corner vertical pilasters & industrial bevel frames */}
+        <line
+          x1={project(x, y + RACK_DEPTH, 0.03).x}
+          y1={project(x, y + RACK_DEPTH, 0.03).y}
+          x2={project(x, y + RACK_DEPTH, height + 0.03).x}
+          y2={project(x, y + RACK_DEPTH, height + 0.03).y}
+          stroke="rgba(56,189,248,0.3)"
+          strokeWidth={0.7}
+        />
+        <line
+          x1={project(x + RACK_WIDTH, y + RACK_DEPTH, 0.03).x}
+          y1={project(x + RACK_WIDTH, y + RACK_DEPTH, 0.03).y}
+          x2={project(x + RACK_WIDTH, y + RACK_DEPTH, height + 0.03).x}
+          y2={project(x + RACK_WIDTH, y + RACK_DEPTH, height + 0.03).y}
+          stroke="rgba(56,189,248,0.2)"
+          strokeWidth={0.7}
+        />
+
+        {/* INDIVIDUAL BLADE SERVER TRAYS */}
+        {blades.map((b) => (
+          <g key={b.id} className="transition-all duration-300">
+            {/* blade tray front face */}
+            <polygon
+              points={b.points}
+              fill="url(#bladeTrayFace)"
+              stroke="rgba(30,41,59,0.7)"
+              strokeWidth={0.4}
+            />
+
+            {/* release latch handles (chrome/steel) */}
+            <rect x={b.leftHandle.x - 1} y={b.leftHandle.y - 1.8} width={1.8} height={3.6} rx={0.6} fill="url(#bladeHandle)" stroke="#1e293b" strokeWidth={0.2} />
+            <rect x={b.rightHandle.x - 1} y={b.rightHandle.y - 1.8} width={1.8} height={3.6} rx={0.6} fill="url(#bladeHandle)" stroke="#1e293b" strokeWidth={0.2} />
+
+            {/* ventilation micro-slits */}
+            {b.vents.map((v, vi) => (
+              <line key={vi} x1={v.x - 1.5} y1={v.y - 1} x2={v.x + 1.5} y2={v.y + 1} stroke="rgba(0,0,0,0.6)" strokeWidth={0.5} strokeLinecap="round" />
+            ))}
+
+            {/* blade power LED */}
+            <circle cx={b.pwrLed.x} cy={b.pwrLed.y} r={0.8} fill={status === "down" ? "#ef4444" : status === "degraded" ? "#f59e0b" : "#10b981"} />
+
+            {/* blade I/O activity micro-LED (simulates active data packets) */}
+            <circle
+              cx={b.actLed.x}
+              cy={b.actLed.y}
+              r={0.75}
+              fill={status === "down" ? "#7f1d1d" : status === "degraded" ? "#f59e0b" : "#00f0ff"}
+              className={status !== "down" ? "ol-blade-led" : undefined}
+              style={{ animationDelay: `${(b.id * 130) % 650}ms` }}
+            />
+          </g>
         ))}
 
-        {/* recessed patch panel with sequenced ports */}
-        {patchPorts.map((p, i) => (
-          <rect key={i} x={p.x - 1} y={p.y - 0.7} width={2} height={1.4} fill="#0f172a" stroke="#525252" strokeWidth={0.3} />
+        {/* GLOWING FIBER OPTIC PATCH CABLES (routing down from top management switch) */}
+        {fiberCables.map((d, fi) => (
+          <path
+            key={fi}
+            d={d}
+            fill="none"
+            stroke={status === "down" ? "#ef4444" : status === "degraded" ? "#fbbf24" : "url(#fiberGlowCyan)"}
+            strokeWidth={0.85}
+            strokeDasharray="4 2"
+            strokeLinecap="round"
+            className="ol-dash-12"
+            style={{ opacity: status === "down" ? 0.4 : 0.85, filter: status === "down" ? undefined : "drop-shadow(0 0 2px rgba(0,240,255,0.8))" }}
+          />
         ))}
 
-        {/* led status column: healthy breathes slowly, degraded stutters amber, down is solid red;
-            each led has its own phase, and on recovery they turn green one after another */}
+        {/* SMOKED ACRYLIC / TEMPERED GLASS DOOR WITH SPECULAR DIAGONAL SHEEN */}
+        <polygon
+          points={glassPoints}
+          fill="url(#rackGlassSheen)"
+          stroke="rgba(56,189,248,0.25)"
+          strokeWidth={0.5}
+          opacity={0.65}
+          pointerEvents="none"
+        />
+
+        {/* PRIMARY STATUS DIAGNOSIS LEDS */}
         {ledPoints.map((p, i) => {
           const period = pattern === "solid" ? 0 : LED_PERIOD_MS[pattern];
           const patternClass = pattern === "breathe" ? "ol-led-healthy" : pattern === "stutter" ? "ol-led-stutter" : "";
@@ -230,12 +372,12 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
               key={i}
               cx={p.x}
               cy={p.y}
-              r={2}
+              r={2.2}
               fill={LED_COLOR[status]}
               className={`ol-led ${booting ? "ol-led-boot" : patternClass}`}
               style={
                 {
-                  filter: `drop-shadow(0 0 3px ${LED_COLOR[status]}cc)`,
+                  filter: `drop-shadow(0 0 4px ${LED_COLOR[status]})`,
                   "--ol-led-from": LED_COLOR[lastBad.current],
                   animationDelay: booting ? `${150 + i * 200}ms` : period ? `${ledPhaseMs(service.id, i, period)}ms` : undefined,
                 } as CSSProperties
@@ -244,29 +386,43 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
           );
         })}
 
-        {/* sky-blue investigation pulse: the one extra signal for "under investigation", shown only
-            while this exact incident is open in the log-triage terminal -- never stacked with any
-            other extra effect on the same rack */}
+        {/* investigation beacon */}
         {investigating && (
           <circle
             cx={bubbleAnchor.x}
             cy={bubbleAnchor.y - 6}
-            r={3.2}
+            r={3.4}
             fill="#38bdf8"
-            style={{ filter: "drop-shadow(0 0 4px rgba(56,189,248,0.9))" }}
+            style={{ filter: "drop-shadow(0 0 6px rgba(56,189,248,0.95))" }}
             className="animate-beacon-flash"
           />
         )}
 
-        {/* rooftop cooling fan: spins while healthy, spins back up after a recovery, stops otherwise */}
+        {/* ROOFTOP COOLING TURBINE FAN WITH MULTI-BLADE ROTOR */}
         <g
           className={status !== "healthy" ? "" : spunUp.current ? "ol-fan-spinup" : "ol-fan"}
           style={{ transformOrigin: `${fanAnchor.x}px ${fanAnchor.y}px` }}
         >
-          <circle cx={fanAnchor.x} cy={fanAnchor.y} r={4} fill="none" stroke="#94a3b8" strokeWidth={1.2} strokeDasharray="2.4 2.4" />
+          {/* outer turbine intake shroud */}
+          <circle cx={fanAnchor.x} cy={fanAnchor.y} r={4.6} fill="#0f172a" stroke="#475569" strokeWidth={0.8} />
+          {/* turbine blades */}
+          {[0, 60, 120, 180, 240, 300].map((deg) => (
+            <line
+              key={deg}
+              x1={fanAnchor.x}
+              y1={fanAnchor.y}
+              x2={fanAnchor.x + 4.2 * Math.cos((deg * Math.PI) / 180)}
+              y2={fanAnchor.y + 4.2 * Math.sin((deg * Math.PI) / 180)}
+              stroke="#94a3b8"
+              strokeWidth={0.9}
+              strokeLinecap="round"
+            />
+          ))}
+          {/* center spinner hub */}
+          <circle cx={fanAnchor.x} cy={fanAnchor.y} r={1.6} fill="#cbd5e1" />
         </g>
 
-        {/* thin dark smoke wisping from the vent grille: a mid-tier warning before the rack fully dies */}
+        {/* DEGRADED FAILURE FX: thin dark smoke */}
         {showDegradedFx && (
           <g className={degradedFading ? "ol-fx-fade motion-only" : undefined}>
             {[0, 0.5].map((delay, i) => (
@@ -274,9 +430,9 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
                 key={`degraded-smoke-${i}`}
                 cx={wrenchAnchor.x + (i - 0.5) * 3}
                 cy={wrenchAnchor.y - 6}
-                r={2}
+                r={2.4}
                 fill="#3f3f46"
-                opacity={0.45}
+                opacity={0.5}
                 className="animate-smoke-rise"
                 style={{ animationDelay: `${delay}s` }}
               />
@@ -284,7 +440,7 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
           </g>
         )}
 
-        {/* flames, arcing sparks and a dense smoke column from a fully downed node */}
+        {/* DOWN CRITICAL FAILURE FX: dense smoke, sparks, licking flame */}
         {showDownFx && (
           <g className={downFading ? "ol-fx-fade motion-only" : undefined}>
             {[0, 0.2, 0.4].map((delay, i) => (
@@ -292,22 +448,22 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
                 key={`spark-${i}`}
                 cx={sparkAnchor.x + i * 2.5}
                 cy={sparkAnchor.y - i * 1.5}
-                r={1.3}
+                r={1.5}
                 fill="#fde047"
                 className="animate-spark-flicker"
                 style={{ animationDelay: `${delay}s` }}
               />
             ))}
-            {/* electric arc jumping between two contact points, flickering on/off like a short circuit */}
+            {/* electric arc jumping between contact points */}
             <path
               d={`M ${sparkAnchor.x - 2},${sparkAnchor.y + 1} L ${sparkAnchor.x + 1.5},${sparkAnchor.y - 2} L ${sparkAnchor.x},${sparkAnchor.y + 0.5} L ${sparkAnchor.x + 3},${sparkAnchor.y - 3}`}
               stroke="#e0f2fe"
-              strokeWidth={0.8}
+              strokeWidth={0.9}
               fill="none"
               className="animate-spark-flicker"
               style={{ animationDelay: "0.1s" }}
             />
-            {/* small stylized flame licking up from the vent */}
+            {/* stylized licking flame */}
             <path
               d={`M ${wrenchAnchor.x - 1},${wrenchAnchor.y - 2} q -2,-4 0,-7 q 2,3 0.5,4.5 q 2,-2 0.5,-5.5 q 2.5,3 1,7 q -0.5,2 -2,1`}
               fill="#f97316"
@@ -320,7 +476,7 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
               className="animate-spark-flicker"
               style={{ animationDelay: "0.35s" }}
             />
-            {/* electrical discharge from the top: short bright streaks flung outwards, out of phase */}
+            {/* electrical top discharge lines (PRESERVES TEST CONTRACT data-testid="rack-top-spark") */}
             {[
               { dx: -9, dy: -7, delay: 0 },
               { dx: 8, dy: -9, delay: 0.17 },
@@ -334,55 +490,43 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
                 x2={topAnchor.x + s.dx}
                 y2={topAnchor.y + s.dy}
                 stroke="#fef08a"
-                strokeWidth={1}
+                strokeWidth={1.2}
                 strokeLinecap="round"
                 className="ol-spark-burst"
                 data-testid="rack-top-spark"
                 style={{ animationDelay: `${s.delay}s` }}
               />
             ))}
-            {/* dense smoke column venting from the top, wider and slower than the vent wisps below */}
+            {/* dense rising smoke column */}
             {[0, 0.6, 1.2, 1.8].map((delay, i) => (
               <circle
                 key={`top-smoke-${i}`}
                 cx={topAnchor.x + (i % 2 === 0 ? -2.5 : 2.5)}
                 cy={topAnchor.y - 2}
-                r={3.4 + i * 0.5}
+                r={3.6 + i * 0.5}
                 fill="#475569"
-                opacity={0.55}
+                opacity={0.65}
                 className="ol-smoke-plume"
-                style={{ animationDelay: `${delay}s` }}
-              />
-            ))}
-            {[0, 0.4, 0.8].map((delay, i) => (
-              <circle
-                key={`smoke-${i}`}
-                cx={wrenchAnchor.x + (i - 1) * 3.4}
-                cy={wrenchAnchor.y - 6}
-                r={2.8}
-                fill="#64748b"
-                opacity={0.6}
-                className="animate-smoke-rise"
                 style={{ animationDelay: `${delay}s` }}
               />
             ))}
           </g>
         )}
 
-        {/* predictive anomaly pulse: aura around base and warning radar badge above rack */}
+        {/* PREDICTIVE ANOMALY RADAR */}
         {isAnomalous && (
           <>
             <ellipse
               cx={baseAnchor.x}
               cy={baseAnchor.y}
-              rx={20}
-              ry={12}
+              rx={22}
+              ry={13}
               fill="none"
               stroke="#f59e0b"
-              strokeWidth={1.5}
+              strokeWidth={1.6}
               strokeDasharray="4 3"
               className="animate-pulse"
-              opacity={0.75}
+              opacity={0.8}
             />
             <foreignObject x={bubbleAnchor.x - 9} y={bubbleAnchor.y - 20} width={18} height={18} className="overflow-visible pointer-events-none">
               <div
@@ -395,10 +539,59 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
           </>
         )}
 
-        {/* bouncy cartoon alert badge for any active incident, colored by its severity so a P1
-            reads as more urgent than a P2/P3 at a glance rather than just by status. the pop-in
-            lives on the outer element and a calmer bob on the inner one, so neither overrides the
-            other's transform; on recovery it fades out with the rest of the fx */}
+        {/* FLOATING HOLOGRAPHIC TELEMETRY HUD OVER CABINET */}
+        {(selected || unhealthy) && (
+          <g transform={`translate(${bubbleAnchor.x}, ${bubbleAnchor.y - 26})`} pointerEvents="none">
+            {/* spinning tactical reticle */}
+            <circle
+              cx={0}
+              cy={0}
+              r={15}
+              fill="none"
+              stroke={unhealthy ? "#ef4444" : "#00f0ff"}
+              strokeWidth={0.8}
+              strokeDasharray="3 4"
+              className="ol-holo-spin"
+              opacity={0.7}
+            />
+            <circle
+              cx={0}
+              cy={0}
+              r={11}
+              fill="none"
+              stroke={unhealthy ? "#ef4444" : "#38bdf8"}
+              strokeWidth={0.6}
+              strokeDasharray="5 2"
+              className="ol-holo-spin-rev"
+              opacity={0.5}
+            />
+
+            {/* tactical status chip */}
+            <rect
+              x={-24}
+              y={-7}
+              width={48}
+              height={14}
+              rx={3}
+              fill="rgba(15,23,42,0.85)"
+              stroke={unhealthy ? "#ef4444" : "#00f0ff"}
+              strokeWidth={0.7}
+              className={unhealthy ? "ol-hazard-glitch" : undefined}
+              style={{ filter: "drop-shadow(0 0 5px rgba(0,240,255,0.4))" }}
+            />
+            <text
+              x={0}
+              y={3}
+              textAnchor="middle"
+              fill={unhealthy ? "#fca5a5" : "#38bdf8"}
+              style={{ fontSize: 6.5, fontWeight: 800, fontFamily: "monospace", letterSpacing: "0.08em" }}
+            >
+              {unhealthy ? (status === "down" ? "OFFLINE" : "ALERT") : `${service.tier.toUpperCase()}`}
+            </text>
+          </g>
+        )}
+
+        {/* ACTIVE INCIDENT ALERT BADGE */}
         {showBadge && (
           <foreignObject x={bubbleAnchor.x - 11} y={bubbleAnchor.y - 24} width={22} height={22} className="overflow-visible">
             <div className={`w-[22px] h-[22px] animate-pop-in${badgeFading ? " ol-fx-fade motion-only" : ""}`}>
@@ -419,28 +612,28 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
           </foreignObject>
         )}
 
-        {/* recovery: an emerald scan bar climbs the cabinet and a RESTORED chip rises above it */}
+        {/* RECOVERY LASER SCAN BAR & RESTORED BADGE */}
         {recoverAnim && (
           <>
             <polyline
               points={scanPoints}
               fill="none"
               stroke="#34d399"
-              strokeWidth={2.2}
+              strokeWidth={2.6}
               strokeLinejoin="round"
               strokeLinecap="round"
               className="ol-scan motion-only"
-              style={{ "--ol-rise": `${-(height - 0.1) * Z_SCALE}px`, filter: "drop-shadow(0 0 3px rgba(52,211,153,0.9))" } as CSSProperties}
+              style={{ "--ol-rise": `${-(height - 0.1) * Z_SCALE}px`, filter: "drop-shadow(0 0 5px rgba(52,211,153,1))" } as CSSProperties}
             />
             <g transform={`translate(${bubbleAnchor.x}, ${bubbleAnchor.y - 14})`}>
               <g className="ol-chip motion-only">
-                <rect x={-23} y={-8} width={46} height={11} rx={5.5} fill="#064e3b" stroke="#34d399" strokeWidth={0.8} />
+                <rect x={-26} y={-8} width={52} height={12} rx={6} fill="#064e3b" stroke="#34d399" strokeWidth={1} style={{ filter: "drop-shadow(0 0 8px rgba(52,211,153,0.7))" }} />
                 <text
                   x={0}
-                  y={0}
+                  y={0.5}
                   textAnchor="middle"
                   fill="#a7f3d0"
-                  style={{ fontSize: 6.2, fontWeight: 800, fontFamily: "monospace", letterSpacing: "0.12em" }}
+                  style={{ fontSize: 6.5, fontWeight: 900, fontFamily: "monospace", letterSpacing: "0.12em" }}
                 >
                   {t.officeLife.restored}
                 </text>
@@ -450,25 +643,23 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
         )}
       </g>
 
-      {/* one-shot entrance flash the instant this service's incident is raised: invisible at rest,
-          it blooms for 500 ms and is unmounted by the timer above. decorative, so it disappears
-          entirely under reduced motion instead of freezing as a solid blob */}
+      {/* ONE-SHOT ENTRANCE FLASH */}
       {raisedAnim && (
         <ellipse
           cx={bubbleAnchor.x}
           cy={project(x + RACK_WIDTH / 2, y + RACK_DEPTH / 2, height * 0.5).y}
-          rx={26}
-          ry={30}
+          rx={28}
+          ry={32}
           fill={sevTone?.glow ?? "rgba(248,113,113,0.9)"}
           className="ol-spawn-flash motion-only"
           style={{ opacity: 0 }}
         />
       )}
 
-      {/* wrench overlay while a mitigation is being applied, until the recover sequence takes over */}
+      {/* MITIGATION WRENCH OVERLAY */}
       {mitigateAnim && !recoverAnim && (
         <foreignObject x={wrenchAnchor.x - 9} y={wrenchAnchor.y - 9} width={18} height={18} className="overflow-visible">
-          <div className="w-[18px] h-[18px] flex items-center justify-center text-amber-400 animate-wrench-turn">
+          <div className="w-[18px] h-[18px] flex items-center justify-center text-amber-400 animate-wrench-turn filter drop-shadow-[0_0_6px_rgba(245,158,11,0.8)]">
             <Wrench className="w-3.5 h-3.5" fill="currentColor" />
           </div>
         </foreignObject>
@@ -478,3 +669,4 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
 }
 
 export default memo(ServerRack);
+

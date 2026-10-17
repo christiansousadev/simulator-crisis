@@ -24,17 +24,19 @@ interface EngineeringFloorProps {
 // engineer on a service). it is bare until somebody takes it, its screens light once they sit down
 const ReserveDesk = memo(function ReserveDesk({ x, y, index }: { x: number; y: number; index: number }) {
   const occupied = useRosterStage((s) => s.walkers.some((w) => w.seated && w.nodeId === reserveSeatNodeId(index)));
-  const screen = occupied ? "#38bdf8" : "#1e293b";
+  const screen = occupied ? "#38bdf8" : "#0f172a";
   return (
     <g>
       <GroundShadow x={x + 0.5} y={y + 0.45} rx={20} ry={10} />
-      <IsoBox x={x} y={y} z={0.03} w={1.0} d={0.55} h={0.28} color="#b98a5a" />
+      <IsoBox x={x} y={y} z={0.03} w={1.0} d={0.55} h={0.28} fillLeft="url(#carbonDeskFace)" fillRight="url(#carbonDeskFace)" fillTop="url(#carbonDeskTop)" stroke="rgba(255,255,255,0.08)" highlightTop />
       <PcTower x={x + 0.05} y={y + 0.42} />
-      <IsoBox x={x + 0.12} y={y + 0.08} z={0.31} w={0.28} d={0.06} h={0.22} color={screen} />
-      <IsoBox x={x + 0.55} y={y + 0.08} z={0.31} w={0.28} d={0.06} h={0.22} color={screen} />
+      <IsoBox x={x + 0.1} y={y + 0.07} z={0.31} w={0.32} d={0.05} h={0.24} color={screen} stroke="#1e293b" highlightTop />
+      <IsoBox x={x + 0.52} y={y + 0.07} z={0.31} w={0.32} d={0.05} h={0.24} color={screen} stroke="#1e293b" highlightTop />
       <DeskLamp x={x + 0.9} y={y + 0.1} />
-      <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.08} h={0.4} color="#1e293b" />
-      <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.32} h={0.22} color="#475569" />
+      {/* Ergonomic chair */}
+      <IsoBox x={x + 0.46} y={y + 0.96} z={0.01} w={0.04} d={0.04} h={0.16} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.32} y={y + 0.85} z={0.17} w={0.32} d={0.26} h={0.07} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" stroke="rgba(255,255,255,0.08)" highlightTop />
+      <IsoBox x={x + 0.32} y={y + 0.85} z={0.24} w={0.32} d={0.07} h={0.32} fillLeft="#0f172a" fillRight="#1e293b" fillTop="#334155" stroke="rgba(255,255,255,0.08)" />
     </g>
   );
 });

@@ -272,3 +272,59 @@
 .ol-smoke-plume {
   animation: ol-smoke-plume 2.4s ease-out infinite;
 }
+
+/* ---- high-tech server blade activity & holographic HUD ---- */
+@keyframes ol-blade-activity {
+  0%, 100% { opacity: 0.95; }
+  20% { opacity: 0.25; }
+  40% { opacity: 1; }
+  60% { opacity: 0.4; }
+  85% { opacity: 0.85; }
+}
+.ol-blade-led {
+  animation: ol-blade-activity 0.65s linear infinite;
+}
+
+@keyframes ol-holo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ol-holo-spin {
+  animation: ol-holo-spin 14s linear infinite;
+}
+
+@keyframes ol-holo-spin-rev {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+.ol-holo-spin-rev {
+  animation: ol-holo-spin-rev 10s linear infinite;
+}
+
+@keyframes ol-holo-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.05); }
+}
+.ol-holo-pulse {
+  animation: ol-holo-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes ol-hex-expand {
+  0% { transform: scale(0.85); opacity: 0.3; }
+  50% { transform: scale(1.08); opacity: 0.85; }
+  100% { transform: scale(0.85); opacity: 0.3; }
+}
+.ol-hex-select {
+  animation: ol-hex-expand 2.6s ease-in-out infinite;
+}
+
+@keyframes ol-hazard-glitch {
+  0%, 90%, 100% { transform: translate(0, 0); opacity: 1; }
+  92% { transform: translate(-1.5px, 0.8px); opacity: 0.8; }
+  94% { transform: translate(1.5px, -0.6px); opacity: 1; }
+  96% { transform: translate(-0.8px, -0.4px); opacity: 0.9; }
+}
+.ol-hazard-glitch {
+  animation: ol-hazard-glitch 2.5s steps(2, start) infinite;
+}
+

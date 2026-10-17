@@ -123,24 +123,55 @@ function RackRadialMenu({ service, gridX, gridY, onFocusRack, onClose }: RackRad
     >
       {/* the scale-in lives on an inner group: the outer one positions itself with a css transform */}
       <g className="ol-radial">
-        {/* Orbital tactical ring */}
+        {/* Orbital tactical azimuth ring with outer notches */}
+        <circle
+          cx={0}
+          cy={0}
+          r={radius + 12}
+          fill="none"
+          stroke="rgba(56,189,248,0.18)"
+          strokeWidth={1}
+          strokeDasharray="2 6"
+          className="ol-holo-spin"
+        />
         <circle
           cx={0}
           cy={0}
           r={radius}
-          fill="none"
-          stroke="rgba(56,189,248,0.25)"
+          fill="rgba(5,8,17,0.4)"
+          stroke="rgba(56,189,248,0.35)"
           strokeWidth={1.5}
-          strokeDasharray="4 3"
-          className="animate-spin-slow"
+          strokeDasharray="8 4"
+          className="ol-holo-spin-rev"
         />
-        <circle cx={0} cy={0} r={radius + 10} fill="none" stroke="rgba(56,189,248,0.12)" strokeWidth={1} />
 
-        {/* Crosshair guide lines */}
-        <line x1={-radius - 8} y1={0} x2={-radius + 4} y2={0} stroke="rgba(56,189,248,0.5)" strokeWidth={1} />
-        <line x1={radius - 4} y1={0} x2={radius + 8} y2={0} stroke="rgba(56,189,248,0.5)" strokeWidth={1} />
-        <line x1={0} y1={-radius - 8} x2={0} y2={-radius + 4} stroke="rgba(56,189,248,0.5)" strokeWidth={1} />
-        <line x1={0} y1={radius - 4} x2={0} y2={radius + 8} stroke="rgba(56,189,248,0.5)" strokeWidth={1} />
+        {/* Tactical azimuth tick marks every 45 deg */}
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+          const rad = (deg * Math.PI) / 180;
+          const x1 = Math.cos(rad) * (radius - 5);
+          const y1 = Math.sin(rad) * (radius - 5);
+          const x2 = Math.cos(rad) * (radius + 5);
+          const y2 = Math.sin(rad) * (radius + 5);
+          return (
+            <line
+              key={deg}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke="rgba(0,240,255,0.4)"
+              strokeWidth={1.2}
+            />
+          );
+        })}
+
+        {/* Center reticle crosshairs */}
+        <circle cx={0} cy={0} r={7} fill="none" stroke="#00f0ff" strokeWidth={1} opacity={0.6} className="ol-holo-pulse" />
+        <circle cx={0} cy={0} r={2} fill="#00f0ff" opacity={0.8} />
+        <line x1={-radius - 12} y1={0} x2={-radius + 6} y2={0} stroke="rgba(0,240,255,0.6)" strokeWidth={1.2} />
+        <line x1={radius - 6} y1={0} x2={radius + 12} y2={0} stroke="rgba(0,240,255,0.6)" strokeWidth={1.2} />
+        <line x1={0} y1={-radius - 12} x2={0} y2={-radius + 6} stroke="rgba(0,240,255,0.6)" strokeWidth={1.2} />
+        <line x1={0} y1={radius - 6} x2={0} y2={radius + 12} stroke="rgba(0,240,255,0.6)" strokeWidth={1.2} />
 
         {/* Radial action nodes */}
         {buttons.map((btn, index) => {
@@ -174,15 +205,30 @@ function RackRadialMenu({ service, gridX, gridY, onFocusRack, onClose }: RackRad
                 style={{ animationDelay: `${index * STAGGER_MS}ms` }}
               >
                 {btn.disabled && <title>{t.officeLife.radial.noOpenIncident}</title>}
+
+                {/* Outer targeting bracket chevrons for interactive feedback */}
+                {!btn.disabled && (
+                  <g className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <path d="M -16,-8 L -18,-8 L -18,-18 L -8,-18 L -8,-16" fill="none" stroke="#00f0ff" strokeWidth={1.2} />
+                    <path d="M 16,-8 L 18,-8 L 18,-18 L 8,-18 L 8,-16" fill="none" stroke="#00f0ff" strokeWidth={1.2} />
+                    <path d="M -16,8 L -18,8 L -18,18 L -8,18 L -8,16" fill="none" stroke="#00f0ff" strokeWidth={1.2} />
+                    <path d="M 16,8 L 18,8 L 18,18 L 8,18 L 8,16" fill="none" stroke="#00f0ff" strokeWidth={1.2} />
+                  </g>
+                )}
+
+                {/* Main glass button capsule */}
                 <circle
                   cx={0}
                   cy={0}
-                  r={13}
-                  fill="#090d16"
+                  r={14}
+                  fill="#050811"
                   stroke={btn.color}
-                  strokeWidth={1.5}
-                  className="group-hover:stroke-sky-300 transition-colors shadow-lg"
+                  strokeWidth={1.8}
+                  className="group-hover:stroke-cyan-300 transition-colors shadow-lg"
+                  style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.8))" }}
                 />
+                <circle cx={0} cy={0} r={11.5} fill="none" stroke={btn.color} strokeWidth={0.5} opacity={0.4} />
+
                 {/* Center icon */}
                 <foreignObject x={-8} y={-8} width={16} height={16} className="overflow-visible pointer-events-none">
                   <div className="flex items-center justify-center w-full h-full text-slate-200 group-hover:text-white transition-colors">
@@ -190,23 +236,36 @@ function RackRadialMenu({ service, gridX, gridY, onFocusRack, onClose }: RackRad
                   </div>
                 </foreignObject>
 
-                {/* Label banner */}
-                <text
-                  x={0}
-                  y={by < 0 ? -17 : 22}
-                  textAnchor="middle"
-                  fill={btn.color}
-                  style={{
-                    fontSize: 6.5,
-                    fontWeight: 800,
-                    fontFamily: "monospace",
-                    letterSpacing: "0.1em",
-                    pointerEvents: "none",
-                    textShadow: "0 1px 3px rgba(0,0,0,0.9)",
-                  }}
-                >
-                  {btn.label}
-                </text>
+                {/* High-tech pill label banner */}
+                <g transform={`translate(0, ${by < 0 ? -22 : 24})`}>
+                  <rect
+                    x={-28}
+                    y={-7}
+                    width={56}
+                    height={12}
+                    rx={2}
+                    fill="#050811"
+                    stroke={btn.color}
+                    strokeWidth={0.6}
+                    opacity={0.9}
+                  />
+                  <text
+                    x={0}
+                    y={1.5}
+                    textAnchor="middle"
+                    fill={btn.color}
+                    style={{
+                      fontSize: 5.5,
+                      fontWeight: 800,
+                      fontFamily: "'Rajdhani', monospace, sans-serif",
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {btn.label}
+                  </text>
+                </g>
               </g>
             </g>
           );

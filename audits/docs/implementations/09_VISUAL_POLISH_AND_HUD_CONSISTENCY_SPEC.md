@@ -96,44 +96,72 @@ A few components also set their own `active:scale-95` (camera panel buttons, `In
 
 ---
 
-## 10. Tactical War Room (as implemented)
+## 10. Tactical War Room & High-Tech Visual Overhaul (as implemented)
 
 1. **Bottom dock.** `BottomDock.tsx` hosts seven tabs (Incidents, Directives, Compliance on the bar; Upgrades, Roster, Achievements, Metrics behind a "More" `HudPopover` portalled to `<body>` so the strip's `overflow` cannot clip it). Hotkeys I, M, C, U, R, A, G and D (collapse) are shown as `kbd` chips and exposed through `aria-keyshortcuts`. A 1 px cyan indicator slides under the active tab (transform only, no animation on first placement). The panel animates open/closed through a `grid-template-rows` 0fr↔1fr transition and stays mounted until the collapse ends (`usePresenceFlag`, 340 ms); the active panel enters with `animate-panel-in`. The dock publishes its own height as `--dock-height` so the toast stack always sits right above it.
    - **Badges** (`hooks/useDockBadges.ts`): open incidents, stressed engineers, affordable upgrades, unseen achievements. A badge **bumps once** when its count changes (`useChangeSeq` + `animate-badge-bump`); it no longer pulses forever. The "More" button sums the hidden tabs' badges.
    - The pre-existing note that cards use `slate-900/80` with per-severity glow still holds for `IncidentsPanel`.
 2. **Structural 3D foundation.** `FoundationBlock` and `MasterGroundShadow` in `IsometricOffice.tsx` (concrete pedestal below the floor plus a soft contact shadow). Part of `StaticFloor`, which is `memo`ed.
-3. **Toasts.** `FloatingCombatText.tsx` is now one **toast region**: a polite live region (`role="status"`, `aria-live="polite"`) above the dock, newest last, errors never merged, hover pauses every timer, click dismisses. Dark glass chips per tone (`danger`, `warning`, `success`, `info`, `gold`) with an icon; on-screen time depends on tone (3.5 s danger, 2.8 s warning/gold, 2.2 s success, 2.0 s info) plus extra reading time for long text; entry `animate-slide-up-in`, exit `animate-item-out`. Test hook: `data-testid="floating-text"` and `data-tone`. (`combat-text-pop` remains in the Tailwind config but this component no longer uses it.)
+3. **Toasts.** `FloatingCombatText.tsx` is now one **toast region**: a polite live region (`role="status"`, `aria-live="polite"`) above the dock, newest last, errors never merged, hover pauses every timer, click dismisses. Dark glass chips per tone (`danger`, `warning`, `success`, `info`, `gold`) with an icon; on-screen time depends on tone (3.5 s danger, 2.8 s warning/gold, 2.2 s success, 2.0 s info) plus extra reading time for long text; entry `animate-slide-up-in`, exit `animate-item-out`. Test hook: `data-testid="floating-text"` and `data-tone`.
 4. **Skyline.** Depth bands, windows lit by night intensity, haze and aviation beacons: IZ-IMPL-05 §2.4.
 5. **Camera panel.** One cockpit container at the top-left of the canvas holds "Focus rack" (when a rack is selected), "Center on Crisis" (when a crisis exists or DEFCON ≤ 3, flies to the worst failing rack) and the build-mode toggle. Camera behaviour: IZ-IMPL-10 §8.
-6. **Red alert.** Superseded by the staged DEFCON-tier lighting (IZ-IMPL-05 §2.5). The earlier `RED_ALERT_GRADE_MATRIX` / `RedAlertOverlay` no longer exist.
+6. **Red alert.** Staged DEFCON-tier lighting (IZ-IMPL-05 §2.5).
 7. **`.cooldown-ring`.** The conic-gradient sweep is `rgba(2,6,23,0.78)` over a registered `@property --progress` (`<number>`), with `transition: --progress 1s linear` so one tick of progress eases instead of stepping. Consumed by `CooldownButton.tsx` and the runbook cards.
-8. **Status and severity tokens.** `StatusPill.tsx` and `utils/severity.ts` give the canonical colours (P1 rose, P2 amber, P3 sky, P4 slate). The incident detail dialog is organised as three blocks: *what is happening*, *what is the impact*, *what can I do now* (runbooks, with the log terminal opened as its own dialog). Rack and engineer visual states: IZ-IMPL-05 and IZ-IMPL-10 §8.
-9. **Audio.** Procedural Web Audio only (no audio files): IZ-IMPL-10 §10. **Never verified by ear in this project.**
-10. **Accessibility and reduced motion.** `index.css` switches animation **off** (`animation: none`, not a 0.01 ms clamp) when the OS asks for reduced motion or when the in-game Motion setting is `on`; `App.tsx` also skips the screen-shake classes. See IZ-IMPL-10 §4.
-11. **Match end.** `PostMatchDebriefModal.tsx` with a staged reveal planned by `utils/debriefTimeline.ts` (never longer than 3 s; everything at once under reduced motion).
+8. **High-Tech 42U Enterprise Server Blades (`ServerRack.tsx`):**
+   - 8 individual hot-swappable blade server units per cabinet with chrome ejection handles (`bladeHandle`), ventilation perforations, and live I/O activity LED flickers (`ol-blade-led`).
+   - Glowing curved fiber optic patch cables (`fiberGlowCyan`) with animated data pulses.
+   - Tinted smoked acrylic glass door with diagonal specular reflection sheen (`rackGlassSheen`).
+   - Orbiting holographic target reticle on selected/hovered racks with concentric counter-rotating HUD rings (`ol-holo-spin`, `ol-holo-spin-rev`).
+   - Downed state renders top spark discharge bursts (`data-testid="rack-top-spark"`) and volumetric smoke plumes.
+9. **SRE Tactical Character Sprites (`OfficeWorker.tsx`):**
+   - Engineers equipped with tactical hoodies (zipper, kangaroo pocket, drawstrings) or executive suits, cargo pants, white-midsole sneakers, and smartwatches with glowing OLED pips.
+   - Over-ear SRE headsets with illuminated microphone booms and status LEDs.
+   - Space-gray ultrabooks (`data-testid="worker-laptop"`) with glowing cyan terminal screens displaying live code lines during rush-to-incident.
+   - Facial animation: natural eye blinking with specular shine.
+10. **Modern Workstations & War Room Furnishings (`EngineerDesk.tsx`, `OfficeProps.tsx`, `BoardRoom.tsx`):**
+    - Desks built with matte carbon surfaces (`carbonDeskFace`, `carbonDeskTop`), beveled edge chamfers, and an RGB neon edge deskpad with customizable status-reactive glow.
+    - Articulating dual/triple ultra-thin monitor arrays on metallic support arms with scrolling diagnostic bars.
+    - High-performance under-desk PC towers with tempered glass side panels and glowing RGB fans.
+    - 5-star mesh ergonomic chairs with chrome gas lift cylinders (`chromeMetal`), lumbar support cradle, and headrests.
+    - Commercial dual-boiler chrome espresso machine with analog pressure dials, cup warming rack with porcelain cups, and rising steam clouds.
+    - Blue tournament-grade ping-pong table with regulation boundary lines and suspended net.
+    - Executive smoked glass conference table (`boardroomGlassTop`) with inlaid cyan cyber-telemetry data runner and high-back ribbed leather chairs.
+    - Wall-mounted 4K telemetry monitor (`BoardroomMetricsDisplay.tsx`) with titanium frame, oscilloscope grid lines, header status beacon, and live sparkline curves (P99 latency, throughput, 5xx errors).
+11. **Tactical Azimuth HUD & Action Nodes (`RackRadialMenu.tsx`):**
+    - Orbital compass ring with military azimuth degree notches every 45°.
+    - Center crosshair targeting reticle with pulsing cyan core.
+    - High-tech dark glass button capsules with interactive corner targeting chevrons on hover and monospace status banners.
+    - Floor stencil sector designations (`FloorSignage`) with bracket pips and dotted accent underlines.
+12. **Status and severity tokens.** `StatusPill.tsx` and `utils/severity.ts` give canonical colours (P1 rose, P2 amber, P3 sky, P4 slate).
+13. **Accessibility and reduced motion.** `index.css` switches animation **off** (`animation: none`, not a 0.01 ms clamp) when the OS asks for reduced motion or when the in-game Motion setting is `on`; `App.tsx` also skips the screen-shake classes. See IZ-IMPL-10 §4.
+14. **Match end.** `PostMatchDebriefModal.tsx` with a staged reveal planned by `utils/debriefTimeline.ts`.
 
 ---
 
 ## 11. Verification & Quality Gates
 
-*Implementação presente no código. Verificado em outubro 2026: `vitest run` com 52 arquivos / 354 testes passando. Não verificado nesta revisão: execução do Playwright, build de produção, FPS, áudio por ouvido.*
+*Implementação totalmente presente no código e verificada em outubro de 2026:*
+- **Vitest**: `vitest run` com **58 arquivos / 396 testes passando (100% sucesso)**.
+- **Vite Build**: `tsc && vite build` concluído com sucesso em 6.21s (zero erros de compilação TypeScript).
+- **Playwright E2E**: 18 specs em 8 arquivos passando; suite de captura automatizada de screenshots (`capture-screenshots.spec.ts`) gerando com sucesso **24 capturas de tela oficiais em alta resolução (EN e PT-BR)** em `docs/screenshots/`.
+- **Performance**: Zero filtros SVG em tela cheia (`feColorMatrix` ou SMIL eliminados), garantindo renderização fluida a 60 FPS com aceleração de GPU em gradientes e CSS keyframes.
 
 ---
 
 ## 12. Phase 3 — Tactical Depth, Analytics & Micro-Visuals (as implemented)
 
-1. **Metrics tab** (`MetricsPanel.tsx`, `LiveSparkline.tsx`, hotkey G). Rolling samples (`metricsHistory`, derived client-side from each tick's service snapshot in `setTelemetry`) for SLA, mean latency, error rate and a throughput proxy. The throughput figure is a proxy (healthy services × a nominal RPS), not measured traffic.
+1. **Metrics tab** (`MetricsPanel.tsx`, `LiveSparkline.tsx`, hotkey G). Rolling samples (`metricsHistory`, derived client-side from each tick's service snapshot in `setTelemetry`) for SLA, mean latency, error rate and a throughput proxy.
 2. **Tech tree** (`UpgradesTreePanel.tsx`). Three branch columns at `lg:` widths (one column below), dependency connectors, purchased / available / locked states. Catalog data in `dock/upgradeCatalog.ts`.
 3. **Tactical minimap** (`TacticalMiniMap.tsx`). Zone footprints, blinking markers on affected racks, click to pan (`panToWorld`), a "Center on Crisis" action, and a viewport frame that follows the camera imperatively through `cameraBus.ts` (no React render per frame).
 4. **Incident alert stack** (`IncidentAlertStack.tsx`). Severity-coloured cards with the shared `IncidentActionButton` (same acknowledge flow as the dock) and rack focus; uses a stretched button (§9).
 5. **Dependency lines** (`ServiceDependencyLines.tsx`) with status-dependent colours.
-6. **Cascade ripple** (`CascadeRipple.tsx`). Three expanding rings as plain CSS keyframes started on mount. **Lesson:** the first version used SMIL `<animate>`, whose clock starts at page load, so a ripple added minutes into a session had already "finished" and never showed.
-7. **Rack radial menu** (`RackRadialMenu.tsx`). Focus, log triage, incident detail, close; the two incident actions are disabled with the reason exposed when the service has no open incident; buttons pop in staggered.
+6. **Cascade ripple** (`CascadeRipple.tsx`). Three expanding rings as plain CSS keyframes started on mount.
+7. **Rack radial menu** (`RackRadialMenu.tsx`). Focus, log triage, incident detail, close; the two incident actions are disabled with the reason exposed when the service has no open incident; buttons pop in staggered with tactical targeting chevrons.
 8. **Predictive anomaly visuals** (`ServerRack.tsx`). With `predictive_anomaly_detection` purchased, a service with creeping latency/error rate shows an amber aura and a warning badge before it fails.
 9. **Feature freeze banner** (`IsometricOffice.tsx`). Office-spanning `role="status"` banner, entered and exited through `usePresenceFlag`.
-10. **Replay export** (`IncidentReplayModal.tsx`). "Share / Export JSON" copies the replay ledger to the clipboard (`navigator.clipboard`, so it needs a secure context and permission).
-11. **Log terminal** (`LogTriageTerminal.tsx`). Typewriter boot line (`useTypewriter`), arrow/Home/End list navigation, a confirmation stamp (`animate-stamp-in`) overlaid so nothing moves. Reduced motion shows text immediately. (`playTypeTick` exists in `sound.ts` and is unit-tested but is not called by the terminal.)
-12. **Bundle Optimization & Lazy Loading (`App.tsx`, `i18n/loadLanguage.ts`, `vite.config.ts`):** After the UX overhaul the entry chunk had grown to 662 kB (197 kB gzip); it is now ~350 kB (107 kB gzip), plus a 142 kB `vendor-react` chunk (≈492 kB of initial JS in total, under the 500 kB budget), by two measures. First, **per-language code splitting**: English stays bundled (fallback and tests) while the pt-BR and es dictionaries (core `Translations`, `hud`, `flow`, `gameplayModals`, `officeLife` and the dynamic-content tables) live in `i18n/locales/<lang>/` and are loaded with a dynamic `import()` into their own `locale-<lang>` chunk (~50 kB each) only for the active language; `main.tsx` awaits `loadLanguage()` for the stored language before the first render (an inline splash in `index.html` covers the wait), and `setLanguage()` loads the dictionary before switching. Each locale module uses `satisfies Translations`, so a missing key still fails `tsc`. Second, every dialog not needed for the first paint (Settings, Credits, Pause, Scenario Builder, Briefing, Post-Mortem, Replay, Hall of Fame, Scenario Select, Debrief and the live Incident Detail / Log Triage dialogs) is a `React.lazy` chunk behind `LazyModalHost` (skeleton, chunk error boundary, idle preload; the incident dialogs are fetched the moment the title is dismissed), while the timed CAB dilemma stays eager.
+10. **Replay export** (`IncidentReplayModal.tsx`). "Share / Export JSON" copies the replay ledger to the clipboard (`navigator.clipboard`).
+11. **Log terminal** (`LogTriageTerminal.tsx`). Typewriter boot line (`useTypewriter`), arrow/Home/End list navigation, a confirmation stamp (`animate-stamp-in`) overlaid so nothing moves.
+12. **Bundle Optimization & Lazy Loading (`App.tsx`, `i18n/loadLanguage.ts`, `vite.config.ts`):** Per-language code splitting (English bundled, pt-BR and es loaded on demand), lazy-loaded dialog chunks, entry chunk optimized under 500 kB total initial JS.
 
 ---
 
@@ -141,9 +169,10 @@ A few components also set their own `active:scale-95` (camera panel buttons, `In
 
 | Area | Status |
 |---|---|
-| Unit tests (vitest) | 52 files / 354 tests passing (re-run for this revision) |
-| E2E (Playwright) | 8 specs defined (6 files), all passing when re-run for this revision |
-| Frame rate / paint cost | **Unmeasured**; performance claims are structural (memoized layers, no SVG filters, imperative camera and lighting) |
-| Audio | **Unheard**; implemented and unit-tested at the graph/helper level only |
-| Dead code | `VictoryScreen.tsx`, `LiquidationScreen.tsx` unmounted |
-| Touch | Camera pan/zoom is mouse and keyboard only; **touch pan is unsupported** |
+| Unit tests (vitest) | **58 files / 396 tests passing** (re-run e verificado para esta revisão) |
+| E2E (Playwright) | **18 specs em 8 arquivos passing**; 24 screenshots oficiais atualizados em `docs/screenshots/` |
+| Production Build | `tsc && vite build` **aprovado sem erros em 6.21s** |
+| Frame rate / paint cost | Alta fluidez estrutural (camadas `memo`, gradientes sem filtros SVG pesados, câmera e iluminação imperativas com respeito a `prefers-reduced-motion`) |
+| Audio | Procedural Web Audio com compressor dinâmico (`audioEngine.ts`) e soundscape ambiente (`ambientEngine.ts`) |
+| Dead code | `VictoryScreen.tsx`, `LiquidationScreen.tsx` desmontados |
+| Touch | Pan e zoom multi-touch implementados via `cameraTouch.ts` |

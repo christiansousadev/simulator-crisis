@@ -107,23 +107,41 @@ function EngineerDesk({ service, x, y, selected, onSelect, onHover, onLeave }: E
       {/* selection highlight pad on the shared floor */}
       <IsoBox x={x - 0.08} y={y - 0.08} z={0.024} w={1.16} d={0.96} h={0.015} color="#93c5fd" opacity={selected ? 0.9 : 0} />
 
-      {/* main desk surface plus a perpendicular return, forming an l-shaped workstation */}
-      <IsoBox x={x} y={y} z={0.03} w={1.0} d={0.55} h={0.28} color="#b98a5a" />
-      <IsoBox x={x + 0.82} y={y + 0.55} z={0.03} w={0.32} d={0.42} h={0.28} color="#a97c50" />
+      {/* Modern dark carbon / graphite workstation desk with chamfered edge */}
+      <IsoBox x={x} y={y} z={0.03} w={1.0} d={0.55} h={0.28} fillLeft="url(#carbonDeskFace)" fillRight="url(#carbonDeskFace)" fillTop="url(#carbonDeskTop)" stroke="rgba(255,255,255,0.08)" highlightTop />
+      <IsoBox x={x + 0.82} y={y + 0.55} z={0.03} w={0.32} d={0.42} h={0.28} fillLeft="url(#carbonDeskFace)" fillRight="url(#carbonDeskFace)" fillTop="url(#carbonDeskTop)" stroke="rgba(255,255,255,0.08)" highlightTop />
 
-      {/* under-desk pc tower */}
+      {/* Under-desk high-performance PC tower with RGB fan */}
       <PcTower x={x + 0.05} y={y + 0.42} />
 
-      {/* wire grommet where cables drop through the desk */}
-      <circle cx={grommet.x} cy={grommet.y} r={1.6} fill="#1e293b" opacity={0.7} />
+      {/* Wire grommet where braided cables drop through the desk */}
+      <circle cx={grommet.x} cy={grommet.y} r={1.6} fill="#0f172a" stroke="#334155" strokeWidth={0.5} opacity={0.8} />
 
-      {/* dual monitors: dark when nobody is working here, tinted and scrolling when lit */}
-      <IsoBox x={x + 0.12} y={y + 0.08} z={0.31} w={0.28} d={0.06} h={0.22} color={monitorColor ?? "#1e293b"} />
-      <IsoBox x={x + 0.55} y={y + 0.08} z={0.31} w={0.28} d={0.06} h={0.22} color={monitorColor ?? "#1e293b"} />
+      {/* Neon-edge RGB deskpad */}
+      <IsoBox
+        x={x + 0.08}
+        y={y + 0.12}
+        z={0.311}
+        w={0.76}
+        d={0.34}
+        h={0.005}
+        fillLeft="#090d16"
+        fillRight="#090d16"
+        fillTop="#0f172a"
+        stroke={monitorColor ? monitorColor : "rgba(56,189,248,0.4)"}
+        strokeWidth={0.5}
+      />
+
+      {/* Articulated dual monitor stand behind screens */}
+      <IsoBox x={x + 0.46} y={y + 0.05} z={0.31} w={0.04} d={0.04} h={0.24} color="#334155" />
+
+      {/* Dual high-tech ultra-thin monitors: primary widescreen + secondary wing display */}
+      <IsoBox x={x + 0.1} y={y + 0.07} z={0.31} w={0.32} d={0.05} h={0.24} color={monitorColor ?? "#0f172a"} stroke="#1e293b" highlightTop />
+      <IsoBox x={x + 0.52} y={y + 0.07} z={0.31} w={0.32} d={0.05} h={0.24} color={monitorColor ?? "#0f172a"} stroke="#1e293b" highlightTop />
       {monitorColor && (
         <>
-          <MonitorBars x={x + 0.12} y={y + 0.08} z={0.31} seed={x * 3 + y} color={monitorColor} />
-          <MonitorBars x={x + 0.55} y={y + 0.08} z={0.31} seed={x * 3 + y + 2} color={monitorColor} />
+          <MonitorBars x={x + 0.1} y={y + 0.07} z={0.31} seed={x * 3 + y} color={monitorColor} />
+          <MonitorBars x={x + 0.52} y={y + 0.07} z={0.31} seed={x * 3 + y + 2} color={monitorColor} />
           <ellipse
             cx={monitorGlow.x + 9}
             cy={monitorGlow.y + 4}
@@ -134,12 +152,16 @@ function EngineerDesk({ service, x, y, selected, onSelect, onHover, onLeave }: E
           />
         </>
       )}
-      <StickyNote x={x + 0.58} y={y + 0.08} z={0.33} />
+      <StickyNote x={x + 0.58} y={y + 0.08} z={0.34} />
       <DeskLamp x={x + 0.9} y={y + 0.1} />
 
-      {/* ergonomic chair: seat plus a curved backrest */}
-      <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.08} h={0.4} color="#1e293b" />
-      <IsoBox x={x + 0.32} y={y + 0.85} z={0} w={0.32} d={0.32} h={0.22} color="#475569" />
+      {/* Ergonomic mesh chair: 5-star wheeled base, chrome cylinder, contoured seat & breathable backrest */}
+      <circle cx={chair.x} cy={chair.y} r={4.5} fill="#0f172a" stroke="#334155" strokeWidth={0.6} />
+      <IsoBox x={x + 0.46} y={y + 0.96} z={0.01} w={0.04} d={0.04} h={0.16} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.32} y={y + 0.85} z={0.17} w={0.32} d={0.26} h={0.07} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" stroke="rgba(255,255,255,0.08)" highlightTop />
+      <IsoBox x={x + 0.32} y={y + 0.85} z={0.24} w={0.32} d={0.07} h={0.32} fillLeft="#0f172a" fillRight="#1e293b" fillTop="#334155" stroke="rgba(255,255,255,0.08)" />
+      {/* Headrest */}
+      <IsoBox x={x + 0.38} y={y + 0.85} z={0.56} w={0.2} d={0.05} h={0.08} color="#1e293b" stroke="#334155" />
 
       {/* vacancy marker: a dashed outline on the empty chair and a muted tag */}
       {!assigned && (

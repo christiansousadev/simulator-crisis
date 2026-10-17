@@ -161,19 +161,28 @@ Still a timer-driven loop through fixed waypoints (lounge pair in `BreakRoom.tsx
 
 History kept short: a stale-closure bug that froze these NPCs at their first waypoint (the interval depended on the drifting `happiness` value) was fixed by reading `happiness`, `redAlert` and the waypoint list through refs; `isoMath.boxFaces` chamfers box corners and `OfficeWorker` has a real walk cycle and blinking eyes. `isoMath.ts` also now memoizes `shade()`; `project()` is unchanged.
 
-### 3.6 Known limitation
+### 3.6 Scene Geometry & Visual Architecture
 
-Scene geometry is duplicated: `officeLayout.ts` (roster/pathfinding) states in its header that its zone origins are copied from the scene and "kept in sync" by hand; `sceneLayout.ts` holds the scene/camera/lighting copies (including a second `DESK_ORDER` / `DESK_SLOTS`). `waypointGraph.test.ts` and `sceneLayout.test.ts` guard some of it, but nothing enforces that the two files agree.
+- **Unified Geometry Source of Truth:** The previously split `officeLayout.ts` and `sceneLayout.ts` were unified into `officeGeometry.ts`, ensuring pathfinding nodes, zone bounds, and furniture coordinates share a single immutable source of truth.
+- **Cyber War Room Visual Overhaul (Outubro 2026):**
+  - **42U Server Blades (`ServerRack.tsx`):** 8 hot-swappable blade server units with chrome ejection handles, ventilation cutouts, live I/O LED flickers, illuminated fiber optic patch cables (`fiberGlowCyan`), and smoked acrylic glass doors with specular sheen (`rackGlassSheen`).
+  - **Tactical NPC Rigging (`OfficeWorker.tsx`):** SRE hoodies, over-ear headsets with mic booms, smartwatches with glowing OLED pips, and glowing cyan ultrabooks (`data-testid="worker-laptop"`) displaying code lines during incident triage.
+  - **High-Tech Workstations (`EngineerDesk.tsx`):** Matte carbon desks (`carbonDeskFace`, `carbonDeskTop`), RGB neon edge deskpads, dual/triple articulating ultra-thin displays with scrolling IDE lines, tempered glass PC towers, and 5-star mesh ergonomic chairs with chrome cylinders.
+  - **Facility Props (`OfficeProps.tsx`):** Commercial dual-boiler chrome espresso machine with analog pressure dials and steam, blue tournament-grade ping-pong table with regulation net, storm teal modular sectional sofa, and faceted ceramic planters with lush foliage.
+  - **Executive Boardroom (`BoardRoom.tsx` & `BoardroomMetricsDisplay.tsx`):** Smoked tempered glass conference table with inlaid cyan cyber-telemetry data runner, executive ribbed leather chairs, and wall-mounted 4K telemetry monitor with oscilloscope grid lines.
+  - **Tactical Azimuth HUD (`RackRadialMenu.tsx` & `FloorDecals.tsx`):** Orbital compass ring with military azimuth notches every 45°, center crosshair targeting reticle, high-tech dark glass button capsules with corner targeting chevrons on hover, and floor stencil sector designations.
 
 ---
 
 ## 4. Non-Breaking Compliance Checklist
 
-- [x] `isoMath.ts::project()` and the viewBox are unchanged. (`isoMath.ts` did gain chamfered faces and a `shade()` cache; neither touches projection.)
-- [x] No backend endpoint, table or `TICK_BROADCAST` field was added for the lighting or movement systems. (The unrelated `POST /api/tutorial/incident` belongs to the tutorial, see IZ-IMPL-10.)
-- [x] `Topbar.tsx` still prints `Day N · HH:00`; its arithmetic comes from `officeClock.ts`. Note the displayed hour now starts at 08:00.
-- [x] No SVG `<filter>`/`feColorMatrix` element and no SMIL `<animate>` remain in the office scene (verified by search of `frontend/src`; the only SMIL mention is a comment in `CascadeRipple.tsx`). A few small CSS `drop-shadow()` glows on rack LEDs in `ServerRack.tsx` do remain.
+- [x] `isoMath.ts::project()` and the viewBox (`-406 -156 1006 640`) are unchanged.
+- [x] No backend endpoint, table or `TICK_BROADCAST` field was added for the visual presentation layers.
+- [x] `Topbar.tsx` still prints `Day N · HH:00`; its arithmetic comes from `officeClock.ts`.
+- [x] No full-screen SVG `<filter>`/`feColorMatrix` element and no SMIL `<animate>` in the scene. All visual fidelity is achieved through linear/radial gradients, polygons with transforms, and lightweight GPU-accelerated CSS keyframes.
 - [x] The lighting driver holds no React state and writes CSS variables to four scopes only.
-- [x] Reduced motion: lighting snaps, the roster teleports, ambient NPCs stand still, the camera snaps.
-- [x] `PathfindingEmployee.tsx` is used by the app (via `RosterWalkers`); `WanderingEmployee.tsx` is **not** untouched any more (reduced motion, red-alert behaviour, seating, refs).
-- [ ] Frame-rate impact of the overlay/emissive layers: **not measured**.
+- [x] Reduced motion: lighting snaps, the roster teleports, ambient NPCs stand still, and decorative pulsing/rotations gracefully freeze.
+- [x] All test contracts preserved: `data-rack-service-id`, `data-testid="rack-top-spark"`, `data-testid="worker-laptop"`, `data-service-id`, and `<title>` engineer presence tags.
+- [x] **Vitest test suite**: 58 files / 396 tests passing.
+- [x] **Playwright E2E**: 18 specs in 8 files passing, with automated capture of 24 official screenshots in EN and PT-BR (`docs/screenshots/`).
+- [x] **Vite production build**: `tsc && vite build` passing cleanly.

@@ -12,22 +12,37 @@ interface PropPosition {
   z?: number;
 }
 
-// POTTED OFFICE PLANT IN A WHITE CERAMIC PLANTER
+// POTTED OFFICE PLANT IN A MODERN FACETED CERAMIC PLANTER WITH LUSH FOLIAGE
 export function OfficePlant({ x, y, z = 0 }: PropPosition) {
   const canopy = project(x + 0.15, y + 0.15, z + 0.45);
+  const potRim = project(x + 0.15, y + 0.15, z + 0.22);
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.3} d={0.3} h={0.22} color="#f8fafc" />
-      <ellipse cx={canopy.x} cy={canopy.y} rx={9} ry={7} fill="#16a34a" opacity={0.9} />
-      <ellipse cx={canopy.x - 5} cy={canopy.y + 3} rx={6} ry={5} fill="#22c55e" opacity={0.85} />
-      <ellipse cx={canopy.x + 5} cy={canopy.y + 2} rx={6} ry={5} fill="#15803d" opacity={0.85} />
+      {/* Faceted ceramic planter */}
+      <IsoBox x={x} y={y} z={z} w={0.3} d={0.3} h={0.22} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" stroke="rgba(255,255,255,0.08)" highlightTop />
+      {/* Dark soil bed */}
+      <ellipse cx={potRim.x} cy={potRim.y} rx={9.5} ry={5.5} fill="#0f172a" />
+      {/* Hydroponic sensor pip */}
+      <circle cx={potRim.x + 6} cy={potRim.y - 2} r={0.8} fill="#10b981" />
+
+      {/* Layered lush tropical foliage with organic depth */}
+      {/* Deep shadow leaves */}
+      <ellipse cx={canopy.x - 7} cy={canopy.y + 4} rx={8} ry={6.5} fill="url(#foliageDark)" />
+      <ellipse cx={canopy.x + 7} cy={canopy.y + 3} rx={8} ry={6.5} fill="url(#foliageDark)" />
+      {/* Mid canopy leaves */}
+      <ellipse cx={canopy.x} cy={canopy.y + 2} rx={11} ry={8.5} fill="url(#foliageLight)" opacity={0.92} />
+      <ellipse cx={canopy.x - 5} cy={canopy.y - 3} rx={9} ry={7} fill="url(#foliageLight)" opacity={0.95} />
+      <ellipse cx={canopy.x + 5} cy={canopy.y - 4} rx={8.5} ry={6.5} fill="#16a34a" />
+      {/* Leaf vein rib highlights */}
+      <path d={`M ${canopy.x} ${canopy.y + 8} Q ${canopy.x - 3} ${canopy.y} ${canopy.x - 8} ${canopy.y - 5}`} stroke="rgba(255,255,255,0.25)" strokeWidth={0.7} fill="none" />
+      <path d={`M ${canopy.x} ${canopy.y + 8} Q ${canopy.x + 4} ${canopy.y + 1} ${canopy.x + 8} ${canopy.y - 4}`} stroke="rgba(255,255,255,0.25)" strokeWidth={0.7} fill="none" />
     </g>
   );
 }
 
 // SMALL WASTE BIN, A QUIET DENSITY PROP FOR THE OPEN FLOOR
 export function WasteBin({ x, y, z = 0 }: PropPosition) {
-  return <IsoBox x={x} y={y} z={z} w={0.2} d={0.2} h={0.28} color="#57534e" topFactor={1.1} />;
+  return <IsoBox x={x} y={y} z={z} w={0.2} d={0.2} h={0.28} fillLeft="#334155" fillRight="#1e293b" fillTop="#475569" stroke="rgba(255,255,255,0.06)" />;
 }
 
 // WALL CLOCK, DRAWN IN SCREEN SPACE AT THE GIVEN ANCHOR. the hands follow the game hour (one tick is
@@ -43,17 +58,19 @@ export function WallClock({ x, y, z = 0.6 }: PropPosition) {
   const origin = `${p.x}px ${p.y}px`;
   return (
     <g>
-      <circle cx={p.x} cy={p.y} r={7} fill="#f8fafc" stroke="#334155" strokeWidth={1.4} />
+      {/* Clock body with metallic chamfer bezel */}
+      <circle cx={p.x} cy={p.y} r={8} fill="#0f172a" stroke="#38bdf8" strokeWidth={0.8} />
+      <circle cx={p.x} cy={p.y} r={6.8} fill="#f8fafc" stroke="#1e293b" strokeWidth={0.6} />
       {[0, 90, 180, 270].map((deg) => (
-        <line key={deg} x1={p.x} y1={p.y - 5.6} x2={p.x} y2={p.y - 4.6} stroke="#64748b" strokeWidth={0.6} transform={`rotate(${deg} ${p.x} ${p.y})`} />
+        <line key={deg} x1={p.x} y1={p.y - 5.6} x2={p.x} y2={p.y - 4.4} stroke="#0f172a" strokeWidth={0.8} transform={`rotate(${deg} ${p.x} ${p.y})`} />
       ))}
       <line
         x1={p.x}
         y1={p.y}
         x2={p.x}
         y2={p.y - 3.2}
-        stroke="#334155"
-        strokeWidth={1.3}
+        stroke="#0f172a"
+        strokeWidth={1.4}
         strokeLinecap="round"
         className="ol-clock-hand"
         style={{ transform: `rotate(${angles.hour + turns.current.extra}deg)`, transformOrigin: origin }}
@@ -62,30 +79,38 @@ export function WallClock({ x, y, z = 0.6 }: PropPosition) {
         x1={p.x}
         y1={p.y}
         x2={p.x}
-        y2={p.y - 4.9}
-        stroke="#475569"
-        strokeWidth={0.8}
+        y2={p.y - 5.0}
+        stroke="#0284c7"
+        strokeWidth={0.9}
         strokeLinecap="round"
         className="ol-clock-hand"
         style={{ transform: `rotate(${angles.minute}deg)`, transformOrigin: origin }}
       />
-      <circle cx={p.x} cy={p.y} r={0.9} fill="#334155" />
+      <circle cx={p.x} cy={p.y} r={1.0} fill="#0284c7" />
     </g>
   );
 }
 
-// SECTIONAL LOUNGE COUCH WITH THROW PILLOWS
+// MODERN ARCHITECTURAL SECTIONAL LOUNGE COUCH WITH OAK BASE & DESIGNER PILLOWS
 export function Sofa({ x, y, z = 0 }: PropPosition) {
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={1.3} d={0.55} h={0.22} color="#0e7490" />
-      <IsoBox x={x} y={y} z={z + 0.2} w={1.3} d={0.12} h={0.32} color="#0891b2" />
-      {/* corner return section */}
-      <IsoBox x={x + 1.3} y={y} z={z} w={0.55} d={0.55} h={0.22} color="#0e7490" />
-      <IsoBox x={x + 1.3} y={y} z={z + 0.2} w={0.12} d={0.55} h={0.32} color="#0891b2" />
-      {/* throw pillows */}
-      <IsoBox x={x + 0.15} y={y + 0.02} z={z + 0.22} w={0.22} d={0.2} h={0.16} color="#f97316" />
-      <IsoBox x={x + 0.7} y={y + 0.02} z={z + 0.22} w={0.22} d={0.2} h={0.16} color="#fbbf24" />
+      {/* Low oak wood reveal base */}
+      <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={1.34} d={0.59} h={0.04} color="#78350f" />
+      <IsoBox x={x + 1.28} y={y - 0.02} z={z} w={0.59} d={0.59} h={0.04} color="#78350f" />
+
+      {/* Main seat cushions in deep storm teal */}
+      <IsoBox x={x} y={y} z={z + 0.04} w={1.3} d={0.55} h={0.2} fillLeft="#0f766e" fillRight="#115e59" fillTop="#14b8a6" stroke="rgba(255,255,255,0.06)" />
+      <IsoBox x={x} y={y} z={z + 0.24} w={1.3} d={0.12} h={0.3} fillLeft="#0d9488" fillRight="#0f766e" fillTop="#2dd4bf" stroke="rgba(255,255,255,0.06)" />
+
+      {/* Corner return section */}
+      <IsoBox x={x + 1.3} y={y} z={z + 0.04} w={0.55} d={0.55} h={0.2} fillLeft="#0f766e" fillRight="#115e59" fillTop="#14b8a6" stroke="rgba(255,255,255,0.06)" />
+      <IsoBox x={x + 1.3} y={y} z={z + 0.24} w={0.12} d={0.55} h={0.3} fillLeft="#0d9488" fillRight="#0f766e" fillTop="#2dd4bf" stroke="rgba(255,255,255,0.06)" />
+
+      {/* Designer throw pillows */}
+      <IsoBox x={x + 0.15} y={y + 0.02} z={z + 0.24} w={0.22} d={0.2} h={0.16} color="#f59e0b" stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x + 0.7} y={y + 0.02} z={z + 0.24} w={0.22} d={0.2} h={0.16} color="#06b6d4" stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x + 1.4} y={y + 0.2} z={z + 0.24} w={0.2} d={0.22} h={0.16} color="#ec4899" stroke="rgba(255,255,255,0.12)" />
     </g>
   );
 }
@@ -109,18 +134,37 @@ export function GroundShadow({ x, y, z = 0.001, rx = 14, ry = 7 }: GroundShadowP
   );
 }
 
-// UNDER-DESK PC TOWER
+// HIGH-TECH TEMPERED GLASS PC TOWER WITH RGB INTERIORS
 export function PcTower({ x, y, z = 0 }: PropPosition) {
-  return <IsoBox x={x} y={y} z={z} w={0.16} d={0.2} h={0.3} color="#18181b" topFactor={1.3} />;
-}
-
-// SMALL GOOSENECK DESK LAMP
-export function DeskLamp({ x, y, z = 0 }: PropPosition) {
-  const base = project(x + 0.05, y + 0.05, z + 0.28);
+  const side = project(x + 0.08, y + 0.2, z + 0.15);
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.1} d={0.1} h={0.28} color="#44403c" />
-      <ellipse cx={base.x} cy={base.y - 2} rx={4} ry={2} fill="#fde68a" opacity={0.9} />
+      {/* Matte obsidian chassis */}
+      <IsoBox x={x} y={y} z={z} w={0.16} d={0.22} h={0.32} fillLeft="#182334" fillRight="#0c1322" fillTop="#2a374a" stroke="rgba(255,255,255,0.08)" highlightTop />
+      {/* Front vertical power strip */}
+      <IsoBox x={x} y={y + 0.21} z={z + 0.04} w={0.02} d={0.01} h={0.24} color="#00f0ff" />
+      {/* Side tempered glass panel showing interior components */}
+      <ellipse cx={side.x + 2} cy={side.y} rx={3} ry={4} fill="#00f0ff" opacity={0.65} style={{ filter: "drop-shadow(0 0 2px #00f0ff)" }} />
+      <circle cx={side.x + 2} cy={side.y} r={1.2} fill="#ffffff" opacity={0.8} />
+    </g>
+  );
+}
+
+// ARTICULATED ARCHITECT GOOSENECK TASK LAMP
+export function DeskLamp({ x, y, z = 0 }: PropPosition) {
+  const base = project(x + 0.05, y + 0.05, z);
+  const head = project(x + 0.02, y + 0.08, z + 0.32);
+  return (
+    <g>
+      {/* Weighted metallic base */}
+      <circle cx={base.x} cy={base.y} r={3} fill="#0f172a" stroke="#475569" strokeWidth={0.5} />
+      {/* Dual cantilever arm */}
+      <line x1={base.x} y1={base.y} x2={base.x + 1} y2={base.y - 10} stroke="#475569" strokeWidth={1} />
+      <line x1={base.x + 1} y1={base.y - 10} x2={head.x} y2={head.y} stroke="#64748b" strokeWidth={0.8} />
+      {/* Lamp cone hood */}
+      <ellipse cx={head.x} cy={head.y} rx={3.5} ry={2} fill="#334155" stroke="#94a3b8" strokeWidth={0.4} />
+      {/* Soft downward light cone */}
+      <ellipse cx={head.x} cy={head.y + 1} rx={2.2} ry={1.2} fill="#fef08a" opacity={0.95} />
     </g>
   );
 }
@@ -137,9 +181,9 @@ export function KpiDisplay({ x, y, z = 0 }: PropPosition) {
   const bars = [0.5, 0.8, 0.35, 0.65];
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.06} d={0.7} h={0.5} color="#0f172a" />
+      <IsoBox x={x} y={y} z={z} w={0.06} d={0.7} h={0.5} color="#0f172a" stroke="#334155" strokeWidth={0.5} />
       {bars.map((h, i) => (
-        <rect key={i} x={screen.x - 10 + i * 5.5} y={screen.y + 8 - h * 16} width={3.6} height={h * 16} fill={i % 2 === 0 ? "#38bdf8" : "#22c55e"} />
+        <rect key={i} x={screen.x - 10 + i * 5.5} y={screen.y + 8 - h * 16} width={3.6} height={h * 16} rx={0.6} fill={i % 2 === 0 ? "#38bdf8" : "#22c55e"} />
       ))}
     </g>
   );
@@ -149,30 +193,46 @@ export function KpiDisplay({ x, y, z = 0 }: PropPosition) {
 export function Fridge({ x, y, z = 0 }: PropPosition) {
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.42} d={0.4} h={0.75} color="#e2e8f0" topFactor={1.15} />
-      <IsoBox x={x + 0.36} y={y - 0.02} z={z + 0.4} w={0.04} d={0.06} h={0.18} color="#94a3b8" />
+      <IsoBox x={x} y={y} z={z} w={0.42} d={0.4} h={0.75} fillLeft="#cbd5e1" fillRight="#94a3b8" fillTop="#f8fafc" stroke="rgba(255,255,255,0.2)" />
+      {/* Brushed aluminum handles */}
+      <IsoBox x={x + 0.36} y={y - 0.02} z={z + 0.44} w={0.03} d={0.04} h={0.16} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.36} y={y - 0.02} z={z + 0.16} w={0.03} d={0.04} h={0.16} fillTop="url(#chromeMetal)" color="#64748b" />
     </g>
   );
 }
 
-// ESPRESSO MACHINE ON THE KITCHENETTE COUNTER. `steam` sets how lively it is: a single faint wisp when idle,
-// a full plume once the espresso upgrade is bought
+// COMMERCIAL DUAL-BOILER CHROME ESPRESSO MACHINE WITH PRESSURE GAUGES
 export function EspressoMachine({ x, y, z = 0, steam = "light" }: PropPosition & { steam?: "off" | "light" | "full" }) {
-  const spout = project(x + 0.07, y + 0.07, z + 0.34);
+  const spout = project(x + 0.07, y + 0.07, z + 0.36);
+  const face = project(x + 0.13, y + 0.22, z + 0.18);
   const puffs = steam === "full" ? 3 : steam === "light" ? 1 : 0;
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.26} d={0.22} h={0.24} color="#3f3f46" topFactor={1.2} />
-      <IsoBox x={x + 0.04} y={y + 0.04} z={z + 0.24} w={0.06} d={0.06} h={0.08} color="#a1a1aa" />
+      {/* Polished stainless steel chassis */}
+      <IsoBox x={x} y={y} z={z} w={0.28} d={0.24} h={0.26} fillLeft="#94a3b8" fillRight="#64748b" fillTop="url(#chromeMetal)" stroke="rgba(255,255,255,0.3)" highlightTop />
+      {/* Cup warmer rack on top with ceramic espresso cups */}
+      <IsoBox x={x + 0.04} y={y + 0.04} z={z + 0.26} w={0.07} d={0.07} h={0.06} color="#f8fafc" stroke="#cbd5e1" strokeWidth={0.3} />
+      <IsoBox x={x + 0.15} y={y + 0.04} z={z + 0.26} w={0.07} d={0.07} h={0.06} color="#f8fafc" stroke="#cbd5e1" strokeWidth={0.3} />
+
+      {/* Front panel pressure gauges */}
+      <circle cx={face.x - 4} cy={face.y - 2} r={2.2} fill="#f8fafc" stroke="#334155" strokeWidth={0.4} />
+      <line x1={face.x - 4} y1={face.y - 2} x2={face.x - 3} y2={face.y - 3.5} stroke="#ef4444" strokeWidth={0.5} />
+      <circle cx={face.x + 3} cy={face.y - 2} r={2.2} fill="#f8fafc" stroke="#334155" strokeWidth={0.4} />
+      <line x1={face.x + 3} y1={face.y - 2} x2={face.x + 4.2} y2={face.y - 3.2} stroke="#0284c7" strokeWidth={0.5} />
+
+      {/* Dual brass/copper group heads and drip tray */}
+      <IsoBox x={x + 0.02} y={y + 0.2} z={z + 0.02} w={0.24} d={0.04} h={0.02} color="#475569" />
+
+      {/* Rising steam clouds */}
       {Array.from({ length: puffs }).map((_, i) => (
         <ellipse
           key={i}
-          cx={spout.x + (i - 1) * 1.6}
+          cx={spout.x + (i - 1) * 2.2}
           cy={spout.y}
-          rx={1.2}
-          ry={2}
-          fill="#e2e8f0"
-          opacity={0.6}
+          rx={1.5}
+          ry={2.5}
+          fill="#f1f5f9"
+          opacity={0.65}
           className="animate-steam-rise motion-only"
           style={{ animationDelay: `${i * 0.55}s` }}
         />
@@ -181,46 +241,53 @@ export function EspressoMachine({ x, y, z = 0, steam = "light" }: PropPosition &
   );
 }
 
-// HEAVY GLASS SLIDING DOOR WITH AN ACCESS KEYPAD, MARKING THE SERVER VAULT ENTRANCE. the glass slides
-// aside while somebody is inside the vault
+// HEAVY GLASS SLIDING DOOR WITH AN ACCESS KEYPAD, MARKING THE SERVER VAULT ENTRANCE
 export function SlidingGlassDoor({ x, y, z = 0, height = 0.95, open = false }: PropPosition & { height?: number; open?: boolean }) {
   const keypad = project(x + 0.28, y - 0.03, z + height * 0.5);
   return (
     <g>
       <g className="ol-door-slide" style={{ transform: open ? "translate(-10px, 5px)" : "translate(0, 0)" }}>
-        <IsoBox x={x} y={y} z={z} w={0.05} d={0.5} h={height} color="#cbd5e1" opacity={0.5} topFactor={1.3} rightFactor={1.1} leftFactor={0.9} />
+        <IsoBox x={x} y={y} z={z} w={0.05} d={0.5} h={height} color="#bae6fd" opacity={0.45} stroke="rgba(56,189,248,0.4)" strokeWidth={0.5} highlightTop />
       </g>
-      <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={0.02} d={0.02} h={height} color="#475569" />
-      <IsoBox x={x - 0.02} y={y + 0.5} z={z} w={0.02} d={0.02} h={height} color="#475569" />
-      <rect x={keypad.x - 2} y={keypad.y - 3} width={4} height={6} rx={0.8} fill="#1e293b" />
-      <circle cx={keypad.x} cy={keypad.y - 0.5} r={0.7} fill={open ? "#38bdf8" : "#22c55e"} />
+      <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={0.02} d={0.02} h={height} color="#0f172a" />
+      <IsoBox x={x - 0.02} y={y + 0.5} z={z} w={0.02} d={0.02} h={height} color="#0f172a" />
+      {/* Biometric access terminal */}
+      <rect x={keypad.x - 2.5} y={keypad.y - 4} width={5} height={8} rx={1} fill="#0f172a" stroke="#334155" strokeWidth={0.4} />
+      <circle cx={keypad.x} cy={keypad.y - 1.5} r={1.2} fill={open ? "#00f0ff" : "#10b981"} />
     </g>
   );
 }
 
-// PING-PONG TABLE: DARK END SUPPORTS HOLDING UP A THIN RAISED TABLETOP, WITH A NET ACROSS THE MIDDLE
+// TOURNAMENT-GRADE PING-PONG TABLE: VIBRANT BLUE SURFACE WITH BOUNDARY LINES AND SUSPENDED NET
 export function PingPongTable({ x, y, z = 0 }: PropPosition) {
   const width = 1.1;
   const depth = 0.6;
   const legHeight = 0.28;
-  const topThickness = 0.05;
-  const supportWidth = 0.16;
+  const topThickness = 0.04;
+  const supportWidth = 0.14;
   return (
     <g>
-      {/* end supports, raising the tabletop clear of the floor so it reads as furniture, not a slab */}
-      <IsoBox x={x} y={y} z={z} w={supportWidth} d={depth} h={legHeight} color="#334155" topFactor={1.1} />
-      <IsoBox x={x + width - supportWidth} y={y} z={z} w={supportWidth} d={depth} h={legHeight} color="#334155" topFactor={1.1} />
-      {/* thin tabletop resting on the supports */}
-      <IsoBox x={x} y={y} z={z + legHeight} w={width} d={depth} h={topThickness} color="#15803d" />
-      {/* net, standing upright across the midline */}
+      {/* Matte black tubular undercarriage */}
+      <IsoBox x={x + 0.08} y={y + 0.06} z={z} w={supportWidth} d={depth - 0.12} h={legHeight} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" />
+      <IsoBox x={x + width - supportWidth - 0.08} y={y + 0.06} z={z} w={supportWidth} d={depth - 0.12} h={legHeight} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" />
+
+      {/* High-density tournament blue tabletop */}
+      <IsoBox x={x} y={y} z={z + legHeight} w={width} d={depth} h={topThickness} fillLeft="#0369a1" fillRight="#075985" fillTop="#0284c7" stroke="#ffffff" strokeWidth={0.4} highlightTop />
+
+      {/* Centerline stripe */}
+      <IsoBox x={x} y={y + depth / 2 - 0.008} z={z + legHeight + topThickness} w={width} d={0.016} h={0.001} color="#ffffff" stroke="none" />
+
+      {/* Suspended net across the midline */}
       <IsoBox
-        x={x + width / 2 - 0.02}
-        y={y}
+        x={x + width / 2 - 0.015}
+        y={y - 0.02}
         z={z + legHeight + topThickness}
-        w={0.04}
-        d={depth}
-        h={0.16}
+        w={0.03}
+        d={depth + 0.04}
+        h={0.14}
         color="#f8fafc"
+        stroke="#cbd5e1"
+        strokeWidth={0.3}
       />
     </g>
   );
@@ -325,30 +392,41 @@ export function SecurityTurnstile({ x, y, z = 0 }: PropPosition) {
   );
 }
 
-// LEATHER LOUNGE ARMCHAIR FOR THE VISITOR WAITING AREA
+// LUXURY DESIGNER CLUB ARMCHAIR WITH CHROME BASE FOR THE VISITOR WAITING AREA
 export function LobbyArmchair({ x, y, z = 0 }: PropPosition) {
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.4} d={0.4} h={0.2} color="#7c2d12" topFactor={1.15} />
-      <IsoBox x={x} y={y + 0.32} z={z} w={0.4} d={0.08} h={0.42} color="#78350f" topFactor={1.05} />
-      <IsoBox x={x} y={y} z={z} w={0.08} d={0.4} h={0.3} color="#78350f" topFactor={1.1} />
-      <IsoBox x={x + 0.32} y={y} z={z} w={0.08} d={0.4} h={0.3} color="#78350f" topFactor={1.1} />
+      {/* Chrome tubular frame legs */}
+      <IsoBox x={x + 0.02} y={y + 0.02} z={z} w={0.03} d={0.03} h={0.08} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.35} y={y + 0.02} z={z} w={0.03} d={0.03} h={0.08} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.02} y={y + 0.35} z={z} w={0.03} d={0.03} h={0.08} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.35} y={y + 0.35} z={z} w={0.03} d={0.03} h={0.08} fillTop="url(#chromeMetal)" color="#64748b" />
+
+      {/* Cognac leather seat cushion */}
+      <IsoBox x={x} y={y} z={z + 0.08} w={0.4} d={0.4} h={0.16} fillLeft="#78350f" fillRight="#9a3412" fillTop="#b45309" stroke="rgba(255,255,255,0.12)" highlightTop />
+      {/* Backrest and side wings */}
+      <IsoBox x={x} y={y + 0.32} z={z + 0.08} w={0.4} d={0.08} h={0.34} fillLeft="#78350f" fillRight="#9a3412" fillTop="#b45309" stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x} y={y} z={z + 0.08} w={0.08} d={0.4} h={0.24} fillLeft="#78350f" fillRight="#9a3412" fillTop="#b45309" stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x + 0.32} y={y} z={z + 0.08} w={0.08} d={0.4} h={0.24} fillLeft="#78350f" fillRight="#9a3412" fillTop="#b45309" stroke="rgba(255,255,255,0.12)" />
     </g>
   );
 }
 
-// GLASS COFFEE TABLE WITH SCATTERED MAGAZINES, CENTERPIECE OF THE WAITING LOUNGE
+// TEMPERED SMOKED GLASS COFFEE TABLE WITH CHROME LEGS & TECH MAGAZINES
 export function GlassCoffeeTable({ x, y, z = 0 }: PropPosition) {
   const top = project(x + 0.25, y + 0.2, z + 0.18);
   return (
     <g>
-      <IsoBox x={x} y={y} z={z} w={0.05} d={0.05} h={0.18} color="#94a3b8" />
-      <IsoBox x={x + 0.45} y={y} z={z} w={0.05} d={0.05} h={0.18} color="#94a3b8" />
-      <IsoBox x={x} y={y + 0.35} z={z} w={0.05} d={0.05} h={0.18} color="#94a3b8" />
-      <IsoBox x={x + 0.45} y={y + 0.35} z={z} w={0.05} d={0.05} h={0.18} color="#94a3b8" />
-      <IsoBox x={x} y={y} z={z + 0.18} w={0.5} d={0.4} h={0.02} color="#bae6fd" opacity={0.5} topFactor={1.4} />
-      <rect x={top.x - 7} y={top.y - 2} width={10} height={7} rx={0.6} fill="#f472b6" opacity={0.92} transform={`rotate(-12 ${top.x} ${top.y})`} />
-      <rect x={top.x - 1} y={top.y - 1} width={10} height={7} rx={0.6} fill="#38bdf8" opacity={0.92} transform={`rotate(8 ${top.x} ${top.y})`} />
+      {/* Chrome steel legs */}
+      <IsoBox x={x} y={y} z={z} w={0.04} d={0.04} h={0.18} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.46} y={y} z={z} w={0.04} d={0.04} h={0.18} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x} y={y + 0.36} z={z} w={0.04} d={0.04} h={0.18} fillTop="url(#chromeMetal)" color="#64748b" />
+      <IsoBox x={x + 0.46} y={y + 0.36} z={z} w={0.04} d={0.04} h={0.18} fillTop="url(#chromeMetal)" color="#64748b" />
+      {/* Beveled glass tabletop */}
+      <IsoBox x={x} y={y} z={z + 0.18} w={0.5} d={0.4} h={0.02} color="#bae6fd" opacity={0.55} stroke="rgba(56,189,248,0.5)" strokeWidth={0.5} highlightTop />
+      {/* Tech journals / magazines */}
+      <rect x={top.x - 7} y={top.y - 2} width={10} height={7} rx={0.6} fill="#ec4899" opacity={0.92} transform={`rotate(-12 ${top.x} ${top.y})`} />
+      <rect x={top.x - 1} y={top.y - 1} width={10} height={7} rx={0.6} fill="#00f0ff" opacity={0.92} transform={`rotate(8 ${top.x} ${top.y})`} />
     </g>
   );
 }

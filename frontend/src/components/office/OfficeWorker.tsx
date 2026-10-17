@@ -76,56 +76,82 @@ const BODY_ANIMATION: Record<WorkerMood, string> = {
   recovering: "",
 };
 
-// RENDER THE ROLE-SPECIFIC TORSO GARMENT: HOODIE, SUIT JACKET OR CASUAL TEE
-// (rx bumped from the original 3-4 to 5 -- softer, less "cardboard box" silhouette at a glance)
+// RENDER THE ROLE-SPECIFIC TORSO GARMENT: DETAILED TACTICAL HOODIE, TAILORED SUIT OR CASUAL TEE
 function Torso({ role, shirtColor }: { role: WorkerRole; shirtColor: string }) {
   if (role === "executive") {
     return (
-      <>
-        <rect x={-6} y={-24} width={12} height={14} rx={5} fill="#1f2937" />
-        <rect x={-2.4} y={-24} width={4.8} height={14} fill="#f8fafc" />
-        <line x1={0} y1={-24} x2={0} y2={-15} stroke={shirtColor} strokeWidth={2} />
-      </>
+      <g>
+        {/* blazer jacket with side contour */}
+        <rect x={-6.2} y={-24} width={12.4} height={14} rx={4.5} fill="#182232" />
+        {/* lapel flaps */}
+        <path d="M -5.5,-24 L -1.5,-16 L -5,-14 Z" fill="#0f172a" />
+        <path d="M 5.5,-24 L 1.5,-16 L 5,-14 Z" fill="#0f172a" />
+        {/* crisp white dress shirt */}
+        <polygon points="-2.2,-24 2.2,-24 1.5,-15 -1.5,-15" fill="#f8fafc" />
+        {/* silk tie */}
+        <polygon points="-1.2,-24 1.2,-24 1.6,-13 0,-10 -1.6,-13" fill={shirtColor} />
+        {/* pocket square */}
+        <rect x={2.4} y={-19.5} width={2.4} height={1.2} rx={0.4} fill="#e2e8f0" />
+      </g>
     );
   }
   if (role === "engineer") {
     return (
-      <>
-        <rect x={-6} y={-24} width={12} height={14} rx={5} fill={shirtColor} />
-        {/* hoodie collar */}
-        <path d="M -3.5,-24 Q 0,-20 3.5,-24 Z" fill="rgba(0,0,0,0.18)" />
-      </>
+      <g>
+        {/* tactical hoodie body with side shading */}
+        <rect x={-6.2} y={-24} width={12.4} height={14} rx={4.5} fill={shirtColor} />
+        <path d="M -6.2,-24 L -3,-24 L -3,-10 L -6.2,-10 Z" fill="rgba(0,0,0,0.14)" />
+        {/* center metallic zipper */}
+        <line x1={0} y1={-20} x2={0} y2={-10} stroke="rgba(255,255,255,0.4)" strokeWidth={0.8} />
+        {/* kangaroo front pocket */}
+        <path d="M -4,-15 Q 0,-16.5 4,-15 L 3.5,-11 Q 0,-11.5 -3.5,-11 Z" fill="rgba(0,0,0,0.18)" />
+        {/* hood collar with drawstrings */}
+        <path d="M -4,-24 Q 0,-20.5 4,-24 Q 0,-22 -4,-24 Z" fill="rgba(0,0,0,0.25)" />
+        <line x1={-1.5} y1={-21} x2={-1.5} y2={-17} stroke="#f8fafc" strokeWidth={0.6} strokeLinecap="round" />
+        <line x1={1.5} y1={-21} x2={1.5} y2={-17} stroke="#f8fafc" strokeWidth={0.6} strokeLinecap="round" />
+      </g>
     );
   }
-  return <rect x={-6} y={-24} width={12} height={14} rx={5} fill={shirtColor} />;
-}
-
-// STANDING LEGS: A STILL, STRAIGHT STANCE -- USED WHENEVER THE SPRITE ISN'T ACTUALLY TRANSLATING
-function StandingLegs() {
   return (
-    <>
-      <line x1={-3} y1={0} x2={-3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
-      <line x1={3} y1={0} x2={3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
-      <rect x={-6} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
-      <rect x={2} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
-    </>
+    <g>
+      <rect x={-6} y={-24} width={12} height={14} rx={4.5} fill={shirtColor} />
+      <path d="M -3.5,-24 Q 0,-21.5 3.5,-24" stroke="rgba(0,0,0,0.25)" strokeWidth={1} fill="none" />
+    </g>
   );
 }
 
-// WALKING LEGS: EACH LEG IS ITS OWN <g>, PIVOTED AT ITS OWN HIP, SWINGING IN OPPOSITE PHASE --
-// A REAL SCISSOR STRIDE RATHER THAN THE SPRITE JUST SLIDING ACROSS THE FLOOR ON FIXED LEGS
+// STANDING LEGS: CARGO/SLACKS WITH SHADED SIDES AND DETAILED SNEAKERS WITH WHITE MIDSOLES
+function StandingLegs() {
+  return (
+    <g>
+      {/* left & right pants legs */}
+      <line x1={-3.2} y1={-1} x2={-3.2} y2={-9} stroke="#1e293b" strokeWidth={3.8} strokeLinecap="round" />
+      <line x1={3.2} y1={-1} x2={3.2} y2={-9} stroke="#1e293b" strokeWidth={3.8} strokeLinecap="round" />
+      {/* sneaker uppers */}
+      <rect x={-6.2} y={-2.4} width={4.4} height={2.2} rx={1} fill="#334155" />
+      <rect x={1.8} y={-2.4} width={4.4} height={2.2} rx={1} fill="#334155" />
+      {/* white midsoles */}
+      <rect x={-6.4} y={-0.8} width={4.8} height={1.2} rx={0.6} fill="#f8fafc" />
+      <rect x={1.6} y={-0.8} width={4.8} height={1.2} rx={0.6} fill="#f8fafc" />
+    </g>
+  );
+}
+
+// WALKING LEGS: SCISSOR STRIDE WITH PIVOTED ARTICULATED LIMBS AND SNEAKERS
 function WalkingLegs() {
   return (
-    <>
-      <g className="animate-walk-cycle-left" style={{ transformOrigin: "-3px 0px" }}>
-        <line x1={-3} y1={0} x2={-3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
-        <rect x={-6} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
+    <g>
+      <g className="animate-walk-cycle-left" style={{ transformOrigin: "-3.2px -8px" }}>
+        <line x1={-3.2} y1={-1} x2={-3.2} y2={-9} stroke="#1e293b" strokeWidth={3.8} strokeLinecap="round" />
+        <rect x={-6.2} y={-2.4} width={4.4} height={2.2} rx={1} fill="#334155" />
+        <rect x={-6.4} y={-0.8} width={4.8} height={1.2} rx={0.6} fill="#f8fafc" />
       </g>
-      <g className="animate-walk-cycle-right" style={{ transformOrigin: "3px 0px" }}>
-        <line x1={3} y1={0} x2={3} y2={-9} stroke="#334155" strokeWidth={4} strokeLinecap="round" />
-        <rect x={2} y={-1.5} width={4} height={2.4} rx={1.2} fill="#1c1917" />
+      <g className="animate-walk-cycle-right" style={{ transformOrigin: "3.2px -8px" }}>
+        <line x1={3.2} y1={-1} x2={3.2} y2={-9} stroke="#1e293b" strokeWidth={3.8} strokeLinecap="round" />
+        <rect x={1.8} y={-2.4} width={4.4} height={2.2} rx={1} fill="#334155" />
+        <rect x={1.6} y={-0.8} width={4.8} height={1.2} rx={0.6} fill="#f8fafc" />
       </g>
-    </>
+    </g>
   );
 }
 
@@ -160,9 +186,6 @@ function OfficeWorker({
   const hands = HAND_POSE[mood];
   const slumped = mood === "tired";
 
-  // real walk-cycle legs only while the sprite is actually mid-translation between two world
-  // positions -- previously the legs were a single fixed mid-stride pose regardless of whether
-  // the sprite was moving or standing still, so nothing ever visibly "walked"
   const [isWalking, setIsWalking] = useState(false);
   const [autoFacing, setAutoFacing] = useState<"left" | "right">("right");
   const prevPos = useRef({ x, y });
@@ -170,7 +193,6 @@ function OfficeWorker({
   const walkingRef = useRef(false);
   useEffect(() => {
     if (prevPos.current.x === x && prevPos.current.y === y) {
-      // only the hop duration changed mid-walk: re-arm the stop timer instead of leaving the legs going
       if (!walkingRef.current || !transitionMs) return;
       const timer = setTimeout(() => {
         walkingRef.current = false;
@@ -180,7 +202,6 @@ function OfficeWorker({
     }
     const dx = x - prevPos.current.x;
     const dy = y - prevPos.current.y;
-    // in isometric projection, x-increase moves bottom-right, y-increase moves bottom-left
     if (dx - dy < 0) {
       setAutoFacing("left");
     } else if (dx - dy > 0) {
@@ -198,11 +219,8 @@ function OfficeWorker({
   }, [x, y, transitionMs]);
 
   const effectiveFacing = facing ?? autoFacing;
-
-  // a stable per-instance blink delay so a whole room of sprites doesn't blink in lockstep
   const blinkDelay = useMemo(() => `${(Math.random() * 4).toFixed(2)}s`, []);
 
-  // click-to-banter: a comic speech bubble with a mood-flavored one-liner, auto-dismissing
   const [quip, setQuip] = useState<string | null>(null);
   useEffect(() => {
     if (!quip) return;
@@ -218,9 +236,6 @@ function OfficeWorker({
     }
   };
 
-  // facing, slump and lean live on their own wrapper: the body keyframes (bob, bounce, sprint) animate
-  // `transform` too, so putting scaleX(-1) on the same element let them override it and the sprite
-  // snapped back to facing right whenever it was idle, happy, panicking or running
   const poseTransform =
     [
       slumped ? "translateY(2px) scaleY(0.94)" : "",
@@ -245,79 +260,123 @@ function OfficeWorker({
         {/* legs and shoes, hidden when seated behind a desk or chair */}
         {!seated && (isWalking ? <WalkingLegs /> : <StandingLegs />)}
 
-        {/* arms, drawn behind the torso so the shoulder joint reads cleanly */}
-        <line x1={SHOULDER[0]} y1={SHOULDER[1]} x2={hands.left[0]} y2={hands.left[1]} stroke={skinTone} strokeWidth={3.4} strokeLinecap="round" />
-        <line x1={SHOULDER_R[0]} y1={SHOULDER_R[1]} x2={hands.right[0]} y2={hands.right[1]} stroke={skinTone} strokeWidth={3.4} strokeLinecap="round" />
+        {/* sleeves & arms */}
+        <line x1={SHOULDER[0]} y1={SHOULDER[1]} x2={hands.left[0]} y2={hands.left[1]} stroke={shirtColor} strokeWidth={3.8} strokeLinecap="round" />
+        <line x1={SHOULDER_R[0]} y1={SHOULDER_R[1]} x2={hands.right[0]} y2={hands.right[1]} stroke={shirtColor} strokeWidth={3.8} strokeLinecap="round" />
+        {/* exposed wrists */}
+        <circle cx={hands.left[0]} cy={hands.left[1]} r={1.6} fill={skinTone} />
+        <circle cx={hands.right[0]} cy={hands.right[1]} r={1.6} fill={skinTone} />
+
+        {/* smartwatch on left wrist with glowing cyan pip */}
+        <circle cx={hands.left[0] - 0.5} cy={hands.left[1] - 0.5} r={1.1} fill="#0284c7" />
+        <circle cx={hands.left[0] - 0.5} cy={hands.left[1] - 0.5} r={0.5} fill="#00f0ff" />
 
         <Torso role={role} shirtColor={shirtColor} />
 
+        {/* ULTRABOOK LAPTOP (PRESERVES TEST CONTRACT data-testid="worker-laptop") */}
         {carriesLaptop && (
-          <g data-testid="worker-laptop" transform={`translate(${hands.right[0] + 1.5} ${hands.right[1] - 2})`}>
-            <rect x={-1} y={-1} width={9} height={6} rx={0.8} fill="#0f172a" stroke="#475569" strokeWidth={0.5} />
-            <rect x={0.2} y={0.1} width={6.6} height={3.6} rx={0.4} fill="#22d3ee" opacity={0.85} />
-            <rect x={-2} y={5} width={11} height={1.4} rx={0.5} fill="#334155" />
+          <g data-testid="worker-laptop" transform={`translate(${hands.right[0] + 1} ${hands.right[1] - 3})`}>
+            {/* laptop base body */}
+            <rect x={-2} y={5} width={12} height={1.8} rx={0.6} fill="#0f172a" stroke="#334155" strokeWidth={0.4} />
+            {/* screen lid */}
+            <rect x={-1} y={-2} width={10} height={7} rx={0.8} fill="#1e293b" stroke="#475569" strokeWidth={0.5} />
+            {/* glowing cyan terminal screen */}
+            <rect x={0.2} y={-0.8} width={7.6} height={4.8} rx={0.4} fill="#00f0ff" opacity={0.9} style={{ filter: "drop-shadow(0 0 3px rgba(0,240,255,0.7))" }} />
+            {/* terminal code lines */}
+            <line x1={1} y1={0.5} x2={5.5} y2={0.5} stroke="#0f172a" strokeWidth={0.5} />
+            <line x1={1} y1={1.8} x2={4.2} y2={1.8} stroke="#0f172a" strokeWidth={0.5} />
+            <line x1={1} y1={3.0} x2={6.2} y2={3.0} stroke="#0f172a" strokeWidth={0.5} />
           </g>
         )}
 
+        {/* ID CARD LANYARD */}
         {badge && (
-          <>
-            <line x1={-1} y1={-24} x2={-1.5} y2={-16} stroke="#94a3b8" strokeWidth={0.8} />
-            <rect x={-2.6} y={-16} width={3.2} height={4} rx={0.6} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={0.4} />
-          </>
+          <g>
+            <path d="M -3.5,-23.5 L 0,-15.5 L 3.5,-23.5" stroke="#475569" strokeWidth={0.7} fill="none" />
+            <rect x={-2.6} y={-15} width={3.2} height={4.2} rx={0.6} fill="#f8fafc" stroke="#64748b" strokeWidth={0.4} />
+            <rect x={-1.8} y={-14.2} width={1.6} height={1.6} rx={0.2} fill="#3b82f6" />
+            <line x1={-1.8} y1={-11.8} x2={1.8} y2={-11.8} stroke="#94a3b8" strokeWidth={0.4} />
+          </g>
         )}
 
         {/* neck */}
-        <rect x={-1.8} y={-27} width={3.6} height={3.5} fill={skinTone} />
+        <rect x={-1.8} y={-27.5} width={3.6} height={4} rx={1} fill={skinTone} />
 
-        {/* head */}
-        <circle cx={0} cy={-30} r={6.2} fill={skinTone} />
-        {/* hair cap with side volume */}
-        <ellipse cx={0} cy={-34.2} rx={6.4} ry={4} fill={hairColor} />
-        <ellipse cx={-5.6} cy={-30.5} rx={1.6} ry={2.6} fill={hairColor} />
-        <ellipse cx={5.6} cy={-30.5} rx={1.6} ry={2.6} fill={hairColor} />
+        {/* HEAD & FACE */}
+        <circle cx={0} cy={-30.5} r={6.4} fill={skinTone} />
 
-        {/* eyes: a simple blink (rather than a static face) is enough to read as "alive" at this
-            sprite scale -- each eye's own transformOrigin keeps the blink's squash centered on
-            itself, and the randomized per-instance delay keeps a room of sprites from blinking
-            in unison */}
-        <ellipse
-          cx={-2.3}
-          cy={-29.6}
-          rx={0.9}
-          ry={1.3}
-          fill="#292524"
-          className="animate-eye-blink"
-          style={{ transformOrigin: "-2.3px -29.6px", animationDelay: blinkDelay }}
-        />
-        <ellipse
-          cx={2.3}
-          cy={-29.6}
-          rx={0.9}
-          ry={1.3}
-          fill="#292524"
-          className="animate-eye-blink"
-          style={{ transformOrigin: "2.3px -29.6px", animationDelay: blinkDelay }}
-        />
+        {/* hair volume and shape */}
+        <ellipse cx={0} cy={-34.6} rx={6.6} ry={4.2} fill={hairColor} />
+        <ellipse cx={-5.8} cy={-31} rx={1.8} ry={3} fill={hairColor} />
+        <ellipse cx={5.8} cy={-31} rx={1.8} ry={3} fill={hairColor} />
+        {/* hair specular sheen */}
+        <path d="M -3,-36.5 Q 0,-38 3,-36.5" stroke="rgba(255,255,255,0.25)" strokeWidth={0.8} fill="none" strokeLinecap="round" />
 
+        {/* OVER-EAR SRE HEADSET (for engineers) */}
+        {role === "engineer" && (
+          <g>
+            {/* headband */}
+            <path d="M -6.2,-31 Q 0,-38.5 6.2,-31" stroke="#0f172a" strokeWidth={1.8} fill="none" strokeLinecap="round" />
+            <path d="M -3.5,-35.8 Q 0,-37.2 3.5,-35.8" stroke="#38bdf8" strokeWidth={0.8} fill="none" />
+            {/* ear cups with cyan ring */}
+            <circle cx={-5.8} cy={-30} r={2} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.7} />
+            <circle cx={5.8} cy={-30} r={2} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.7} />
+            {/* mic boom */}
+            <path d="M -5.8,-29 Q -3,-27.5 -0.5,-27.5" stroke="#334155" strokeWidth={0.7} fill="none" />
+            <circle cx={-0.5} cy={-27.5} r={0.65} fill="#10b981" />
+          </g>
+        )}
+
+        {/* eyes with blink animation and eye-shine highlight */}
+        <g>
+          <ellipse
+            cx={-2.3}
+            cy={-30.2}
+            rx={1.0}
+            ry={1.4}
+            fill="#1e293b"
+            className="animate-eye-blink"
+            style={{ transformOrigin: "-2.3px -30.2px", animationDelay: blinkDelay }}
+          />
+          <circle cx={-2.5} cy={-30.6} r={0.35} fill="#ffffff" />
+          <ellipse
+            cx={2.3}
+            cy={-30.2}
+            rx={1.0}
+            ry={1.4}
+            fill="#1e293b"
+            className="animate-eye-blink"
+            style={{ transformOrigin: "2.3px -30.2px", animationDelay: blinkDelay }}
+          />
+          <circle cx={2.1} cy={-30.6} r={0.35} fill="#ffffff" />
+        </g>
+
+        {/* glasses */}
         {glasses && (
-          <g stroke="#1e293b" strokeWidth={0.7} fill="none">
-            <circle cx={-2.6} cy={-30} r={2} />
-            <circle cx={2.6} cy={-30} r={2} />
-            <line x1={-0.6} y1={-30} x2={0.6} y2={-30} />
+          <g stroke="#0f172a" strokeWidth={0.7} fill="none">
+            <rect x={-4.4} y={-31.5} width={3.6} height={2.6} rx={0.6} stroke="#0f172a" fill="rgba(56,189,248,0.15)" />
+            <rect x={0.8} y={-31.5} width={3.6} height={2.6} rx={0.6} stroke="#0f172a" fill="rgba(56,189,248,0.15)" />
+            <line x1={-0.8} y1={-30.2} x2={0.8} y2={-30.2} />
           </g>
         )}
 
         {glowColor && (
-          <ellipse cx={0} cy={-29} rx={5.5} ry={5} fill={glowColor} opacity={0.25} className="animate-screen-glow-pulse" />
+          <ellipse cx={0} cy={-29} rx={6} ry={5} fill={glowColor} opacity={0.3} className="animate-screen-glow-pulse" />
         )}
 
-        {/* typing hands jitter subtly, only for a seated engineer at a lit desk */}
+        {/* typing hands jitter subtly for seated engineer */}
         <g className={typing && mood === "idle" ? "animate-type-jitter" : undefined}>
           <circle cx={hands.left[0]} cy={hands.left[1]} r={1.6} fill={skinTone} />
           <circle cx={hands.right[0]} cy={hands.right[1]} r={1.6} fill={skinTone} />
         </g>
 
-        {holdsMug && <rect x={hands.right[0] - 1.5} y={hands.right[1] - 3} width={3} height={3.4} rx={0.8} fill="#e2e8f0" />}
+        {/* coffee mug with handle */}
+        {holdsMug && (
+          <g transform={`translate(${hands.right[0] - 1.5} ${hands.right[1] - 3.5})`}>
+            <rect x={0} y={0} width={3.4} height={4} rx={0.8} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={0.4} />
+            <path d="M 3.4,1 Q 4.8,2 3.4,3" fill="none" stroke="#cbd5e1" strokeWidth={0.6} />
+          </g>
+        )}
       </g>
       </g>
 

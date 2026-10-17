@@ -36,14 +36,14 @@ export default defineConfig({
   // the same prerequisite the README's "Testing & CI" section already states for pytest.
   webServer: [
     {
-      command: `npm run dev -- --port ${FRONTEND_PORT} --strictPort`,
+      command: `${process.platform === "win32" ? "npm.cmd" : "npm"} run dev -- --port ${FRONTEND_PORT} --strictPort`,
       env: { VITE_API_URL: `http://localhost:${BACKEND_PORT}`, VITE_WS_URL: `ws://localhost:${BACKEND_PORT}/ws/telemetry` },
       url: `http://localhost:${FRONTEND_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
     {
-      command: `python -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `${process.platform === "win32" ? ".\\.venv\\Scripts\\python.exe" : "python"} -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       cwd: "../backend",
       url: `${BACKEND_URL}/api/health`,
       reuseExistingServer: !process.env.CI,
