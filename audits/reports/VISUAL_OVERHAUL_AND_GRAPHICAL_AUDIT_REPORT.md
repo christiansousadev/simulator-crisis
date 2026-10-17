@@ -109,9 +109,27 @@ Todas as 24 capturas de tela oficiais foram regeradas e validadas:
 
 ---
 
-## 5. Parecer Conclusivo da Auditoria
+## 5. Modernização Adicional: Estilo Pixel Art Isométrico (16-bit Retro)
+
+Para atender à demanda estética de eliminar o aspecto vetorial excessivamente geométrico ("quadradão"), foi implementada a transição completa para **Pixel Art Isométrico**:
+
+1. **Primitivas de Degraus Isométricos 2:1:**
+   - Em `isoMath.ts` e `IsoBox.tsx`, as caixas isométricas adotam geometria pura de 4 vértices por face, respeitando rigorosamente a inclinação 2:1 clássica de jogos isométricos retro (como *Habbo Hotel*, *Kairosoft* e *Mega Man Battle Network*).
+   - Ativação de `shapeRendering="crispEdges"` e `image-rendering: pixelated`, eliminando borrões de anti-aliasing do navegador.
+   - Contornos escuros sólidos de 1px (`#090d16` / `#0a0f1d`) com junção em esquadria (`miter`).
+
+2. **Personagens (NPCs Chibi 16-bit):**
+   - Redesenho completo em `OfficeWorker.tsx`: cabeça chibi (13x11px), olhos 2x2 com brilho especular branco, mechas de cabelo pixeladas e bochechas coradas.
+   - Vestimentas temáticas em pixel art: moletons táticos com cordões e bolso canguru para engenheiros, ternos escuros com camisa social e gravata para executivos.
+   - Sneakers com solado de borracha branco de 1px destacado.
+   - Acessórios de alta tecnologia: headsets de concha quadrada com anel neon ciano, haste com LED verde e smartwatch com display ciano.
+   - Animações por passos discretos (`steps()`): ciclo de caminhada em 4 frames-chave, *idle bobbing* de 1px e digitação frenética alternada.
+
+---
+
+## 6. Parecer Conclusivo da Auditoria
 
 O objetivo de transformar o visual e animações do projeto em uma experiência com aspecto de **plataforma e jogo profissional** foi **atingido com excelência técnica**.
 
-- A atmosfera anterior, tida como simples e sem apelo, foi convertida em uma **Cyber War Room com linguagem visual moderna, dinâmica e elegante**, alinhada a simuladores de alta qualidade do gênero tático.
-- Nenhuma regressão foi introduzida: contratos de acessibilidade (`prefers-reduced-motion`, `[data-high-contrast]`, `[data-colorblind-safe]`) e testes unitários/E2E seguem íntegros com **100% de cobertura e aprovação**.
+- A atmosfera anterior, tida como simples e sem apelo, foi convertida em uma **Cyber War Room em Pixel Art Isométrico 16-bit com linguagem visual retro-tática, dinâmica e charmosa**, alinhada aos melhores simuladores de gerenciamento do gênero.
+- Nenhuma regressão foi introduzida: contratos de acessibilidade (`prefers-reduced-motion`, `[data-high-contrast]`, `[data-colorblind-safe]`) e testes unitários/E2E seguem íntegros com **100% de cobertura e aprovação (396/396 testes)**.

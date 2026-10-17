@@ -328,3 +328,93 @@
   animation: ol-hazard-glitch 2.5s steps(2, start) infinite;
 }
 
+/* ==========================================================================
+   PIXEL ART RETRO 16-BIT UTILITIES & STEP-BASED FRAME ANIMATIONS
+   ========================================================================== */
+
+.pixel-art {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  shape-rendering: crispEdges;
+}
+
+/* Stepped 1-pixel idle bobbing for authentic 16-bit RPG character feel */
+@keyframes ol-pixel-bob {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-1px); }
+}
+.animate-worker-bob {
+  animation: ol-pixel-bob 1.2s steps(2, start) infinite;
+}
+
+/* Stepped panic bounce: rapid 2px hopping */
+@keyframes ol-pixel-panic {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+.animate-bounce-panic {
+  animation: ol-pixel-panic 0.35s steps(2, start) infinite;
+}
+
+/* Stepped typing flurry for seated engineers: alternating hands */
+@keyframes ol-pixel-type-left {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+@keyframes ol-pixel-type-right {
+  0%, 100% { transform: translateY(-1.5px); }
+  50% { transform: translateY(0); }
+}
+.animate-pixel-type-left {
+  animation: ol-pixel-type-left 0.16s steps(2, start) infinite;
+}
+.animate-pixel-type-right {
+  animation: ol-pixel-type-right 0.16s steps(2, start) infinite;
+}
+
+/* Stepped 4-frame walk cycle */
+@keyframes ol-pixel-walk-l {
+  0% { transform: rotate(18deg); }
+  25% { transform: rotate(0deg); }
+  50% { transform: rotate(-18deg); }
+  75% { transform: rotate(0deg); }
+  100% { transform: rotate(18deg); }
+}
+@keyframes ol-pixel-walk-r {
+  0% { transform: rotate(-18deg); }
+  25% { transform: rotate(0deg); }
+  50% { transform: rotate(18deg); }
+  75% { transform: rotate(0deg); }
+  100% { transform: rotate(-18deg); }
+}
+.animate-walk-cycle-left {
+  animation: ol-pixel-walk-l 0.4s steps(4, start) infinite;
+}
+.animate-walk-cycle-right {
+  animation: ol-pixel-walk-r 0.4s steps(4, start) infinite;
+}
+
+/* 16-bit steam zig-zag rise */
+@keyframes ol-pixel-steam {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  20% { opacity: 0.9; }
+  50% { transform: translateY(-3px) translateX(1px); opacity: 0.8; }
+  100% { transform: translateY(-7px) translateX(-1px); opacity: 0; }
+}
+.ol-pixel-steam {
+  animation: ol-pixel-steam 1.4s steps(4, start) infinite;
+}
+
+/* Pixel alert balloon pop */
+@keyframes ol-pixel-pop {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop-in {
+  animation: ol-pixel-pop 0.18s steps(3, start) both;
+}
+
+

@@ -55,16 +55,30 @@ function chamferedFace(getPoint: (a: number, b: number) => Point, spanA: number,
   ]);
 }
 
+function simpleFace(getPoint: (a: number, b: number) => Point, spanA: number, spanB: number): string {
+  return toPath([getPoint(0, 0), getPoint(spanA, 0), getPoint(spanA, spanB), getPoint(0, spanB)]);
+}
+
 // BUILD THE THREE VISIBLE SVG POLYGONS OF AN ISOMETRIC BOX
 // x, y: grid origin (near corner is at x+w, y+d); z: base height; w, d, h: size in grid units
-export function boxFaces(x: number, y: number, z: number, w: number, d: number, h: number): BoxFaces {
+// By default, chamfer=false produces pure 2:1 isometric pixel geometry.
+export function boxFaces(
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  d: number,
+  h: number,
+  chamfer = false,
+): BoxFaces {
   const p = (dx: number, dy: number, dz: number) => project(x + dx, y + dy, z + dz);
+  const faceFn = chamfer ? chamferedFace : simpleFace;
   return {
-    top: chamferedFace((dx, dy) => p(dx, dy, h), w, d),
+    top: faceFn((dx, dy) => p(dx, dy, h), w, d),
     // face at max y, facing the screen lower-right
-    faceRight: chamferedFace((dx, dz) => p(dx, d, dz), w, h),
+    faceRight: faceFn((dx, dz) => p(dx, d, dz), w, h),
     // face at max x, facing the screen lower-left
-    faceLeft: chamferedFace((dy, dz) => p(w, dy, dz), d, h),
+    faceLeft: faceFn((dy, dz) => p(w, dy, dz), d, h),
   };
 }
 

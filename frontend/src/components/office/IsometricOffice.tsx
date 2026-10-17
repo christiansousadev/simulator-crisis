@@ -558,7 +558,7 @@ export default function IsometricOffice() {
       <SkylineBackdrop onElement={setSkylineEl} />
       {/* the idle drift lives on this wrapper (translate only), apart from the camera transform */}
       <div ref={sceneHostRef} className="absolute inset-0 z-10 office-drift">
-        <svg viewBox="-406 -156 1006 640" className="relative z-10 w-full h-full" preserveAspectRatio="xMidYMid meet">
+        <svg viewBox="-406 -156 1006 640" className="relative z-10 w-full h-full pixel-art" shapeRendering="crispEdges" preserveAspectRatio="xMidYMid meet">
           <defs>
             <radialGradient id="groundShadowGradient" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="rgba(15,23,42,0.32)" />
