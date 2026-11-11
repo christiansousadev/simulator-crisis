@@ -11,4 +11,4 @@ reportlab>=4.1.0
 pytest>=8.0.0
 pytest-cov>=5.0.0
 ruff>=0.16.0
-alembic>=1.13.0
+alembic>=1.20.0
