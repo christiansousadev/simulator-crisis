@@ -8,7 +8,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["shield-alert.svg"],
+      includeAssets: [
+        "favicon.ico",
+        "shield-alert.svg",
+        "apple-touch-icon.png",
+        "pwa-192x192.png",
+        "pwa-512x512.png",
+        "maskable-icon-512x512.png",
+      ],
       manifest: {
         name: "IncidentZero Corp.",
         short_name: "IncidentZero",
@@ -18,10 +25,10 @@ export default defineConfig({
         display: "standalone",
         start_url: "/",
         icons: [
-          // the existing branded shield mark, reused as-is rather than generating new binary
-          // assets; most modern installers accept a single "any"-purpose svg icon, though a
-          // dedicated maskable 512x512 png would be a worthwhile follow-up for stricter installers
           { src: "/shield-alert.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+          { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/maskable-icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {

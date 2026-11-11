@@ -128,10 +128,6 @@ export default {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
-        "bounce-panic": {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-6px)" },
-        },
         // one-shot horizontal rejection wobble (wrong pick); shake above loops for the screen shake
         "shake-once": {
           "0%, 100%": { transform: "translateX(0)" },
@@ -176,10 +172,6 @@ export default {
           "0%, 100%": { transform: "rotate(-18deg)" },
           "50%": { transform: "rotate(18deg)" },
         },
-        "worker-bob": {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-1.4px)" },
-        },
         "type-jitter": {
           "0%, 100%": { transform: "translateX(0)" },
           "50%": { transform: "translateX(0.8px)" },
@@ -210,10 +202,6 @@ export default {
           "0%": { transform: "rotate(0deg)" },
           "100%": { transform: "rotate(360deg)" },
         },
-        "sprint-bounce": {
-          "0%, 100%": { transform: "translateY(0) skewX(-6deg)" },
-          "50%": { transform: "translateY(-4px) skewX(-6deg)" },
-        },
         "sweat-drop": {
           "0%": { transform: "translateY(0)", opacity: "0.9" },
           "100%": { transform: "translateY(8px)", opacity: "0" },
@@ -226,17 +214,6 @@ export default {
           "0%, 100%": { transform: "translateX(-11px)" },
           "50%": { transform: "translateX(11px)" },
         },
-        // scissor walk-cycle: each leg's own <g> is pivoted at its hip via transformOrigin, so
-        // this only ever rotates that one leg -- paired with "walk-cycle-right" (opposite phase)
-        // to alternate, and applied only while OfficeWorker detects it's actually mid-transition
-        "walk-cycle-left": {
-          "0%, 100%": { transform: "rotate(16deg)" },
-          "50%": { transform: "rotate(-16deg)" },
-        },
-        "walk-cycle-right": {
-          "0%, 100%": { transform: "rotate(-16deg)" },
-          "50%": { transform: "rotate(16deg)" },
-        },
         // natural, infrequent eye blink (mostly open, briefly shut) rather than a continuous
         // flutter -- each eye's own transformOrigin keeps the squash centered on itself
         "eye-blink": {
@@ -246,22 +223,6 @@ export default {
         "drawer-slide-in": {
           "0%": { transform: "translateX(-16px)", opacity: "0" },
           "100%": { transform: "translateX(0)", opacity: "1" },
-        },
-        "screen-shake-light": {
-          "0%, 100%": { transform: "translate(0, 0)" },
-          "20%": { transform: "translate(-4px, 2px)" },
-          "40%": { transform: "translate(3px, -3px)" },
-          "60%": { transform: "translate(-3px, -1px)" },
-          "80%": { transform: "translate(2px, 3px)" },
-        },
-        "screen-shake-heavy": {
-          "0%, 100%": { transform: "translate(0, 0) rotate(0deg)" },
-          "15%": { transform: "translate(-10px, 6px) rotate(-0.5deg)" },
-          "30%": { transform: "translate(9px, -8px) rotate(0.5deg)" },
-          "45%": { transform: "translate(-8px, -5px) rotate(-0.4deg)" },
-          "60%": { transform: "translate(7px, 8px) rotate(0.3deg)" },
-          "75%": { transform: "translate(-5px, -3px) rotate(-0.2deg)" },
-          "90%": { transform: "translate(3px, 2px) rotate(0deg)" },
         },
         "impact-flash-fx": {
           "0%": { opacity: "0" },
@@ -314,7 +275,6 @@ export default {
         "pop-in": "pop-in 0.25s ease-out",
         "modal-in": "modal-in 0.18s ease-out",
         "backdrop-in": "backdrop-in 0.15s ease-out",
-        "bounce-panic": "bounce-panic 0.5s ease-in-out infinite",
         "shake-once": "shake-once 0.32s ease-in-out both",
         shake: "shake 0.22s linear infinite",
         "spin-slow": "spin-slow 2.4s linear infinite",
@@ -324,7 +284,6 @@ export default {
         "fan-spin": "fan-spin 1.2s linear infinite",
         "smoke-rise": "smoke-rise 1.4s ease-out infinite",
         "wrench-turn": "wrench-turn 0.4s ease-in-out infinite",
-        "worker-bob": "worker-bob 1.6s ease-in-out infinite",
         "type-jitter": "type-jitter 0.18s ease-in-out infinite",
         "steam-rise": "steam-rise 1.6s ease-out infinite",
         "spark-flicker": "spark-flicker 0.6s steps(1, end) infinite",
@@ -332,16 +291,11 @@ export default {
         "glow-pulse": "glow-pulse 1.8s ease-in-out infinite",
         "beacon-flash": "beacon-flash 0.7s step-start infinite",
         "beacon-sweep": "beacon-sweep 2.2s linear infinite",
-        "sprint-bounce": "sprint-bounce 0.28s ease-in-out infinite",
         "sweat-drop": "sweat-drop 0.9s ease-in infinite",
         "screen-glow-pulse": "screen-glow-pulse 2.4s ease-in-out infinite",
         "ball-volley": "ball-volley 1.1s ease-in-out infinite",
-        "walk-cycle-left": "walk-cycle-left 0.45s ease-in-out infinite",
-        "walk-cycle-right": "walk-cycle-right 0.45s ease-in-out infinite",
         "eye-blink": "eye-blink 4s ease-in-out infinite",
         "drawer-slide-in": "drawer-slide-in 0.22s ease-out",
-        "screen-shake-light": "screen-shake-light 0.4s ease-in-out",
-        "screen-shake-heavy": "screen-shake-heavy 0.6s ease-in-out",
         "impact-flash-fx": "impact-flash-fx 0.5s ease-out",
         "confetti-fall": "confetti-fall 3.2s linear forwards",
         "ticker-scroll": "ticker-scroll 32s linear infinite",

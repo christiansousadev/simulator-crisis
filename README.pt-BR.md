@@ -113,8 +113,10 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 
 - **Escritório Isométrico Vivo:** Diorama isométrico em SVG com câmera de mola (zoom em direção ao cursor, arrasto com inércia, teclas de seta, `+`, `-` e `Home`), voo de "Centralizar na Crise" até o rack mais grave e minimapa com moldura de visualização arrastável.
 - **Luz Contínua:** O céu e a iluminação do escritório acompanham a hora do jogo de forma suave, e o DEFCON define o clima: poça âmbar no DEFCON 4, giroflex âmbar no 3 e alerta vermelho encenado (cintilação, giroflex, varredura) do 2 para baixo.
-- **Racks que Reagem:** Racks saudáveis, degradados e fora do ar mudam de tom, padrão de LED e efeitos com transições encenadas, um tremor único na falha e uma sequência de recuperação (faixa de varredura, LEDs ficando verdes, selo "RESTAURADO").
+- **Racks que Reagem:** Racks saudáveis, degradados e fora do ar mudam de tom, padrão de LED e efeitos com transições encenadas, um tremor único na falha e uma sequência de recuperação (faixa de varredura, LEDs ficando verdes, selo "RESTAURADO", confete pixelado). As ventoinhas forçam em degradação e desaceleram até parar quando o rack cai, e chips de valor sobem de onde foram ganhos: `+SLA` no rack restaurado, `-$` no rack sob runbook, `+XP` na mesa do engenheiro.
 - **Equipe de Verdade no Escritório:** As mesas ficam vagas até você contratar. Os novos engenheiros entram pela recepção até a mesa, correm à sala de servidores quando o serviço deles tem incidente e vão à copa quando descansam.
+- **Personagens com Peso:** Equipe em pixel art sobre um rig em camadas: sombra no chão, quatro direções isométricas com vista de costas, um só relógio de passada para pernas, balanço dos braços e bob, respiração, digitação em rajadas e gestos ociosos (olhar em volta, checar o relógio, beber da caneca da mesa, tirar um expresso). Um incidente varre o andar com um susto e um balão "!"; a corrida levanta poeira; os executivos apontam para a TV de métricas; quem está por perto dá um passo hesitante para trás. Um clique amassa e estica mesas, racks e funcionários.
+- **Vida Ambiente:** A porta do datacenter desliza quando alguém passa, cadeiras vazias ficam afastadas da mesa, mesas vagas entram em screensaver, luminárias acendem piscando ao anoitecer, plantas balançam quando alguém passa correndo e a almofada do sofá afunda sob quem se recosta. O tremor de tela move só o cenário do escritório, nunca o HUD.
 - **HUD Legível:** Os números contam suavemente até o novo valor, os gastos saem do contador de caixa como chips com rótulo ("-US$ 1.800 · Rollback"), o custo fixo aparece como uma tendência discreta, os medidores piscam ao cruzar uma faixa e o cooldown dos runbooks varre suave e brilha quando fica pronto.
 - **Listas com Memória:** Os incidentes se ordenam por urgência e trazem a trilha Novo → Reconhecido → Investigado → Mitigando → Resolvido, com a próxima ação sempre visível; novas linhas do ledger ganham destaque; cards resolvidos recebem um carimbo antes de sumir.
 - **Tutorial Interativo:** Um guia com destaques que aponta o rack, o card, os botões e os runbooks reais, espera você agir e cria um incidente de treino garantido. Reveja quando quiser pelo botão de ajuda ou pelo menu de pausa.
@@ -128,9 +130,11 @@ O loop principal de gameplay reflete o ciclo de vida real de resposta a incident
 |---|---|
 | `Espaço` | Pausar ou retomar |
 | `1` `2` `5` | Velocidade do jogo |
-| `I` `M` `C` `U` `R` `A` `G` | Abas do dock: incidentes, diretivas, conformidade, upgrades, equipe, conquistas, métricas |
+| `I` `M` `C` `U` `R` `A` `G` `W` | Abas do dock: incidentes, diretivas, conformidade, upgrades, equipe, conquistas, métricas, war room |
+| `D` | Recolher ou expandir o dock |
 | `[` `]` | Incidente aberto anterior ou seguinte |
 | `B` | Modo construção |
+| `?` `H` | Abrir a Academia SRE (ajuda) |
 | Setas, `+` `-`, `Home` | Mover, aproximar e redefinir a câmera |
 | `Esc` | Fecha o diálogo do topo ou abre o menu de pausa |
 
@@ -243,6 +247,8 @@ make check             # lint + tsc + testes unitários + build + e2e (também: 
 ```
 
 A suíte Playwright (`frontend/e2e/`) valida os fluxos reais da interface contra instâncias ativas do backend e WebSocket sem uso de mocks. O pipeline de CI valida linting, testes unitários, checagem de tipos e testes end-to-end a cada pull request (`.github/workflows/ci.yml`).
+
+As 26 capturas oficiais em `docs/screenshots/` (13 em inglês, 13 em português) são regeradas por `npx playwright test capture-screenshots.spec.ts` a partir de `frontend/`. Defina `E2E_FRONTEND_PORT` / `E2E_BACKEND_PORT` se as portas padrão estiverem ocupadas. O spec contrata dois engenheiros antes, para o escritório aparecer com equipe em todas as imagens.
 
 ---
 

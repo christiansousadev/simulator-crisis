@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGameStore } from "../../store/useGameStore";
 import { decodeChallengeCode } from "../../utils/scenarioConfig";
@@ -43,8 +43,10 @@ describe("ScenarioBuilderModal starting conditions", () => {
     fireEvent.click(budgetToggle);
     fireEvent.click(debtToggle);
     fireEvent.change(screen.getByLabelText("Starting Tech Debt (TDI)"), { target: { value: "60" } });
-    fireEvent.click(screen.getByRole("button", { name: /Copy Challenge Code/ }));
-    await Promise.resolve();
+    // the clipboard write resolves asynchronously and flips the "copied" state: flush it inside act
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Copy Challenge Code/ }));
+    });
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(decodeChallengeCode(writeText.mock.calls[0][0])).toMatchObject({ starting_budget: 250_000, starting_tech_debt: 60 });
   });

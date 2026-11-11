@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -12,7 +12,7 @@ class AuditLog(Base):
 
     id = Column(String(36), primary_key=True)
     session_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     tick = Column(Integer, nullable=False)
     event_type = Column(String(50), nullable=False)
     actor = Column(String(50), nullable=False)

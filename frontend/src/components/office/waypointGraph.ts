@@ -266,6 +266,34 @@ export function hopDurationMs(from: GridPoint, to: GridPoint, speed = WALK_SPEED
   return Math.max(MIN_HOP_MS, Math.round((Math.hypot(to.x - from.x, to.y - from.y) / speed) * 1000));
 }
 
+// THE FOUR ISOMETRIC HEADINGS. n* moves away from the camera (the sprite shows its back), s* comes
+// toward it (front view); *e / *w match the left/right facing used for the horizontal flip.
+export type Heading = "ne" | "nw" | "se" | "sw";
+
+// the front-facing heading for a sprite standing still and turned left or right
+export function frontHeading(facing: "left" | "right"): Heading {
+  return facing === "left" ? "sw" : "se";
+}
+
+export function isBackHeading(heading: Heading): boolean {
+  return heading === "ne" || heading === "nw";
+}
+
+// WHICH OF THE FOUR HEADINGS A MOVE FROM ONE WORLD POINT TO ANOTHER HAS. screen-y grows with
+// (x + y), so a move that lowers x + y walks away from the camera. A move with no depth change
+// keeps the north/south half of `fallback`; the east/west half always follows `facing`, so the
+// back view and the horizontal flip can never disagree.
+export function headingForMove(
+  from: GridPoint,
+  to: GridPoint,
+  facing: "left" | "right",
+  fallback: Heading = "se"
+): Heading {
+  const depth = to.x + to.y - (from.x + from.y);
+  const ns = Math.abs(depth) < 1e-6 ? fallback[0] : depth < 0 ? "n" : "s";
+  return `${ns}${facing === "left" ? "w" : "e"}` as Heading;
+}
+
 // WHICH WAY A SPRITE FACES WHEN IT MOVES FROM ONE WORLD POINT TO ANOTHER. in the isometric
 // projection screen-x grows with (x - y); a move with no screen-x change keeps the previous facing
 export function facingForMove(from: GridPoint, to: GridPoint, fallback: "left" | "right" = "right"): "left" | "right" {

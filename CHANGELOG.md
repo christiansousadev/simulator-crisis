@@ -6,6 +6,85 @@ version numbers since this project hasn't tagged releases yet.
 
 ## [Unreleased]
 
+### Added (animations & game feel)
+
+- Layered sprite rig in `OfficeWorker`: contact shadow on the floor outside every bob; legs, arm
+  swing (counter-phase, with the laptop/mug arm locked), body bob and shadow all driven by one
+  `--step` clock derived from walking speed (`workerRig.gaitFor`); whole-pixel 4-frame poses with
+  `steps()`, no rotation or skew.
+- Breathing on the upper body only, with a per-sprite phase; `tired` and `recovering` are no
+  longer static. Typing now comes in bursts with reading pauses.
+- Four isometric headings (`heading: "ne" | "nw" | "se" | "sw"` on `WalkerView`) with a simplified
+  back view; routes ease in from a standstill and brake into the stop; anticipation, settle and
+  two-frame sit/stand cues.
+- Startle hop and a 7×9 pixel `!` balloon sweeping the floor in a 0–300 ms wave when an incident
+  hits; three seeded panic styles; urgency lean instead of `skewX`; cheer when a service is restored.
+- `useIdleGesture`: look around, check the watch, stretch, and sip from the desk mug (the mug leaves
+  the desk via `deskLife`); the break-room employee pulls a shot at the espresso machine and lounges
+  on the sofa.
+- Juice: `.ol-press` squash & stretch on desks, racks and staff; `PixelBurst` confetti on rack and
+  desk when a service is restored; rack fans strain when degraded and spin down when down, a down
+  chassis rattles, and top sparks fire in irregular bursts.
+- Screen shake moved from the app root to the office SVG (`useSceneShake`): HUD, dock and KPIs stay
+  still; three magnitudes (breach / P1 / bankruptcy) with a 1.5 s cooldown. Reduced motion shows a
+  static red border flash instead.
+
+### Added (ambient life & world feedback)
+
+- Ambient office life:
+  - the vault's glass door slides on a 4-frame track while someone crosses it;
+  - a desk chair is left pushed back and turned while its engineer is away;
+  - vacant desks run a dim, slow screensaver;
+  - desk lamps switch on at dusk (18:00) with two flicker frames;
+  - potted plants rustle one pixel when someone runs past on red alert;
+  - the sofa cushion sinks with a small elastic settle under whoever lounges on it.
+- World-anchored value chips (`WorldChip`): `+SLA` rises off a restored rack, `-$` off a rack under a
+  runbook, and `+XP` off the desk of the engineer whose service was restored (the XP the backend
+  grants on resolution). The HUD's floating text still carries the numbers under reduced motion.
+- Urgency runs kick up two recycled 1–2 px dust motes behind the heels, one per footfall.
+- On red alert, one executive at the metrics TV points at the screen while the other taps a foot
+  (`OfficeWorker` `action`); lounge wanderers turn toward the vault, crane their head and take one
+  hesitant step back (`wary`) instead of freezing.
+- `capture-screenshots.spec.ts` now produces all 26 official screenshots: it hires two specialists
+  so the office HUD shows engineers seated at lit desks, and adds the forensic log triage terminal
+  and the guided tutorial spotlighting the alerting rack (EN and pt-BR).
+- Tests: `ambientLife.test.tsx` (17 cases, reduced motion included).
+
+### Fixed (tests)
+
+- The frontend test run is now free of `act()` warnings (it had 9). Components were unmounted before
+  `afterEach` store resets in `foundation` and `officeScene`; the post-mortem close in `AuditorChat` is
+  wrapped in `act`; and the asynchronous hire in `EngineerRosterPanel` settles inside `act`.
+
+### Fixed (animations)
+
+- The screen shake never ran in production: its keyframes were defined only in
+  `tailwind.config.js`, which emits a keyframe only for a used `animate-*` utility. They now live in
+  `index.css`.
+- Removed conflicting duplicate keyframes: `animate-walk-cycle-*`, `worker-bob`, `bounce-panic` and
+  `sprint-bounce` existed in both Tailwind and `officeLife.css`, and the office stylesheet's global
+  `.animate-pop-in` silently overrode the HUD's pop-in. In-world balloons now use `.ol-pop`.
+
+### Added (career & office polish)
+
+- Prestige badge on the top-bar Hall of Fame button: shows the spendable balance (compact `1.2k`
+  form), bumps on every earn/spend, and names the balance for screen readers.
+- `?` / `H` open the SRE Academy from anywhere in-game (listed in Settings → Keyboard shortcuts).
+- Decor shop: fully localized (en / pt-BR / es) by cosmetic id, shortfall hint on unaffordable
+  items, error and confirmation announcements, double-click guard, proper `tab`/`tabpanel` wiring
+  with arrow-key navigation; the catalog is fetched once per opening instead of on every filter.
+- `IsoFaceDecal`: pixel detail painted onto an isometric face's own 2:1 plane. The boardroom C4
+  sketch now sits on the whiteboard (it used to overflow it) and flags the failing service on red
+  alert; desks get a handled SRE mug that steams while its engineer is seated; the wall carries an
+  extinguisher station with locator sign, a first-aid cabinet and a pictogram exit sign.
+- Tests: `HallOfFameModal.test.tsx`, `Topbar.test.tsx`, `officeDetails.test.tsx`,
+  `backend/tests/test_cosmetics.py`, and help-key routing cases.
+
+### Fixed
+
+- README and Settings shortcut lists were missing `W` (war room) and `D` (dock).
+- `active:scale-98` (not a Tailwind utility) on the unlock button replaced with `active:scale-[0.98]`.
+
 ### Added (systemic evolution)
 
 - Deterministic offline auditor for the post-mortem interview (no more `503` without an LLM key);

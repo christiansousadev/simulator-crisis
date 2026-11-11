@@ -18,7 +18,6 @@ import LazyDialogs from "./components/flow/LazyDialogs";
 import LazyModalHost from "./components/flow/LazyModalHost";
 import { HallOfFameModal, PostMatchDebriefModal, preloadGameplayChunks, ScenarioSelectModal } from "./components/flow/lazyModals";
 import { usePresenceFlag } from "./hooks/usePresence";
-import { useReducedMotion } from "./hooks/useReducedMotion";
 import { useRunAchievements } from "./hooks/useRunAchievements";
 import { useSimulationHolds } from "./hooks/useSimulationHolds";
 import { useFlowStore } from "./store/useFlowStore";
@@ -53,7 +52,6 @@ export default function App() {
   // select the derived level only: subscribing to the whole telemetry object re-rendered the
   // entire tree (office svg, dock, every modal) on every single tick
   const defconLevel = useGameStore((s) => computeDefconLevel(s.telemetry));
-  const reducedMotion = useReducedMotion();
   const reducedMotionPref = useGameStore((s) => s.reducedMotionPref);
   const titleScreenVisible = useGameStore((s) => s.titleScreenVisible);
   const language = useGameStore((s) => s.language);
@@ -64,8 +62,6 @@ export default function App() {
   const officeIntro = useFlowStore((s) => s.officeIntro);
   const title = usePresenceFlag(titleScreenVisible, TITLE_EXIT_MS);
   const stageView = useGameStore((s) => s.stageView);
-  const screenShakeSeq = useGameStore((s) => s.screenShakeSeq);
-  const screenShakeMagnitude = useGameStore((s) => s.screenShakeMagnitude);
   const highContrast = useGameStore((s) => s.highContrast);
   const colorblindSafe = useGameStore((s) => s.colorblindSafe);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -100,22 +96,8 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [titleScreenVisible]);
 
-  // imperative class toggle rather than a react-controlled class so a rapid second shake
-  // restarts the css animation cleanly instead of being swallowed by an unchanged classname
-  useEffect(() => {
-    if (screenShakeSeq === 0) return;
-    if (reducedMotion) return;
-    const el = rootRef.current;
-    if (!el) return;
-    const shakeClass = screenShakeMagnitude === "heavy" ? "screen-shake-heavy" : "screen-shake-light";
-    el.classList.remove("screen-shake-light", "screen-shake-heavy");
-    // force reflow so re-adding the same class restarts the animation
-    void el.offsetWidth;
-    el.classList.add(shakeClass);
-    const timer = setTimeout(() => el.classList.remove(shakeClass), 700);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenShakeSeq, screenShakeMagnitude]);
+  // screen shake lives on the office scene itself (useSceneShake in IsometricOffice), so the HUD
+  // around it never trembles
 
   // modals reachable from the title screen or gameplay
   const alwaysMountedModals = (

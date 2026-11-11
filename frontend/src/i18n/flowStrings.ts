@@ -62,6 +62,7 @@ export interface FlowStrings {
   shortcutTabs: string;
   shortcutDock: string;
   shortcutBuild: string;
+  shortcutHelp: string;
   // credits
   creditsDesign: string;
   creditsTech: string;
@@ -180,6 +181,7 @@ export const flowEn: FlowStrings = {
   shortcutTabs: "Dock tabs",
   shortcutDock: "Collapse or expand the dock",
   shortcutBuild: "Build mode",
+  shortcutHelp: "Open the SRE Academy (help)",
   creditsDesign: "Design & simulation",
   creditsTech: "Built with",
   creditsPractice: "Grounded in",

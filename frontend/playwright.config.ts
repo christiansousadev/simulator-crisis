@@ -1,4 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const backendDir = path.resolve(__dirname, "../backend");
+const pythonBin = process.platform === "win32"
+  ? path.join(backendDir, ".venv", "Scripts", "python.exe")
+  : "python";
 
 // e2e/ drives the real, running app end-to-end (both servers, a real WebSocket, a real SQLite
 // session) rather than mocking anything -- it exists specifically to catch the class of bug that
@@ -43,8 +51,9 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: `${process.platform === "win32" ? ".\\.venv\\Scripts\\python.exe" : "python"} -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
-      cwd: "../backend",
+      command: `"${pythonBin}" -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      cwd: backendDir,
+      env: { PYTHONPATH: backendDir },
       url: `${BACKEND_URL}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

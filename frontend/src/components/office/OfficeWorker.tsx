@@ -1,11 +1,29 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useTranslation } from "../../i18n/useTranslation";
 import { project } from "./isoMath";
+import { useIdleGesture } from "./useIdleGesture";
+import { Heading, isBackHeading } from "./waypointGraph";
+import {
+  breathCycle,
+  breathPhase,
+  CUE_CLASSES,
+  Gait,
+  gaitFor,
+  GaitTiming,
+  headingFromDelta,
+  IdleGesture,
+  panicVariantFor,
+  replayClass,
+  seedOf,
+  startleWaveMs,
+} from "./workerRig";
 
 export type WorkerMood = "idle" | "panic" | "running" | "tired" | "happy" | "recovering";
 
 const QUIP_DISPLAY_MS = 3200;
+const EXCLAIM_MS = 900;
 
 // maps every sprite mood onto one of the four flavored quip pools (running/recovering read
 // closest to a determined "idle" bark rather than getting their own dedicated lines)
@@ -33,6 +51,8 @@ interface OfficeWorkerProps {
   badge?: boolean;
   glowColor?: string;
   facing?: "left" | "right";
+  /** one of the four isometric directions; n* shows the sprite's back. Omitted = derived from movement */
+  heading?: Heading;
   name?: string;
   workerStatusText?: string;
   /** only seated engineers at a lit desk type; everyone else keeps their hands still */
@@ -47,39 +67,70 @@ interface OfficeWorkerProps {
   fadeIn?: boolean;
   /** when set, a click runs this (after the banter bubble) and stops there instead of bubbling to the canvas */
   onActivate?: () => void;
+  /** stable per-sprite key for variation (panic style, breathing phase); defaults to name + colours */
+  seedKey?: string;
+  /** rising edge = the incident just hit: startle hop and a "!" balloon, swept across the floor */
+  alarmed?: boolean;
+  /** arms up and a little hop, e.g. the engineer whose service was just restored */
+  cheering?: boolean;
+  /** reaching for the espresso machine */
+  brewing?: boolean;
+  /** leaning back on the sofa, one arm on the backrest */
+  lounging?: boolean;
+  /** which sporadic idle gestures this sprite may play (default by mood) */
+  gestures?: readonly IdleGesture[];
+  onGestureChange?: (gesture: IdleGesture | null) => void;
+  /** a held standing action that replaces the panic style: point at a screen, or tap a foot */
+  action?: WorkerAction;
+  /** a bystander on alert: head craned one pixel toward what is facing, no idle gestures */
+  wary?: boolean;
 }
+
+export type WorkerAction = "point" | "stomp";
 
 interface HandPose {
   left: [number, number];
   right: [number, number];
 }
 
-// hand coordinates are local to the sprite, feet/seat at (0,0), head near (0,-30)
-const HAND_POSE: Record<WorkerMood, HandPose> = {
-  idle: { left: [-5, -15], right: [5, -15] },
-  panic: { left: [-5, -31], right: [5, -31] },
+// hand coordinates are local to the sprite, feet/seat at (0,0), head near (0,-30). Resting hands
+// hang just outside the torso so the arm swing is actually visible.
+const HAND_POSE: Record<WorkerMood | "typing" | "lounge" | "flail" | WorkerAction, HandPose> = {
+  idle: { left: [-8, -14], right: [8, -14] },
+  typing: { left: [-4, -14], right: [4, -14] },
+  panic: { left: [-8, -32], right: [8, -32] },
+  flail: { left: [-8, -14], right: [8, -14] },
   running: { left: [-9, -12], right: [8, -20] },
   tired: { left: [-7, -7], right: [7, -7] },
-  happy: { left: [-5, -16], right: [5, -18] },
-  recovering: { left: [-5, -30], right: [5, -15] },
+  happy: { left: [-8, -16], right: [8, -18] },
+  recovering: { left: [-8, -30], right: [8, -14] },
+  lounge: { left: [-10, -24], right: [8, -14] },
+  // arm out straight at shoulder height toward whatever the sprite faces; the other hand on the hip
+  point: { left: [-8, -15], right: [16, -24] },
+  // both hands on the hips while one foot taps
+  stomp: { left: [-9, -16], right: [9, -16] },
 };
 
-const SHOULDER: [number, number] = [-5, -22];
-const SHOULDER_R: [number, number] = [5, -22];
+const SHOULDER_L: [number, number] = [-6, -22];
+const SHOULDER_R: [number, number] = [6, -22];
 
-const BODY_ANIMATION: Record<WorkerMood, string> = {
-  idle: "animate-worker-bob",
-  panic: "animate-bounce-panic",
-  running: "animate-sprint-bounce",
-  tired: "",
-  happy: "animate-worker-bob",
-  recovering: "",
-};
+const DEFAULT_GESTURES: IdleGesture[] = ["look", "watch"];
+const TIRED_GESTURES: IdleGesture[] = ["stretch", "look"];
+const LOUNGE_GESTURES: IdleGesture[] = ["look"];
 
-// RENDER THE ROLE-SPECIFIC TORSO GARMENT: DETAILED TACTICAL HOODIE, TAILORED SUIT OR CASUAL TEE
-// RENDER THE ROLE-SPECIFIC TORSO GARMENT: DETAILED 16-BIT RETRO PIXEL HOODIE, TAILORED SUIT OR CASUAL TEE
-function Torso({ role, shirtColor }: { role: WorkerRole; shirtColor: string }) {
+// RENDER THE ROLE-SPECIFIC TORSO GARMENT: 16-BIT PIXEL HOODIE, TAILORED SUIT OR CASUAL TEE, FRONT OR BACK
+function Torso({ role, shirtColor, back }: { role: WorkerRole; shirtColor: string; back: boolean }) {
   if (role === "executive") {
+    if (back) {
+      return (
+        <g shapeRendering="crispEdges">
+          <rect x={-6.5} y={-24} width={13} height={15} fill="#182232" stroke="#0a0f1d" strokeWidth={0.8} />
+          {/* collar and the centre back vent */}
+          <rect x={-3} y={-24} width={6} height={1.5} fill="#0f172a" />
+          <line x1={0} y1={-14} x2={0} y2={-9} stroke="#0a0f1d" strokeWidth={0.8} />
+        </g>
+      );
+    }
     return (
       <g shapeRendering="crispEdges">
         {/* blazer jacket block with crisp dark border */}
@@ -97,6 +148,16 @@ function Torso({ role, shirtColor }: { role: WorkerRole; shirtColor: string }) {
     );
   }
   if (role === "engineer") {
+    if (back) {
+      return (
+        <g shapeRendering="crispEdges">
+          <rect x={-6.5} y={-24} width={13} height={15} fill={shirtColor} stroke="#0a0f1d" strokeWidth={0.8} />
+          <rect x={-6.5} y={-11} width={13} height={2} fill="rgba(0,0,0,0.24)" stroke="#0a0f1d" strokeWidth={0.6} />
+          {/* the hood hanging down the back */}
+          <rect x={-4} y={-24} width={8} height={5} fill="rgba(0,0,0,0.22)" stroke="#0a0f1d" strokeWidth={0.6} />
+        </g>
+      );
+    }
     return (
       <g shapeRendering="crispEdges">
         {/* tactical hoodie block with pixel outline */}
@@ -118,40 +179,24 @@ function Torso({ role, shirtColor }: { role: WorkerRole; shirtColor: string }) {
   return (
     <g shapeRendering="crispEdges">
       <rect x={-6.5} y={-24} width={13} height={15} fill={shirtColor} stroke="#0a0f1d" strokeWidth={0.8} />
-      {/* collar seam */}
-      <rect x={-3} y={-24} width={6} height={2} fill="rgba(0,0,0,0.16)" stroke="#0a0f1d" strokeWidth={0.6} />
+      {/* collar seam (front) or the plain back of the tee */}
+      <rect x={-3} y={-24} width={6} height={back ? 1 : 2} fill="rgba(0,0,0,0.16)" stroke="#0a0f1d" strokeWidth={0.6} />
     </g>
   );
 }
 
-// STANDING LEGS: CARGO SLACKS WITH 16-BIT PIXEL SNEAKERS & WHITE MIDSOLES
-function StandingLegs() {
+// LEGS: CARGO SLACKS WITH 16-BIT PIXEL SNEAKERS. Each leg is its own group so the gait keyframes can
+// shift it whole pixels per frame; the trousers reach 1px under the torso so breathing never opens a gap.
+function Legs() {
   return (
     <g shapeRendering="crispEdges">
-      {/* left & right pants legs */}
-      <rect x={-4.5} y={-9} width={3.5} height={7.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.8} />
-      <rect x={1} y={-9} width={3.5} height={7.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.8} />
-      {/* sneaker uppers with pixel contours */}
-      <rect x={-6} y={-2.5} width={5} height={2.5} fill="#334155" stroke="#0a0f1d" strokeWidth={0.8} />
-      <rect x={1} y={-2.5} width={5} height={2.5} fill="#334155" stroke="#0a0f1d" strokeWidth={0.8} />
-      {/* white rubber sole strips */}
-      <rect x={-6.2} y={-0.8} width={5.4} height={1.2} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
-      <rect x={0.8} y={-0.8} width={5.4} height={1.2} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
-    </g>
-  );
-}
-
-// WALKING LEGS: SCISSOR STRIDE WITH STEPPED 16-BIT LIMBS
-function WalkingLegs() {
-  return (
-    <g shapeRendering="crispEdges">
-      <g className="animate-walk-cycle-left" style={{ transformOrigin: "-2.8px -8px" }}>
-        <rect x={-4.5} y={-9} width={3.5} height={7.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.8} />
+      <g className="ol-leg-l">
+        <rect x={-4.5} y={-10} width={3.5} height={8.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.8} />
         <rect x={-6} y={-2.5} width={5} height={2.5} fill="#334155" stroke="#0a0f1d" strokeWidth={0.8} />
         <rect x={-6.2} y={-0.8} width={5.4} height={1.2} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
       </g>
-      <g className="animate-walk-cycle-right" style={{ transformOrigin: "2.8px -8px" }}>
-        <rect x={1} y={-9} width={3.5} height={7.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.8} />
+      <g className="ol-leg-r">
+        <rect x={1} y={-10} width={3.5} height={8.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.8} />
         <rect x={1} y={-2.5} width={5} height={2.5} fill="#334155" stroke="#0a0f1d" strokeWidth={0.8} />
         <rect x={0.8} y={-0.8} width={5.4} height={1.2} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
       </g>
@@ -159,7 +204,26 @@ function WalkingLegs() {
   );
 }
 
-// 16-BIT RETRO PIXEL ART CHIBI HUMANOID SPRITE
+function Arm({ shoulder, hand, color, skinTone }: { shoulder: [number, number]; hand: [number, number]; color: string; skinTone: string }) {
+  return (
+    <>
+      <line x1={shoulder[0]} y1={shoulder[1]} x2={hand[0]} y2={hand[1]} stroke="#0a0f1d" strokeWidth={4.8} strokeLinecap="square" />
+      <line x1={shoulder[0]} y1={shoulder[1]} x2={hand[0]} y2={hand[1]} stroke={color} strokeWidth={3.4} strokeLinecap="square" />
+      <rect x={hand[0] - 1.5} y={hand[1] - 1.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} />
+    </>
+  );
+}
+
+function Mug({ hand }: { hand: [number, number] }) {
+  return (
+    <g transform={`translate(${hand[0] - 1.5} ${hand[1] - 3.5})`} shapeRendering="crispEdges">
+      <rect x={0} y={0} width={4} height={4.5} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
+      <path d="M 4,1 L 5.5,1 L 5.5,3.5 L 4,3.5" fill="none" stroke="#0a0f1d" strokeWidth={0.6} />
+    </g>
+  );
+}
+
+// 16-BIT RETRO PIXEL ART CHIBI HUMANOID SPRITE ON A LAYERED RIG (see the WORKER RIG notes in officeLife.css)
 function OfficeWorker({
   x,
   y,
@@ -176,6 +240,7 @@ function OfficeWorker({
   badge = false,
   glowColor,
   facing,
+  heading,
   name,
   workerStatusText,
   typing = false,
@@ -184,47 +249,110 @@ function OfficeWorker({
   fadeIn = false,
   carriesLaptop = false,
   onActivate,
+  seedKey,
+  alarmed = false,
+  cheering = false,
+  brewing = false,
+  lounging = false,
+  gestures,
+  onGestureChange,
+  action,
+  wary = false,
 }: OfficeWorkerProps) {
   const t = useTranslation();
+  const reduced = useReducedMotion();
   const anchor = project(x, y, z);
-  const hands = HAND_POSE[mood];
   const slumped = mood === "tired";
+  const seed = useMemo(() => seedOf(seedKey ?? `${name ?? ""}|${shirtColor}|${hairColor}`), [seedKey, name, shirtColor, hairColor]);
+  const panicVariant = panicVariantFor(seed);
 
-  const [isWalking, setIsWalking] = useState(false);
+  // ---- locomotion: gait timing and heading from each move ----
+  const [walk, setWalk] = useState<GaitTiming | null>(null);
   const [autoFacing, setAutoFacing] = useState<"left" | "right">("right");
+  const [autoHeading, setAutoHeading] = useState<Heading>("se");
   const prevPos = useRef({ x, y });
-
   const walkingRef = useRef(false);
   useEffect(() => {
     if (prevPos.current.x === x && prevPos.current.y === y) {
       if (!walkingRef.current || !transitionMs) return;
       const timer = setTimeout(() => {
         walkingRef.current = false;
-        setIsWalking(false);
+        setWalk(null);
       }, transitionMs);
       return () => clearTimeout(timer);
     }
     const dx = x - prevPos.current.x;
     const dy = y - prevPos.current.y;
-    if (dx - dy < 0) {
-      setAutoFacing("left");
-    } else if (dx - dy > 0) {
-      setAutoFacing("right");
-    }
+    if (dx - dy < 0) setAutoFacing("left");
+    else if (dx - dy > 0) setAutoFacing("right");
+    setAutoHeading((prev) => headingFromDelta(dx, dy, prev));
     prevPos.current = { x, y };
-    setIsWalking(true);
-    walkingRef.current = true;
+    // a move without a transition is a teleport (reduced motion, first placement): no legs
     if (!transitionMs) return;
+    setWalk(gaitFor(Math.hypot(dx, dy), transitionMs));
+    walkingRef.current = true;
     const timer = setTimeout(() => {
       walkingRef.current = false;
-      setIsWalking(false);
+      setWalk(null);
     }, transitionMs);
     return () => clearTimeout(timer);
   }, [x, y, transitionMs]);
 
+  const walking = walk !== null && !seated;
+  const gait: Gait = walking ? walk.gait : "still";
   const effectiveFacing = facing ?? autoFacing;
+  const effectiveHeading = heading ?? autoHeading;
+  // a roster sprite's heading is authoritative; a free sprite only shows its back mid-walk
+  const back = isBackHeading(effectiveHeading) && (heading !== undefined || walking);
   const blinkDelay = useMemo(() => `${(Math.random() * 4).toFixed(2)}s`, []);
 
+  // ---- idle life ----
+  const calmMood = mood === "idle" || mood === "happy" || mood === "tired" || mood === "recovering";
+  const gesturePool = gestures ?? (lounging ? LOUNGE_GESTURES : mood === "tired" ? TIRED_GESTURES : DEFAULT_GESTURES);
+  const idleGesture = useIdleGesture(
+    !reduced && gait === "still" && calmMood && !cheering && !brewing && !leaning && !back && !wary && !action,
+    gesturePool,
+    onGestureChange
+  );
+  const gesture: IdleGesture | null = gait !== "still" ? null : cheering ? "cheer" : brewing ? "brew" : idleGesture;
+  const sipping = gesture === "sip";
+  const typingNow = typing && !back && gesture !== "sip" && gesture !== "watch";
+
+  // ---- one-shot cues (anticipation, settle, sit / stand, startle, press) ----
+  const cueRef = useRef<SVGGElement>(null);
+  const prevWalking = useRef(walking);
+  const prevSeated = useRef(seated);
+  const prevAlarmed = useRef(alarmed);
+  const [exclaim, setExclaim] = useState(false);
+  useEffect(() => {
+    const wasWalking = prevWalking.current;
+    const wasSeated = prevSeated.current;
+    const wasAlarmed = prevAlarmed.current;
+    prevWalking.current = walking;
+    prevSeated.current = seated;
+    prevAlarmed.current = alarmed;
+    if (reduced) return;
+    const el = cueRef.current;
+    if (alarmed && !wasAlarmed) {
+      replayClass(el, "ol-cue-startle", CUE_CLASSES);
+      setExclaim(true);
+      return;
+    }
+    if (seated !== wasSeated) replayClass(el, seated ? "ol-cue-sit" : "ol-cue-stand", CUE_CLASSES);
+    else if (walking && !wasWalking) replayClass(el, "ol-cue-start", CUE_CLASSES);
+    else if (!walking && wasWalking) replayClass(el, "ol-cue-settle", CUE_CLASSES);
+  }, [walking, seated, alarmed, reduced]);
+
+  const waveMs = startleWaveMs(x, y);
+  useEffect(() => {
+    if (!exclaim) return;
+    const timer = setTimeout(() => setExclaim(false), EXCLAIM_MS + waveMs);
+    return () => clearTimeout(timer);
+    // the wave delay is fixed at the moment the balloon appears
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exclaim]);
+
+  // ---- banter + squash on click ----
   const [quip, setQuip] = useState<string | null>(null);
   useEffect(() => {
     if (!quip) return;
@@ -234,11 +362,30 @@ function OfficeWorker({
   const handleBanter = (evt: ReactMouseEvent<SVGGElement>) => {
     const pool = t.workerQuips[quipPoolKey(mood)];
     setQuip(pool[Math.floor(Math.random() * pool.length)]);
+    if (!reduced) replayClass(cueRef.current, "ol-press", CUE_CLASSES);
     if (onActivate) {
       evt.stopPropagation();
       onActivate();
     }
   };
+
+  // ---- pose ----
+  const poseKey =
+    action && !seated && !walking
+      ? action
+      : typingNow && !seated
+        ? "idle"
+        : typingNow
+          ? "typing"
+          : lounging
+            ? "lounge"
+            : mood === "panic" && panicVariant === "flail"
+              ? "flail"
+              : mood;
+  const acting = poseKey === action;
+  const hands = HAND_POSE[poseKey];
+  const rightLocked = carriesLaptop || holdsMug;
+  const showHeldMug = holdsMug || sipping;
 
   const poseTransform =
     [
@@ -248,6 +395,34 @@ function OfficeWorker({
     ]
       .filter(Boolean)
       .join(" ") || undefined;
+
+  const rigStyle = {
+    "--step": `${walk?.stepS ?? 0.33}s`,
+    "--phase": breathPhase(seed),
+    "--breathe": breathCycle(mood),
+    "--wave": `${waveMs}ms`,
+  } as CSSProperties;
+
+  const heldItems = (
+    <g className="ol-arm-r" data-locked={rightLocked ? "" : undefined}>
+      {/* ULTRABOOK LAPTOP (PRESERVES TEST CONTRACT data-testid="worker-laptop") */}
+      {carriesLaptop && (
+        <g data-testid="worker-laptop" transform={`translate(${hands.right[0] + 1} ${hands.right[1] - 3})`} shapeRendering="crispEdges">
+          <rect x={-2} y={5} width={13} height={2} fill="#0f172a" stroke="#0a0f1d" strokeWidth={0.6} />
+          <rect x={-1} y={-2} width={11} height={7.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.6} />
+          <rect x={0.2} y={-0.8} width={8.6} height={5.2} fill="#00f0ff" opacity={0.92} />
+          <line x1={1} y1={0.5} x2={6} y2={0.5} stroke="#0f172a" strokeWidth={0.6} />
+          <line x1={1} y1={1.8} x2={4.5} y2={1.8} stroke="#0f172a" strokeWidth={0.6} />
+          <line x1={1} y1={3.0} x2={7} y2={3.0} stroke="#0f172a" strokeWidth={0.6} />
+        </g>
+      )}
+      {showHeldMug && (
+        <g data-testid={sipping ? "worker-sip-mug" : undefined}>
+          <Mug hand={hands.right} />
+        </g>
+      )}
+    </g>
+  );
 
   return (
     <g
@@ -261,151 +436,168 @@ function OfficeWorker({
     >
       <title>{name ? `${name} [${workerStatusText || t.officeLife.moods[mood]}]` : `${t.officeLife.workerLabel} [${t.officeLife.moods[mood]}]`}</title>
       <g className="ol-pose" style={{ transform: poseTransform, transformOrigin: "0px 0px" }}>
-      <g className={BODY_ANIMATION[mood]}>
-        {/* contact ground shadow */}
-        <ellipse cx={0} cy={0} rx={6.5} ry={3.2} fill="rgba(10,15,29,0.35)" />
+        <g
+          className="ol-rig"
+          data-gait={gait}
+          data-mood={mood}
+          data-panic={mood === "panic" && !acting ? panicVariant : undefined}
+          data-action={acting ? action : undefined}
+          data-wary={wary ? "" : undefined}
+          data-gesture={gesture ?? undefined}
+          data-pose={lounging ? "lounge" : undefined}
+          data-heading={effectiveHeading}
+          data-view={back ? "back" : "front"}
+          style={rigStyle}
+        >
+          {/* contact shadow: on the floor, outside every bob, shrinking as the body rises */}
+          <ellipse className="ol-shadow" cx={0} cy={0} rx={6.5} ry={3.2} fill="rgba(10,15,29,0.35)" />
 
-        {/* legs and shoes, hidden when seated behind a desk or chair */}
-        {!seated && (isWalking ? <WalkingLegs /> : <StandingLegs />)}
+          {/* run dust: two recycled motes kicked up behind the heels, one per footfall (--step) */}
+          {gait === "run" && (
+            <g data-testid="worker-dust" shapeRendering="crispEdges" pointerEvents="none">
+              <rect className="ol-dust" x={-6} y={-1} width={2} height={1} fill="#94a3b8" />
+              <rect className="ol-dust" x={-4} y={-2} width={1} height={1} fill="#cbd5e1" />
+            </g>
+          )}
 
-        {/* sleeves & arms */}
-        <line x1={SHOULDER[0]} y1={SHOULDER[1]} x2={hands.left[0]} y2={hands.left[1]} stroke="#0a0f1d" strokeWidth={4.8} strokeLinecap="square" />
-        <line x1={SHOULDER[0]} y1={SHOULDER[1]} x2={hands.left[0]} y2={hands.left[1]} stroke={shirtColor} strokeWidth={3.4} strokeLinecap="square" />
-        <line x1={SHOULDER_R[0]} y1={SHOULDER_R[1]} x2={hands.right[0]} y2={hands.right[1]} stroke="#0a0f1d" strokeWidth={4.8} strokeLinecap="square" />
-        <line x1={SHOULDER_R[0]} y1={SHOULDER_R[1]} x2={hands.right[0]} y2={hands.right[1]} stroke={shirtColor} strokeWidth={3.4} strokeLinecap="square" />
+          <g ref={cueRef} className="ol-cue">
+            <g className="ol-bob">
+              {/* legs and shoes, hidden when seated behind a desk or chair */}
+              {!seated && <Legs />}
 
-        {/* hands / wrists */}
-        <rect x={hands.left[0] - 1.5} y={hands.left[1] - 1.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} />
-        <rect x={hands.right[0] - 1.5} y={hands.right[1] - 1.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} />
+              <g className="ol-lean">
+                <g className="ol-upper">
+                  {/* arms hang just outside the torso and are drawn behind it */}
+                  <g className="ol-arm-l">
+                    <Arm shoulder={SHOULDER_L} hand={hands.left} color={shirtColor} skinTone={skinTone} />
+                    {/* smartwatch on the left wrist with its glowing cyan pip */}
+                    <rect x={hands.left[0] - 2} y={hands.left[1] - 2} width={2} height={2} fill="#0284c7" stroke="#0a0f1d" strokeWidth={0.4} />
+                    <rect className="ol-watch-pip" x={hands.left[0] - 1.5} y={hands.left[1] - 1.5} width={1} height={1} fill="#00f0ff" />
+                  </g>
+                  <g className="ol-arm-r" data-locked={rightLocked ? "" : undefined}>
+                    <Arm shoulder={SHOULDER_R} hand={hands.right} color={shirtColor} skinTone={skinTone} />
+                  </g>
 
-        {/* smartwatch on left wrist with glowing cyan pip */}
-        <rect x={hands.left[0] - 2} y={hands.left[1] - 2} width={2} height={2} fill="#0284c7" stroke="#0a0f1d" strokeWidth={0.4} />
-        <rect x={hands.left[0] - 1.5} y={hands.left[1] - 1.5} width={1} height={1} fill="#00f0ff" />
+                  {back && heldItems}
 
-        <Torso role={role} shirtColor={shirtColor} />
+                  <Torso role={role} shirtColor={shirtColor} back={back} />
 
-        {/* ULTRABOOK LAPTOP (PRESERVES TEST CONTRACT data-testid="worker-laptop") */}
-        {carriesLaptop && (
-          <g data-testid="worker-laptop" transform={`translate(${hands.right[0] + 1} ${hands.right[1] - 3})`} shapeRendering="crispEdges">
-            {/* laptop base body */}
-            <rect x={-2} y={5} width={13} height={2} fill="#0f172a" stroke="#0a0f1d" strokeWidth={0.6} />
-            {/* screen lid */}
-            <rect x={-1} y={-2} width={11} height={7.5} fill="#1e293b" stroke="#0a0f1d" strokeWidth={0.6} />
-            {/* glowing cyan terminal screen */}
-            <rect x={0.2} y={-0.8} width={8.6} height={5.2} fill="#00f0ff" opacity={0.92} />
-            {/* terminal code scanlines */}
-            <line x1={1} y1={0.5} x2={6} y2={0.5} stroke="#0f172a" strokeWidth={0.6} />
-            <line x1={1} y1={1.8} x2={4.5} y2={1.8} stroke="#0f172a" strokeWidth={0.6} />
-            <line x1={1} y1={3.0} x2={7} y2={3.0} stroke="#0f172a" strokeWidth={0.6} />
+                  {/* ID CARD LANYARD (front only) */}
+                  {badge && !back && (
+                    <g shapeRendering="crispEdges">
+                      <path d="M -3.5,-23.5 L 0,-16 L 3.5,-23.5" stroke="#475569" strokeWidth={0.8} fill="none" />
+                      <rect x={-2.2} y={-16} width={4.4} height={5.2} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
+                      <rect x={-1.4} y={-15} width={2.8} height={2.2} fill="#3b82f6" />
+                      <line x1={-1.4} y1={-12} x2={1.4} y2={-12} stroke="#64748b" strokeWidth={0.6} />
+                    </g>
+                  )}
+
+                  {/* neck */}
+                  <rect x={-2} y={-26.5} width={4} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} />
+
+                  <g className="ol-head">
+                    {back ? (
+                      <g data-testid="worker-back-head">
+                        {/* the back of the head is all hair, with the nape showing above the collar */}
+                        <rect x={-6.5} y={-36} width={13} height={11} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.8} />
+                        <rect x={-7} y={-38.5} width={14} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.8} />
+                        <rect x={-4} y={-27} width={8} height={1.5} fill={skinTone} />
+                        <rect x={-3.5} y={-37.5} width={7} height={1} fill="rgba(255,255,255,0.18)" />
+                        {role === "engineer" && (
+                          <g shapeRendering="crispEdges">
+                            <path d="M -7,-35 L -7,-38.5 L 7,-38.5 L 7,-35" fill="none" stroke="#0a0f1d" strokeWidth={1.4} />
+                            <rect x={-8} y={-33.5} width={3} height={4} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.8} />
+                            <rect x={5} y={-33.5} width={3} height={4} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.8} />
+                          </g>
+                        )}
+                      </g>
+                    ) : (
+                      <g data-testid="worker-face">
+                        {/* face silhouette block */}
+                        <rect x={-6.5} y={-36} width={13} height={11} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.8} />
+                        {/* hair volume and pixel bangs */}
+                        <rect x={-7} y={-38.5} width={14} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.8} />
+                        <rect x={-6.5} y={-35.5} width={4} height={2.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
+                        <rect x={-1.5} y={-35.5} width={3} height={3.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
+                        <rect x={2.5} y={-35.5} width={4.5} height={2} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
+                        <rect x={-7} y={-34.5} width={2} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
+                        <rect x={5} y={-34.5} width={2} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
+                        <rect x={-3.5} y={-37.5} width={7} height={1} fill="rgba(255,255,255,0.3)" />
+
+                        {/* OVER-EAR SRE HEADSET (for engineers) */}
+                        {role === "engineer" && (
+                          <g shapeRendering="crispEdges">
+                            <path d="M -7,-35 L -7,-38.5 L 7,-38.5 L 7,-35" fill="none" stroke="#0a0f1d" strokeWidth={1.4} />
+                            <path d="M -4,-38.5 L 4,-38.5" stroke="#38bdf8" strokeWidth={1} fill="none" />
+                            <rect x={-8} y={-33.5} width={3} height={4} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.8} />
+                            <rect x={5} y={-33.5} width={3} height={4} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.8} />
+                            <path d="M -6.5,-30 L -3,-28 L -0.5,-28" stroke="#0a0f1d" strokeWidth={0.8} fill="none" />
+                            <rect x={-0.5} y={-28.5} width={1.2} height={1.2} fill="#10b981" />
+                          </g>
+                        )}
+
+                        {/* eyes with blink animation and eye-shine highlight */}
+                        <g shapeRendering="crispEdges">
+                          <rect
+                            x={-3.8}
+                            y={-31.5}
+                            width={2.2}
+                            height={2.2}
+                            fill="#0a0f1d"
+                            className="animate-eye-blink"
+                            style={{ transformOrigin: "-2.7px -30.4px", animationDelay: blinkDelay }}
+                          />
+                          <rect x={-3.8} y={-31.5} width={1} height={1} fill="#ffffff" />
+                          <rect
+                            x={1.6}
+                            y={-31.5}
+                            width={2.2}
+                            height={2.2}
+                            fill="#0a0f1d"
+                            className="animate-eye-blink"
+                            style={{ transformOrigin: "2.7px -30.4px", animationDelay: blinkDelay }}
+                          />
+                          <rect x={1.6} y={-31.5} width={1} height={1} fill="#ffffff" />
+                        </g>
+
+                        {/* blush cheeks */}
+                        <rect x={-4.5} y={-28.5} width={2} height={1} fill="#f43f5e" opacity={0.35} />
+                        <rect x={2.5} y={-28.5} width={2} height={1} fill="#f43f5e" opacity={0.35} />
+
+                        {glasses && (
+                          <g shapeRendering="crispEdges">
+                            <rect x={-4.5} y={-32.5} width={3.5} height={3.5} fill="rgba(56,189,248,0.2)" stroke="#0a0f1d" strokeWidth={0.8} />
+                            <rect x={1} y={-32.5} width={3.5} height={3.5} fill="rgba(56,189,248,0.2)" stroke="#0a0f1d" strokeWidth={0.8} />
+                            <line x1={-1} y1={-31} x2={1} y2={-31} stroke="#0a0f1d" strokeWidth={0.8} />
+                          </g>
+                        )}
+
+                        {glowColor && (
+                          <rect x={-5.5} y={-34} width={11} height={9} fill={glowColor} opacity={0.25} className="animate-screen-glow-pulse" />
+                        )}
+                      </g>
+                    )}
+                  </g>
+
+                  {/* typing hands on the keyboard, in bursts with reading pauses */}
+                  {typingNow && (
+                    <g shapeRendering="crispEdges" data-testid="worker-typing">
+                      <rect x={-5.5} y={-15.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} className="ol-type-l" />
+                      <rect x={2.5} y={-15.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} className="ol-type-r" />
+                    </g>
+                  )}
+
+                  {!back && heldItems}
+                </g>
+              </g>
+            </g>
           </g>
-        )}
-
-        {/* ID CARD LANYARD */}
-        {badge && (
-          <g shapeRendering="crispEdges">
-            <path d="M -3.5,-23.5 L 0,-16 L 3.5,-23.5" stroke="#475569" strokeWidth={0.8} fill="none" />
-            <rect x={-2.2} y={-16} width={4.4} height={5.2} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
-            <rect x={-1.4} y={-15} width={2.8} height={2.2} fill="#3b82f6" />
-            <line x1={-1.4} y1={-12} x2={1.4} y2={-12} stroke="#64748b" strokeWidth={0.6} />
-          </g>
-        )}
-
-        {/* neck */}
-        <rect x={-2} y={-26.5} width={4} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} />
-
-        {/* 16-BIT CHIBI PIXEL HEAD & FACE */}
-        {/* face silhouette block */}
-        <rect x={-6.5} y={-36} width={13} height={11} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.8} />
-
-        {/* hair volume and pixel bangs */}
-        <rect x={-7} y={-38.5} width={14} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.8} />
-        {/* stepped fringe / bangs */}
-        <rect x={-6.5} y={-35.5} width={4} height={2.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
-        <rect x={-1.5} y={-35.5} width={3} height={3.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
-        <rect x={2.5} y={-35.5} width={4.5} height={2} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
-        {/* sideburns */}
-        <rect x={-7} y={-34.5} width={2} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
-        <rect x={5} y={-34.5} width={2} height={4.5} fill={hairColor} stroke="#0a0f1d" strokeWidth={0.6} />
-        {/* top sheen highlight */}
-        <rect x={-3.5} y={-37.5} width={7} height={1} fill="rgba(255,255,255,0.3)" />
-
-        {/* OVER-EAR SRE HEADSET (for engineers) */}
-        {role === "engineer" && (
-          <g shapeRendering="crispEdges">
-            {/* headband */}
-            <path d="M -7,-35 L -7,-38.5 L 7,-38.5 L 7,-35" fill="none" stroke="#0a0f1d" strokeWidth={1.4} />
-            <path d="M -4,-38.5 L 4,-38.5" stroke="#38bdf8" strokeWidth={1} fill="none" />
-            {/* ear cups with cyan ring */}
-            <rect x={-8} y={-33.5} width={3} height={4} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.8} />
-            <rect x={5} y={-33.5} width={3} height={4} fill="#1e293b" stroke="#00f0ff" strokeWidth={0.8} />
-            {/* mic boom */}
-            <path d="M -6.5,-30 L -3,-28 L -0.5,-28" stroke="#0a0f1d" strokeWidth={0.8} fill="none" />
-            <rect x={-0.5} y={-28.5} width={1.2} height={1.2} fill="#10b981" />
-          </g>
-        )}
-
-        {/* eyes with blink animation and eye-shine highlight */}
-        <g shapeRendering="crispEdges">
-          <rect
-            x={-3.8}
-            y={-31.5}
-            width={2.2}
-            height={2.2}
-            fill="#0a0f1d"
-            className="animate-eye-blink"
-            style={{ transformOrigin: "-2.7px -30.4px", animationDelay: blinkDelay }}
-          />
-          <rect x={-3.8} y={-31.5} width={1} height={1} fill="#ffffff" />
-          <rect
-            x={1.6}
-            y={-31.5}
-            width={2.2}
-            height={2.2}
-            fill="#0a0f1d"
-            className="animate-eye-blink"
-            style={{ transformOrigin: "2.7px -30.4px", animationDelay: blinkDelay }}
-          />
-          <rect x={1.6} y={-31.5} width={1} height={1} fill="#ffffff" />
         </g>
-
-        {/* blush cheeks */}
-        <rect x={-4.5} y={-28.5} width={2} height={1} fill="#f43f5e" opacity={0.35} />
-        <rect x={2.5} y={-28.5} width={2} height={1} fill="#f43f5e" opacity={0.35} />
-
-        {/* glasses */}
-        {glasses && (
-          <g shapeRendering="crispEdges">
-            <rect x={-4.5} y={-32.5} width={3.5} height={3.5} fill="rgba(56,189,248,0.2)" stroke="#0a0f1d" strokeWidth={0.8} />
-            <rect x={1} y={-32.5} width={3.5} height={3.5} fill="rgba(56,189,248,0.2)" stroke="#0a0f1d" strokeWidth={0.8} />
-            <line x1={-1} y1={-31} x2={1} y2={-31} stroke="#0a0f1d" strokeWidth={0.8} />
-          </g>
-        )}
-
-        {glowColor && (
-          <rect x={-5.5} y={-34} width={11} height={9} fill={glowColor} opacity={0.25} className="animate-screen-glow-pulse" />
-        )}
-
-        {/* typing hands jitter subtly for seated engineer */}
-        {typing && (
-          <g shapeRendering="crispEdges">
-            <rect x={hands.left[0] - 1.5} y={hands.left[1] - 1.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} className="animate-pixel-type-left" />
-            <rect x={hands.right[0] - 1.5} y={hands.right[1] - 1.5} width={3} height={3} fill={skinTone} stroke="#0a0f1d" strokeWidth={0.6} className="animate-pixel-type-right" />
-          </g>
-        )}
-
-        {/* coffee mug with pixel handle and steam */}
-        {holdsMug && (
-          <g transform={`translate(${hands.right[0] - 1.5} ${hands.right[1] - 3.5})`} shapeRendering="crispEdges">
-            <rect x={0} y={0} width={4} height={4.5} fill="#f8fafc" stroke="#0a0f1d" strokeWidth={0.6} />
-            <path d="M 4,1 L 5.5,1 L 5.5,3.5 L 4,3.5" fill="none" stroke="#0a0f1d" strokeWidth={0.6} />
-          </g>
-        )}
-      </g>
       </g>
 
       {mood === "panic" && (
         <g shapeRendering="crispEdges">
-          <g className="animate-pop-in">
+          <g className="ol-pop">
             <rect x={-5} y={-49} width={10} height={10} fill="#ef4444" stroke="#0a0f1d" strokeWidth={0.8} />
             <text x={0} y={-41.5} textAnchor="middle" fill="white" style={{ fontSize: 7, fontWeight: 900, fontFamily: "monospace" }}>
               !
@@ -428,6 +620,16 @@ function OfficeWorker({
         </g>
       )}
 
+      {/* startle balloon: a 7x9 pixel "!" with a tail, sprouting in the same wave as the hop */}
+      {exclaim && mood !== "panic" && !reduced && (
+        <g className="ol-exclaim" data-testid="worker-exclaim" shapeRendering="crispEdges" style={{ "--wave": `${waveMs}ms` } as CSSProperties}>
+          <rect x={-3.5} y={-52} width={7} height={9} fill="#fef2f2" stroke="#0a0f1d" strokeWidth={0.8} />
+          <rect x={-0.5} y={-50} width={1.5} height={4} fill="#dc2626" />
+          <rect x={-0.5} y={-45} width={1.5} height={1} fill="#dc2626" />
+          <rect x={-1} y={-43} width={2} height={1.5} fill="#fef2f2" stroke="#0a0f1d" strokeWidth={0.5} />
+        </g>
+      )}
+
       {mood === "tired" && (
         <g>
           {["z", "Z", "z"].map((glyph, i) => (
@@ -446,7 +648,7 @@ function OfficeWorker({
       )}
 
       {mood === "happy" && (
-        <g className="animate-pop-in" shapeRendering="crispEdges">
+        <g className="ol-pop" shapeRendering="crispEdges">
           <rect x={3} y={-46} width={8} height={8} fill="#10b981" stroke="#0a0f1d" strokeWidth={0.8} />
           <text x={7} y={-40} textAnchor="middle" fill="white" style={{ fontSize: 6, fontWeight: 900 }}>
             ★
@@ -455,7 +657,7 @@ function OfficeWorker({
       )}
 
       {mood === "recovering" && (
-        <g className="animate-pop-in" shapeRendering="crispEdges">
+        <g className="ol-pop" shapeRendering="crispEdges">
           <rect x={-9} y={-44} width={8} height={8} fill="#0ea5e9" stroke="#0a0f1d" strokeWidth={0.8} />
           <text x={-5} y={-38} textAnchor="middle" fill="white" style={{ fontSize: 5.5, fontWeight: 900 }}>
             ⚡
@@ -463,7 +665,7 @@ function OfficeWorker({
         </g>
       )}
 
-      {holdsMug && (
+      {holdsMug && !back && (
         <g className="ol-pixel-steam" shapeRendering="crispEdges">
           <rect x={hands.right[0] - 0.5} y={hands.right[1] - 5} width={1.5} height={1.5} fill="#cbd5e1" opacity={0.8} />
           <rect x={hands.right[0] + 0.5} y={hands.right[1] - 7} width={1.5} height={1.5} fill="#cbd5e1" opacity={0.6} />

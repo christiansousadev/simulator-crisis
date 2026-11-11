@@ -103,4 +103,21 @@ Operational rank is derived dynamically in `_calculate_operator_rank()` from lif
 
 - **`PostMatchDebriefModal.tsx`:** Primary post-match screen mounted on session termination. Renders the outcome stamp, duration, SLA, final cash runway, tech debt, a grade derived from the final SLA, the scenario's objectives (with their `failed`/`done` state), personal-best comparison (against prior runs with matching scenario and difficulty), prestige gained, achievements unlocked during the run, the recommended next challenge and play-again / Hall of Fame actions.
 - **Staged reveal (`utils/debriefTimeline.ts`):** the debrief is a timed sequence rather than a static page. A pure planner (`planDebrief`) decides when each stage starts: backdrop, outcome stamp, metric tiles (staggered, with count-up numbers), grade, objectives (if any), personal record, prestige, achievements and finally the action buttons. The whole sequence is squeezed (never stretched) to at most `MAX_DEBRIEF_MS = 3000` ms, any key or click skips straight to the final state, and with reduced motion everything appears at once. The planner has no timers of its own and is unit-tested; the component only schedules its steps. Because the terminal-tick achievement evaluation (§ 2) runs before the career record is written, the achievements and prestige shown here include those unlocked by the final tick.
-- **`HallOfFameModal.tsx`:** Displays match history filtered by player (`scope="mine"`) or server-wide (`scope="global"`), with scenario and difficulty filters. Compares personal bests locally without relying on external online cloud services.
+- **`HallOfFameModal.tsx`:** Displays match history filtered by player (`scope="mine"`) or server-wide (`scope="global"`), with scenario and difficulty filters. Compares personal bests locally without relying on external online cloud services. Incorporates the **Office Decor & Cosmetics Shop** tab allowing players to spend accumulated prestige points.
+
+---
+
+## 7. Prestige Cosmetics & Office Decor Customization
+
+Players spend prestige points earned from career achievements to permanently unlock luxury aesthetic reskins across the Cyber War Room:
+
+| Cosmetic ID | Name | Prestige Cost | Office Surface & Reskin Effect |
+|---|---|---|---|
+| `golden_coffee_machine` | Golden Coffee Machine | 200 pts | Breakroom kitchenette: replaces standard stainless steel with 24K polished gold chassis (`#fef08a` / `#f59e0b`), brass dials, and fine black porcelain cups. |
+| `executive_leather_sofa` | Executive Leather Sofa | 150 pts | Breakroom lounge: replaces standard teal fabric with handcrafted cognac/espresso leather (`#78350f` / `#451a03`) with double stitched seams and gold accents. |
+| `marble_reception_desk` | Marble Reception Desk | 300 pts | Corporate lobby entrance: replaces slate counter with polished Carrara marble (`#f8fafc` / `#cbd5e1`) and dual neon cyan/emerald underglow. |
+
+**Technical Architecture & State Propagation:**
+1. **Catalog & Unlocks:** `backend/app/engine/cosmetics.py` exposes `COSMETIC_CATALOG`. `POST /api/cosmetics/{id}/unlock` validates points balance, records the unlock, persists it to SQLite (`CareerRecord` / `unlocked_cosmetics`), and re-broadcasts engine telemetry via WebSocket.
+2. **Interactive Shop UI:** `HallOfFameModal.tsx` features a tab switcher between Rankings and the Decor Shop with live prestige balance, unlock confirmation sounds, and reactive state updates.
+3. **Office Shaders:** `FloorDecals.tsx` provides high-fidelity linear gradients (`goldMetal`, `marbleStone`, `executiveLeather`), and `OfficeProps.tsx` renders conditional materials based on `telemetry.unlocked_cosmetics`.

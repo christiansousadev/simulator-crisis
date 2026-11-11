@@ -27,6 +27,8 @@ export type OnCallStatusKey = "on_duty" | "off_duty" | "resting";
 export type ScenarioIdKey = "black_friday_rush" | "ransomware_infiltration" | "chaos_engineering_drill";
 // scenarios whose name is translated but whose briefing text still comes from the backend catalog
 export type ExtraScenarioIdKey = "ddos_global" | "deployment_rollback" | "third_party_outage";
+// cosmetic ids mirror app.engine.cosmetics.COSMETIC_CATALOG on the backend
+export type CosmeticIdKey = "golden_coffee_machine" | "executive_leather_sofa" | "marble_reception_desk";
 export type InfrastructureNodeTypeKey = "redis_cache" | "kafka_queue" | "db_read_replica" | "nginx_lb";
 export type TutorialStepId =
   | "welcome"
@@ -423,6 +425,24 @@ export interface Translations {
     recordedAtLabel: string;
     objectivesSnapshot: string;
     resolvedOfTotal: (resolved: number, total: number) => string;
+    viewsLabel: string;
+    // the prestige-point decor shop tab; item copy is keyed by catalog id so the shop stays
+    // translated even though the backend catalog only carries english names
+    shop: {
+      tab: string;
+      title: string;
+      heading: string;
+      intro: string;
+      installedCount: (installed: number, total: number) => string;
+      balance: string;
+      cost: (points: number) => string;
+      unlock: (cost: number) => string;
+      installed: string;
+      needMore: (missing: number) => string;
+      unlockFailed: string;
+      unlockedToast: (name: string) => string;
+      items: Record<CosmeticIdKey, { name: string; description: string }>;
+    };
   };
   debrief: {
     titleVictory: string;
@@ -1049,6 +1069,35 @@ const en: Translations = {
     recordedAtLabel: "Recorded At",
     objectivesSnapshot: "Objectives Snapshot",
     resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resolved`,
+    viewsLabel: "Hall of Fame views",
+    shop: {
+      tab: "Office Decor Shop",
+      title: "Office Decor & Cosmetics",
+      heading: "Tactical War Room Customization",
+      intro: "Spend Prestige Points earned from audits and achievements to install luxury cosmetic upgrades across the War Room.",
+      installedCount: (installed, total) => `${installed} / ${total} installed`,
+      balance: "Balance:",
+      cost: (points) => `${points} pts`,
+      unlock: (cost) => `Unlock (${cost} pts)`,
+      installed: "Installed in Office",
+      needMore: (missing) => `${missing} more pts needed`,
+      unlockFailed: "The unlock was rejected. Your balance was not charged; try again.",
+      unlockedToast: (name) => `${name} installed in the office`,
+      items: {
+        golden_coffee_machine: {
+          name: "Golden Coffee Machine",
+          description: "A gilded 24K reskin of the breakroom espresso machine with black and gold porcelain cups.",
+        },
+        executive_leather_sofa: {
+          name: "Executive Leather Sofa",
+          description: "A premium handcrafted cognac leather reskin of the breakroom lounge sofa.",
+        },
+        marble_reception_desk: {
+          name: "Marble Reception Desk",
+          description: "A luxurious Carrara marble reskin of the corporate entrance reception counter.",
+        },
+      },
+    },
   },
   debrief: {
     titleVictory: "AUDIT CYCLE CERTIFIED",

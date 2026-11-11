@@ -133,7 +133,8 @@ function persistFlag(key: string, value: boolean) {
   }
 }
 
-export type ScreenShakeMagnitude = "light" | "heavy";
+// light: a breach; heavy: a fresh P1; quake: the company going under
+export type ScreenShakeMagnitude = "light" | "heavy" | "quake";
 
 export type DockTabId = "incidents" | "directives" | "compliance" | "upgrades" | "roster" | "achievements" | "metrics" | "warroom";
 export type StageView = "office" | "graph";
@@ -712,9 +713,13 @@ export const useGameStore = create<GameStore>((set) => ({
       let impactFlashSeq = state.impactFlashSeq;
       if (justWentBankrupt) {
         screenShakeSeq += 1;
+        screenShakeMagnitude = "quake";
+        impactFlashSeq += 1;
+      } else if (newlyRaisedP1) {
+        screenShakeSeq += 1;
         screenShakeMagnitude = "heavy";
         impactFlashSeq += 1;
-      } else if (newlyRaisedP1 || justBreached) {
+      } else if (justBreached) {
         screenShakeSeq += 1;
         screenShakeMagnitude = "light";
         impactFlashSeq += 1;

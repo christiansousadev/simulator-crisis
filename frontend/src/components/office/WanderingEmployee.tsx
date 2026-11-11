@@ -3,6 +3,7 @@ import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useRedAlert } from "../../hooks/useRedAlert";
 import { useGameStore } from "../../store/useGameStore";
 import OfficeWorker, { WorkerMood } from "./OfficeWorker";
+import { GESTURE_MS } from "./useIdleGesture";
 import { FACE_VAULT } from "./officeLifeUtils";
 
 type WaypointAction = "walk" | "coffee" | "sofa" | "pingpong";
@@ -24,9 +25,16 @@ interface WanderingEmployeeProps {
   // parent scene sync a prop's own animation (e.g. BreakRoom's ping-pong ball) to whether anyone
   // is actually standing there, instead of guessing from an unrelated global condition
   onActionChange?: (action: WaypointAction) => void;
+  // true while this employee is pulling a shot at the espresso machine (lets the machine vent steam)
+  onBrewingChange?: (brewing: boolean) => void;
+  // true while this employee is lounging on the sofa (lets the cushion sink under them)
+  onSeatedChange?: (seated: boolean) => void;
 }
 
 const WALK_TRANSITION_MS = 1800;
+// the hesitant step back on red alert: a fraction of a tile, away from the vault, over one stride
+const RECOIL_TILES = { x: 0.12, y: -0.06 };
+const RECOIL_MS = 500;
 // seat height of the lounge sofa
 const SOFA_SEAT_Z = 0.2;
 
@@ -39,6 +47,8 @@ export default function WanderingEmployee({
   hairColor,
   dwellMs = 4500,
   onActionChange,
+  onBrewingChange,
+  onSeatedChange,
 }: WanderingEmployeeProps) {
   const happiness = useGameStore((s) => s.telemetry.user_happiness);
   const redAlert = useRedAlert();
@@ -102,7 +112,51 @@ export default function WanderingEmployee({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
-  const seated = current.action === "sofa" && arrivedIndex === index;
+  const arrived = arrivedIndex === index;
+  const seated = current.action === "sofa" && arrived;
+
+  // at the coffee machine: reach for it and pull a shot first, only then walk off holding the mug
+  const atMachine = current.action === "coffee" && arrived && !redAlert;
+  const [brewDone, setBrewDone] = useState(false);
+  useEffect(() => {
+    setBrewDone(false);
+    if (!atMachine) return;
+    const timer = setTimeout(() => setBrewDone(true), GESTURE_MS.brew);
+    return () => clearTimeout(timer);
+  }, [atMachine, index]);
+  const brewing = atMachine && !brewDone && !reduced;
+  const onBrewingChangeRef = useRef(onBrewingChange);
+  onBrewingChangeRef.current = onBrewingChange;
+  useEffect(() => {
+    onBrewingChangeRef.current?.(brewing);
+  }, [brewing]);
+  // leaving the room mid-shot (morale drop) must not leave the machine venting forever
+  useEffect(() => () => onBrewingChangeRef.current?.(false), []);
+
+  const onSeatedChangeRef = useRef(onSeatedChange);
+  onSeatedChangeRef.current = onSeatedChange;
+  useEffect(() => {
+    onSeatedChangeRef.current?.(seated);
+  }, [seated]);
+  useEffect(() => () => onSeatedChangeRef.current?.(false), []);
+
+  // red alert: a standing bystander turns toward the vault, cranes their head and takes one hesitant
+  // step back (someone on the sofa stays put). Reduced motion keeps them where they are.
+  const recoil = redAlert && !seated && !reduced;
+  // the walk transition only belongs to the patrol; the recoil is one short stride, and the step
+  // forward again once the alert ends uses the same short stride
+  // (derived during render, so the very render that moves the sprite already carries the short stride)
+  const [lastRecoil, setLastRecoil] = useState(recoil);
+  const [recoilEdge, setRecoilEdge] = useState(false);
+  if (lastRecoil !== recoil) {
+    setLastRecoil(recoil);
+    setRecoilEdge(true);
+  }
+  useEffect(() => {
+    if (!recoilEdge) return;
+    const timer = setTimeout(() => setRecoilEdge(false), RECOIL_MS);
+    return () => clearTimeout(timer);
+  }, [recoilEdge]);
 
   let mood: WorkerMood = "idle";
   if (happiness < 40) mood = "tired";
@@ -110,16 +164,20 @@ export default function WanderingEmployee({
 
   return (
     <OfficeWorker
-      x={current.x}
-      y={current.y}
+      x={current.x + (recoil ? RECOIL_TILES.x : 0)}
+      y={current.y + (recoil ? RECOIL_TILES.y : 0)}
       z={seated ? SOFA_SEAT_Z : 0}
       shirtColor={shirtColor}
       hairColor={hairColor}
       mood={mood}
-      holdsMug={current.action === "coffee" && !redAlert}
+      holdsMug={atMachine && !brewing}
+      brewing={brewing}
       seated={seated}
+      lounging={seated}
+      seedKey={`${shirtColor}|${hairColor}`}
       facing={redAlert ? FACE_VAULT : undefined}
-      transitionMs={WALK_TRANSITION_MS}
+      wary={redAlert && !seated}
+      transitionMs={recoilEdge ? RECOIL_MS : WALK_TRANSITION_MS}
     />
   );
 }

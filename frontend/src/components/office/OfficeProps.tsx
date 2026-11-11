@@ -1,9 +1,11 @@
 import { useRef } from "react";
+import { useRedAlert } from "../../hooks/useRedAlert";
 import { useGameStore } from "../../store/useGameStore";
 import { getHourOfDay } from "../../utils/officeClock";
 import IsoBox from "./IsoBox";
 import { project, shade } from "./isoMath";
 import { clockHandAngles } from "./officeLifeUtils";
+import { useRosterStage } from "./rosterStage";
 import "./officeLife.css";
 
 interface PropPosition {
@@ -13,11 +15,20 @@ interface PropPosition {
 }
 
 // POTTED OFFICE PLANT IN A MODERN FACETED CERAMIC PLANTER WITH LUSH FOLIAGE
+// how close (in tiles, manhattan) a running walker must pass for the foliage to rustle
+const PLANT_RUSTLE_RADIUS = 1.4;
+
 export function OfficePlant({ x, y, z = 0 }: PropPosition) {
   const canopy = project(x + 0.15, y + 0.15, z + 0.45);
   const potRim = project(x + 0.15, y + 0.15, z + 0.22);
+  // somebody is dashing past it on red alert: a boolean selector, so plants only re-render on the edge
+  const redAlert = useRedAlert();
+  const brushedPast = useRosterStage((s) =>
+    s.walkers.some((w) => !w.seated && w.hopMs > 0 && Math.abs(w.x - (x + 0.15)) + Math.abs(w.y - (y + 0.15)) < PLANT_RUSTLE_RADIUS)
+  );
+  const rustling = redAlert && brushedPast;
   return (
-    <g>
+    <g data-testid="office-plant" data-rustling={rustling ? "" : undefined}>
       {/* Faceted ceramic planter */}
       <IsoBox x={x} y={y} z={z} w={0.3} d={0.3} h={0.22} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" stroke="rgba(255,255,255,0.08)" highlightTop />
       {/* Dark soil bed */}
@@ -25,7 +36,8 @@ export function OfficePlant({ x, y, z = 0 }: PropPosition) {
       {/* Hydroponic sensor pip */}
       <circle cx={potRim.x + 6} cy={potRim.y - 2} r={0.8} fill="#10b981" />
 
-      {/* Layered lush tropical foliage with organic depth */}
+      {/* Layered lush tropical foliage with organic depth; the whole canopy sways one pixel as a runner brushes past */}
+      <g className={rustling ? "ol-plant-sway" : undefined}>
       {/* Deep shadow leaves */}
       <ellipse cx={canopy.x - 7} cy={canopy.y + 4} rx={8} ry={6.5} fill="url(#foliageDark)" />
       <ellipse cx={canopy.x + 7} cy={canopy.y + 3} rx={8} ry={6.5} fill="url(#foliageDark)" />
@@ -36,6 +48,7 @@ export function OfficePlant({ x, y, z = 0 }: PropPosition) {
       {/* Leaf vein rib highlights */}
       <path d={`M ${canopy.x} ${canopy.y + 8} Q ${canopy.x - 3} ${canopy.y} ${canopy.x - 8} ${canopy.y - 5}`} stroke="rgba(255,255,255,0.25)" strokeWidth={0.7} fill="none" />
       <path d={`M ${canopy.x} ${canopy.y + 8} Q ${canopy.x + 4} ${canopy.y + 1} ${canopy.x + 8} ${canopy.y - 4}`} stroke="rgba(255,255,255,0.25)" strokeWidth={0.7} fill="none" />
+      </g>
     </g>
   );
 }
@@ -92,25 +105,39 @@ export function WallClock({ x, y, z = 0.6 }: PropPosition) {
 }
 
 // MODERN ARCHITECTURAL SECTIONAL LOUNGE COUCH WITH OAK BASE & DESIGNER PILLOWS
-export function Sofa({ x, y, z = 0 }: PropPosition) {
+// `occupied`: somebody is lounging on it, so the seat cushion sinks a pixel with a small elastic settle
+export function Sofa({ x, y, z = 0, isExecutive = false, occupied = false }: PropPosition & { isExecutive?: boolean; occupied?: boolean }) {
+  const baseColor = isExecutive ? "#1e293b" : "#78350f";
+  const seatFillLeft = isExecutive ? "url(#executiveLeather)" : "#0f766e";
+  const seatFillRight = isExecutive ? "#3b1702" : "#115e59";
+  const seatFillTop = isExecutive ? "#78350f" : "#14b8a6";
+  const backFillLeft = isExecutive ? "#451a03" : "#0d9488";
+  const backFillRight = isExecutive ? "#291102" : "#0f766e";
+  const backFillTop = isExecutive ? "#9a3412" : "#2dd4bf";
+  const pillow1 = isExecutive ? "#d97706" : "#f59e0b";
+  const pillow2 = isExecutive ? "#090d16" : "#06b6d4";
+  const pillow3 = isExecutive ? "#b45309" : "#ec4899";
+
   return (
     <g>
-      {/* Low oak wood reveal base */}
-      <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={1.34} d={0.59} h={0.04} color="#78350f" />
-      <IsoBox x={x + 1.28} y={y - 0.02} z={z} w={0.59} d={0.59} h={0.04} color="#78350f" />
+      {/* Low wood reveal base */}
+      <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={1.34} d={0.59} h={0.04} color={baseColor} />
+      <IsoBox x={x + 1.28} y={y - 0.02} z={z} w={0.59} d={0.59} h={0.04} color={baseColor} />
 
-      {/* Main seat cushions in deep storm teal */}
-      <IsoBox x={x} y={y} z={z + 0.04} w={1.3} d={0.55} h={0.2} fillLeft="#0f766e" fillRight="#115e59" fillTop="#14b8a6" stroke="rgba(255,255,255,0.06)" />
-      <IsoBox x={x} y={y} z={z + 0.24} w={1.3} d={0.12} h={0.3} fillLeft="#0d9488" fillRight="#0f766e" fillTop="#2dd4bf" stroke="rgba(255,255,255,0.06)" />
+      {/* Main seat cushions */}
+      <g className="ol-cushion" data-testid="sofa-cushion" data-sunk={occupied ? "" : undefined}>
+        <IsoBox x={x} y={y} z={z + 0.04} w={1.3} d={0.55} h={0.2} fillLeft={seatFillLeft} fillRight={seatFillRight} fillTop={seatFillTop} stroke="rgba(255,255,255,0.06)" />
+      </g>
+      <IsoBox x={x} y={y} z={z + 0.24} w={1.3} d={0.12} h={0.3} fillLeft={backFillLeft} fillRight={backFillRight} fillTop={backFillTop} stroke="rgba(255,255,255,0.06)" />
 
       {/* Corner return section */}
-      <IsoBox x={x + 1.3} y={y} z={z + 0.04} w={0.55} d={0.55} h={0.2} fillLeft="#0f766e" fillRight="#115e59" fillTop="#14b8a6" stroke="rgba(255,255,255,0.06)" />
-      <IsoBox x={x + 1.3} y={y} z={z + 0.24} w={0.12} d={0.55} h={0.3} fillLeft="#0d9488" fillRight="#0f766e" fillTop="#2dd4bf" stroke="rgba(255,255,255,0.06)" />
+      <IsoBox x={x + 1.3} y={y} z={z + 0.04} w={0.55} d={0.55} h={0.2} fillLeft={seatFillLeft} fillRight={seatFillRight} fillTop={seatFillTop} stroke="rgba(255,255,255,0.06)" />
+      <IsoBox x={x + 1.3} y={y} z={z + 0.24} w={0.12} d={0.55} h={0.3} fillLeft={backFillLeft} fillRight={backFillRight} fillTop={backFillTop} stroke="rgba(255,255,255,0.06)" />
 
       {/* Designer throw pillows */}
-      <IsoBox x={x + 0.15} y={y + 0.02} z={z + 0.24} w={0.22} d={0.2} h={0.16} color="#f59e0b" stroke="rgba(255,255,255,0.12)" />
-      <IsoBox x={x + 0.7} y={y + 0.02} z={z + 0.24} w={0.22} d={0.2} h={0.16} color="#06b6d4" stroke="rgba(255,255,255,0.12)" />
-      <IsoBox x={x + 1.4} y={y + 0.2} z={z + 0.24} w={0.2} d={0.22} h={0.16} color="#ec4899" stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x + 0.15} y={y + 0.02} z={z + 0.24} w={0.22} d={0.2} h={0.16} color={pillow1} stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x + 0.7} y={y + 0.02} z={z + 0.24} w={0.22} d={0.2} h={0.16} color={pillow2} stroke="rgba(255,255,255,0.12)" />
+      <IsoBox x={x + 1.4} y={y + 0.2} z={z + 0.24} w={0.2} d={0.22} h={0.16} color={pillow3} stroke="rgba(255,255,255,0.12)" />
     </g>
   );
 }
@@ -151,7 +178,8 @@ export function PcTower({ x, y, z = 0 }: PropPosition) {
 }
 
 // ARTICULATED ARCHITECT GOOSENECK TASK LAMP
-export function DeskLamp({ x, y, z = 0 }: PropPosition) {
+// `lit`: switched on for the night shift, with two quick flicker frames as it comes on
+export function DeskLamp({ x, y, z = 0, lit = false }: PropPosition & { lit?: boolean }) {
   const base = project(x + 0.05, y + 0.05, z);
   const head = project(x + 0.02, y + 0.08, z + 0.32);
   return (
@@ -163,8 +191,15 @@ export function DeskLamp({ x, y, z = 0 }: PropPosition) {
       <line x1={base.x + 1} y1={base.y - 10} x2={head.x} y2={head.y} stroke="#64748b" strokeWidth={0.8} />
       {/* Lamp cone hood */}
       <ellipse cx={head.x} cy={head.y} rx={3.5} ry={2} fill="#334155" stroke="#94a3b8" strokeWidth={0.4} />
-      {/* Soft downward light cone */}
-      <ellipse cx={head.x} cy={head.y + 1} rx={2.2} ry={1.2} fill="#fef08a" opacity={0.95} />
+      {lit ? (
+        <g className="ol-lamp-on" data-testid="desk-lamp-light" pointerEvents="none">
+          {/* bulb, and the warm pool it throws on the desk top */}
+          <ellipse cx={head.x} cy={head.y + 1} rx={2.2} ry={1.2} fill="#fef08a" opacity={0.95} />
+          <ellipse cx={head.x - 2} cy={base.y - 1} rx={9} ry={4.5} fill="#fde68a" opacity={0.18} />
+        </g>
+      ) : (
+        <ellipse cx={head.x} cy={head.y + 1} rx={2.2} ry={1.2} fill="#475569" opacity={0.9} />
+      )}
     </g>
   );
 }
@@ -201,27 +236,53 @@ export function Fridge({ x, y, z = 0 }: PropPosition) {
   );
 }
 
-// COMMERCIAL DUAL-BOILER CHROME ESPRESSO MACHINE WITH PRESSURE GAUGES
-export function EspressoMachine({ x, y, z = 0, steam = "light" }: PropPosition & { steam?: "off" | "light" | "full" }) {
+// COMMERCIAL DUAL-BOILER CHROME OR 24K GOLD ESPRESSO MACHINE WITH PRESSURE GAUGES
+export function EspressoMachine({
+  x,
+  y,
+  z = 0,
+  steam = "light",
+  isGolden = false,
+  brewing = false,
+}: PropPosition & { steam?: "off" | "light" | "full"; isGolden?: boolean; brewing?: boolean }) {
   const spout = project(x + 0.07, y + 0.07, z + 0.36);
   const face = project(x + 0.13, y + 0.22, z + 0.18);
-  const puffs = steam === "full" ? 3 : steam === "light" ? 1 : 0;
+  // pulling a shot vents a full plume whatever the machine's resting steam level
+  const puffs = brewing ? 3 : steam === "full" ? 3 : steam === "light" ? 1 : 0;
+  const head = project(x + 0.14, y + 0.24, z + 0.08);
+
+  const chassisLeft = isGolden ? "#b45309" : "#94a3b8";
+  const chassisRight = isGolden ? "#78350f" : "#64748b";
+  const chassisTop = isGolden ? "url(#goldMetal)" : "url(#chromeMetal)";
+  const chassisStroke = isGolden ? "rgba(254,240,138,0.7)" : "rgba(255,255,255,0.3)";
+  const cupColor = isGolden ? "#0f172a" : "#f8fafc";
+  const cupStroke = isGolden ? "#fbbf24" : "#cbd5e1";
+  const trayColor = isGolden ? "#92400e" : "#475569";
+
   return (
     <g>
-      {/* Polished stainless steel chassis */}
-      <IsoBox x={x} y={y} z={z} w={0.28} d={0.24} h={0.26} fillLeft="#94a3b8" fillRight="#64748b" fillTop="url(#chromeMetal)" stroke="rgba(255,255,255,0.3)" highlightTop />
-      {/* Cup warmer rack on top with ceramic espresso cups */}
-      <IsoBox x={x + 0.04} y={y + 0.04} z={z + 0.26} w={0.07} d={0.07} h={0.06} color="#f8fafc" stroke="#cbd5e1" strokeWidth={0.3} />
-      <IsoBox x={x + 0.15} y={y + 0.04} z={z + 0.26} w={0.07} d={0.07} h={0.06} color="#f8fafc" stroke="#cbd5e1" strokeWidth={0.3} />
+      {/* Polished chassis */}
+      <IsoBox x={x} y={y} z={z} w={0.28} d={0.24} h={0.26} fillLeft={chassisLeft} fillRight={chassisRight} fillTop={chassisTop} stroke={chassisStroke} highlightTop />
+      {/* Cup warmer rack on top with ceramic/gold espresso cups */}
+      <IsoBox x={x + 0.04} y={y + 0.04} z={z + 0.26} w={0.07} d={0.07} h={0.06} color={cupColor} stroke={cupStroke} strokeWidth={0.4} />
+      <IsoBox x={x + 0.15} y={y + 0.04} z={z + 0.26} w={0.07} d={0.07} h={0.06} color={cupColor} stroke={cupStroke} strokeWidth={0.4} />
 
       {/* Front panel pressure gauges */}
-      <circle cx={face.x - 4} cy={face.y - 2} r={2.2} fill="#f8fafc" stroke="#334155" strokeWidth={0.4} />
+      <circle cx={face.x - 4} cy={face.y - 2} r={2.2} fill={isGolden ? "#fef08a" : "#f8fafc"} stroke="#334155" strokeWidth={0.4} />
       <line x1={face.x - 4} y1={face.y - 2} x2={face.x - 3} y2={face.y - 3.5} stroke="#ef4444" strokeWidth={0.5} />
-      <circle cx={face.x + 3} cy={face.y - 2} r={2.2} fill="#f8fafc" stroke="#334155" strokeWidth={0.4} />
+      <circle cx={face.x + 3} cy={face.y - 2} r={2.2} fill={isGolden ? "#fef08a" : "#f8fafc"} stroke="#334155" strokeWidth={0.4} />
       <line x1={face.x + 3} y1={face.y - 2} x2={face.x + 4.2} y2={face.y - 3.2} stroke="#0284c7" strokeWidth={0.5} />
 
-      {/* Dual brass/copper group heads and drip tray */}
-      <IsoBox x={x + 0.02} y={y + 0.2} z={z + 0.02} w={0.24} d={0.04} h={0.02} color="#475569" />
+      {/* Dual group heads and drip tray */}
+      <IsoBox x={x + 0.02} y={y + 0.2} z={z + 0.02} w={0.24} d={0.04} h={0.02} color={trayColor} />
+
+      {/* pulling a shot: brew LED lit and a pixel coffee stream from the group head into the cup */}
+      {brewing && (
+        <g data-testid="espresso-brewing" shapeRendering="crispEdges" pointerEvents="none">
+          <rect x={Math.round(face.x) - 1} y={Math.round(face.y) + 2} width={2} height={1} fill={isGolden ? "#fde047" : "#f59e0b"} />
+          <rect x={Math.round(head.x)} y={Math.round(head.y)} width={1} height={4} fill="#3b2414" className="animate-blink" />
+        </g>
+      )}
 
       {/* Rising steam clouds */}
       {Array.from({ length: puffs }).map((_, i) => (
@@ -231,7 +292,7 @@ export function EspressoMachine({ x, y, z = 0, steam = "light" }: PropPosition &
           cy={spout.y}
           rx={1.5}
           ry={2.5}
-          fill="#f1f5f9"
+          fill={isGolden ? "#fef9c3" : "#f1f5f9"}
           opacity={0.65}
           className="animate-steam-rise motion-only"
           style={{ animationDelay: `${i * 0.55}s` }}
@@ -246,7 +307,7 @@ export function SlidingGlassDoor({ x, y, z = 0, height = 0.95, open = false }: P
   const keypad = project(x + 0.28, y - 0.03, z + height * 0.5);
   return (
     <g>
-      <g className="ol-door-slide" style={{ transform: open ? "translate(-10px, 5px)" : "translate(0, 0)" }}>
+      <g className="ol-door-slide" data-testid="vault-door" data-open={open ? "" : undefined} style={{ transform: open ? "translate(-10px, 5px)" : "translate(0, 0)" }}>
         <IsoBox x={x} y={y} z={z} w={0.05} d={0.5} h={height} color="#bae6fd" opacity={0.45} stroke="rgba(56,189,248,0.4)" strokeWidth={0.5} highlightTop />
       </g>
       <IsoBox x={x - 0.02} y={y - 0.02} z={z} w={0.02} d={0.02} h={height} color="#0f172a" />
@@ -313,8 +374,8 @@ export function WaterCooler({ x, y, z = 0 }: PropPosition) {
   );
 }
 
-// CURVED MODERN RECEPTION COUNTER, FRONT FACADE BOWED OUTWARD TOWARD THE VISITOR SIDE
-export function ReceptionDesk({ x, y, z = 0 }: PropPosition) {
+// CURVED MODERN RECEPTION COUNTER (SLATE OR CARRARA MARBLE), FRONT FACADE BOWED OUTWARD TOWARD THE VISITOR SIDE
+export function ReceptionDesk({ x, y, z = 0, isMarble = false }: PropPosition & { isMarble?: boolean }) {
   const width = 1.5;
   const depth = 0.42;
   const height = 0.5;
@@ -340,13 +401,19 @@ export function ReceptionDesk({ x, y, z = 0 }: PropPosition) {
   const leftCapPath = `M ${p(0, 0, 0).x} ${p(0, 0, 0).y} L ${backL.x} ${backL.y} L ${topL.x} ${topL.y} L ${botL.x} ${botL.y} Z`;
   const ledPath = `M ${ledL.x} ${ledL.y} Q ${ledM.x} ${ledM.y} ${ledR.x} ${ledR.y}`;
 
+  const leftCapFill = isMarble ? "#cbd5e1" : shade("#1e293b", 0.65);
+  const frontFill = isMarble ? "url(#marbleStone)" : shade("#1e293b", 0.95);
+  const topFill = isMarble ? "#f8fafc" : shade("#1e293b", 1.25);
+  const strokeColor = isMarble ? "rgba(100,116,139,0.5)" : "rgba(15,23,42,0.3)";
+  const ledColor = isMarble ? "#10b981" : "#38bdf8";
+
   return (
     <g>
-      <path d={leftCapPath} fill={shade("#1e293b", 0.65)} stroke="rgba(15,23,42,0.3)" strokeWidth={0.6} />
-      <path d={frontPath} fill={shade("#1e293b", 0.95)} stroke="rgba(15,23,42,0.3)" strokeWidth={0.6} />
-      <path d={topPath} fill={shade("#1e293b", 1.25)} stroke="rgba(15,23,42,0.25)" strokeWidth={0.6} />
+      <path d={leftCapPath} fill={leftCapFill} stroke={strokeColor} strokeWidth={0.6} />
+      <path d={frontPath} fill={frontFill} stroke={strokeColor} strokeWidth={0.6} />
+      <path d={topPath} fill={topFill} stroke={strokeColor} strokeWidth={0.6} />
       {/* backlit accent strip following the counter's curve */}
-      <path d={ledPath} fill="none" stroke="#38bdf8" strokeWidth={2} opacity={0.85} strokeLinecap="round" />
+      <path d={ledPath} fill="none" stroke={ledColor} strokeWidth={2} opacity={0.9} strokeLinecap="round" />
     </g>
   );
 }

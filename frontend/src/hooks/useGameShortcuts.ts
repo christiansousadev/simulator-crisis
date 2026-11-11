@@ -91,6 +91,9 @@ function runAction(action: ShortcutAction) {
     case "toggle-dock":
       store.toggleDockCollapsed();
       return;
+    case "open-help":
+      store.openAcademy();
+      return;
   }
 }
 

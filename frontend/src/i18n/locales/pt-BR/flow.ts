@@ -57,6 +57,7 @@ export const flowPt = {
   shortcutTabs: "Abas do painel",
   shortcutDock: "Recolher ou expandir o painel",
   shortcutBuild: "Modo construção",
+  shortcutHelp: "Abrir a Academia SRE (ajuda)",
   creditsDesign: "Design e simulação",
   creditsTech: "Feito com",
   creditsPractice: "Baseado em",

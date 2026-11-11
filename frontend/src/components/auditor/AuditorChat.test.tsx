@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useGameStore } from "../../store/useGameStore";
@@ -50,7 +50,8 @@ describe("PostMortemModal auditor tab", () => {
     await userEvent.click(report);
     expect(report).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("heading", { name: "Report body" })).toBeInTheDocument();
-    useGameStore.setState({ postMortem: null });
+    // closing the dialog re-renders it (exit presence), so it belongs inside act
+    act(() => useGameStore.setState({ postMortem: null }));
   });
 });
 

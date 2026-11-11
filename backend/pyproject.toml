@@ -21,6 +21,12 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+  # third-party only: starlette warns at import time that its TestClient is moving off httpx. Nothing
+  # in this repo can act on it until fastapi/starlette ship the replacement client, so it is silenced
+  # by exact message; every other DeprecationWarning (including our own) still surfaces.
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.coverage.run]
 source = ["app"]

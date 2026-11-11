@@ -488,6 +488,35 @@ export const core = {
     recordedAtLabel: "Registrado Em",
     objectivesSnapshot: "Instantâneo dos Objetivos",
     resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resolvidos`,
+    viewsLabel: "Visões do Hall da Fama",
+    shop: {
+      tab: "Loja de Decorações & Cosméticos",
+      title: "Loja de Decorações & Cosméticos",
+      heading: "Personalização Tática da Cyber War Room",
+      intro: "Gaste seus Pontos de Prestígio acumulados nas operações para aplicar reskins exclusivos nos móveis e estações do escritório.",
+      installedCount: (installed, total) => `${installed} / ${total} instalados`,
+      balance: "Saldo disponível:",
+      cost: (points) => `${points} pts`,
+      unlock: (cost) => `Desbloquear (${cost} pts)`,
+      installed: "Ativo no Escritório",
+      needMore: (missing) => `Faltam ${missing} pts`,
+      unlockFailed: "O desbloqueio foi recusado. Seu saldo não foi debitado; tente novamente.",
+      unlockedToast: (name) => `${name} instalado no escritório`,
+      items: {
+        golden_coffee_machine: {
+          name: "Máquina de Café Dourada (24K)",
+          description: "Substitui a máquina de expresso italiana da copa por uma versão suntuosa banhada a ouro 24K com xícaras de porcelana fina.",
+        },
+        executive_leather_sofa: {
+          name: "Sofá Executivo em Couro Nobre",
+          description: "Substitui o sofá da área de descanso por um modelo modular em couro nobre escuro com pespontos duplos artesanais.",
+        },
+        marble_reception_desk: {
+          name: "Balcão em Mármore Carrara",
+          description: "Substitui o balcão da entrada corporativa por mármore Carrara polido com iluminação inferior em neon ciano e esmeralda.",
+        },
+      },
+    },
   },
   debrief: {
     titleVictory: "CICLO DE AUDITORIA CERTIFICADO",

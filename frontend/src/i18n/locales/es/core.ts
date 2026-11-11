@@ -488,6 +488,35 @@ export const core = {
     recordedAtLabel: "Registrado En",
     objectivesSnapshot: "Instantánea de Objetivos",
     resolvedOfTotal: (resolved, total) => `${resolved} / ${total} resueltos`,
+    viewsLabel: "Vistas del Salón de la Fama",
+    shop: {
+      tab: "Tienda de Decoración",
+      title: "Tienda de Decoración y Cosméticos",
+      heading: "Personalización Táctica de la War Room",
+      intro: "Gasta los Puntos de Prestigio ganados en auditorías y logros para instalar mejoras cosméticas de lujo en la War Room.",
+      installedCount: (installed, total) => `${installed} / ${total} instalados`,
+      balance: "Saldo:",
+      cost: (points) => `${points} pts`,
+      unlock: (cost) => `Desbloquear (${cost} pts)`,
+      installed: "Instalado en la Oficina",
+      needMore: (missing) => `Faltan ${missing} pts`,
+      unlockFailed: "El desbloqueo fue rechazado. No se descontó tu saldo; inténtalo de nuevo.",
+      unlockedToast: (name) => `${name} instalado en la oficina`,
+      items: {
+        golden_coffee_machine: {
+          name: "Cafetera Dorada (24K)",
+          description: "Reemplaza la cafetera espresso de la sala de descanso por una versión bañada en oro de 24K con tazas de porcelana fina.",
+        },
+        executive_leather_sofa: {
+          name: "Sofá Ejecutivo de Cuero",
+          description: "Reemplaza el sofá de la sala de descanso por un modelo modular de cuero coñac con doble pespunte artesanal.",
+        },
+        marble_reception_desk: {
+          name: "Mostrador de Mármol Carrara",
+          description: "Reemplaza el mostrador de la recepción por mármol Carrara pulido con iluminación inferior en neón cian y esmeralda.",
+        },
+      },
+    },
   },
   debrief: {
     titleVictory: "CICLO DE AUDITORÍA CERTIFICADO",

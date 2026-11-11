@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
+import { useGameStore } from "../../store/useGameStore";
 import {
   GlassCoffeeTable,
   GroundShadow,
@@ -25,6 +26,7 @@ interface ReceptionLobbyProps {
 // CORPORATE ENTRANCE LOBBY: RECEPTION COUNTER, SECURITY TURNSTILES AND A VISITOR WAITING LOUNGE
 export default function ReceptionLobby({ originX, originY }: ReceptionLobbyProps) {
   const t = useTranslation();
+  const isMarbleDesk = useGameStore((s) => s.telemetry.unlocked_cosmetics?.includes("marble_reception_desk") ?? false);
   // she only perks up (with the star badge) when a new hire actually reaches her desk
   const checkIns = useRosterStage((s) => s.checkIns);
   const [greeting, setGreeting] = useState(false);
@@ -47,7 +49,7 @@ export default function ReceptionLobby({ originX, originY }: ReceptionLobbyProps
       {/* logo partition wall anchors the counter and screens the back office beyond it */}
       <LogoPartitionWall x={originX + 0.1} y={originY - 0.38} />
 
-      <ReceptionDesk x={originX} y={originY} />
+      <ReceptionDesk x={originX} y={originY} isMarble={isMarbleDesk} />
       <ReceptionMonitor x={originX + 0.62} y={originY + 0.05} z={0.5} />
       <OfficeWorker
         x={originX + 0.78}

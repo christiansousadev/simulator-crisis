@@ -137,6 +137,48 @@ const SecondaryPopover = memo(function SecondaryPopover() {
   );
 });
 
+// compact badge text so a veteran career balance never widens the toolbar: 950, 1.2k, 12k
+export function formatPrestigeBadge(points: number): string {
+  if (points >= 10_000) return `${Math.floor(points / 1000)}k`;
+  if (points >= 1000) return `${(Math.floor(points / 100) / 10).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(Math.max(0, Math.floor(points)));
+}
+
+const ICON_BUTTON = "rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white";
+
+// HALL OF FAME TRIGGER WITH A PRESTIGE BALANCE BADGE. Subscribes to prestige_points alone, so a
+// telemetry tick only re-renders this button when the balance actually moves; the badge is keyed on
+// the balance so the bump animation replays on every earn or spend (and is muted by reduced motion).
+export const HallOfFameButton = memo(function HallOfFameButton() {
+  const t = useTranslation();
+  const openHallOfFame = useGameStore((s) => s.openHallOfFame);
+  const points = useGameStore((s) => s.telemetry.prestige_points ?? 0);
+  const hasPrestige = points > 0;
+  const label = hasPrestige ? t.hud.topbar.hallOfFamePrestige(points) : t.hud.topbar.hallOfFameTitle;
+
+  return (
+    <button
+      type="button"
+      onClick={openHallOfFame}
+      className={`relative ${ICON_BUTTON} ${hasPrestige ? "!text-amber-300" : ""}`}
+      title={label}
+      aria-label={label}
+    >
+      <Award className="h-4 w-4" aria-hidden />
+      {hasPrestige && (
+        <span
+          key={points}
+          data-testid="prestige-badge"
+          aria-hidden
+          className="pointer-events-none absolute -right-1.5 -top-1.5 min-w-[1.1rem] rounded-full border border-amber-300/70 bg-amber-500 px-1 text-center font-mono text-[9px] font-extrabold leading-[14px] text-slate-950 shadow-[0_0_6px_rgba(245,158,11,0.55)] tabular-nums animate-badge-bump"
+        >
+          {formatPrestigeBadge(points)}
+        </span>
+      )}
+    </button>
+  );
+});
+
 const SpeedControls = memo(function SpeedControls() {
   const t = useTranslation();
   const isRunning = useGameStore((s) => s.telemetry.is_running);
@@ -211,15 +253,13 @@ export default function Topbar() {
   const openScenarioSelect = useGameStore((s) => s.openScenarioSelect);
   const openAcademy = useGameStore((s) => s.openAcademy);
   const openSettings = useGameStore((s) => s.openSettings);
-  const openHallOfFame = useGameStore((s) => s.openHallOfFame);
   const stageView = useGameStore((s) => s.stageView);
   const toggleStageView = useGameStore((s) => s.toggleStageView);
   // wide screens show the secondary indicators inline; below that they live in the popover. only
   // one copy is ever mounted.
   const wide = useMediaQuery("(min-width: 1720px)");
 
-  const iconButton =
-    "rounded-md p-1.5 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white";
+  const iconButton = ICON_BUTTON;
 
   return (
     <header className="relative z-20 flex h-16 items-center justify-between gap-2 bg-slate-900 px-2 text-slate-100 panel-shadow sm:gap-3 sm:px-5">
@@ -269,12 +309,17 @@ export default function Topbar() {
           <button type="button" onClick={openScenarioSelect} className={iconButton} title={t.topbar.newGame}>
             <Gamepad2 className="h-4 w-4" aria-hidden />
           </button>
-          <button type="button" onClick={openAcademy} className={iconButton} title={t.topbar.help}>
+          <button
+            type="button"
+            onClick={openAcademy}
+            className={iconButton}
+            title={t.hud.topbar.helpTitle}
+            aria-label={t.topbar.help}
+            aria-keyshortcuts="? h"
+          >
             <HelpCircle className="h-4 w-4" aria-hidden />
           </button>
-          <button type="button" onClick={openHallOfFame} className={iconButton} title={t.titleScreen.hallOfFame}>
-            <Award className="h-4 w-4" aria-hidden />
-          </button>
+          <HallOfFameButton />
           <button type="button" onClick={openSettings} className={iconButton} title={t.topbar.settings}>
             <Settings className="h-4 w-4" aria-hidden />
           </button>

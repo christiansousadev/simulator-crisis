@@ -20,6 +20,10 @@ export interface HudCopy {
     speedTitle: (x: number) => string;
     freeze: string;
     freezeTitle: string;
+    helpTitle: string;
+    hallOfFameTitle: string;
+    // hall of fame trigger while there is prestige waiting to be spent in the decor shop
+    hallOfFamePrestige: (points: number) => string;
   };
   dock: {
     tabsLabel: string;
@@ -142,6 +146,9 @@ export const hudEn: HudCopy = {
     speedTitle: (x) => `Run at ${x}x speed`,
     freeze: "FREEZE",
     freezeTitle: "Feature freeze: risky runbooks are locked",
+    helpTitle: "SRE Academy & help [? / H]",
+    hallOfFameTitle: "Hall of Fame",
+    hallOfFamePrestige: (points) => `Hall of Fame: ${points} prestige points to spend on office decor`,
   },
   dock: {
     tabsLabel: "Dock sections",

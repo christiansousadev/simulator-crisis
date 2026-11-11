@@ -6,6 +6,9 @@ import { useGameStore } from "../../store/useGameStore";
 import { IncidentSeverity, Service } from "../../types/game";
 import { severityTone } from "../../utils/severity";
 import { GroundShadow } from "./OfficeProps";
+import PixelBurst from "./PixelBurst";
+import WorldChip from "./WorldChip";
+import { replayClass } from "./workerRig";
 import IsoBox from "./IsoBox";
 import { Z_SCALE, project } from "./isoMath";
 import { CABINET_COLOR, LED_COLOR, ledPatternFor, ledPhaseMs } from "./officeLifeUtils";
@@ -192,6 +195,11 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
     return pts.join(" ");
   }, [baseAnchor.x, baseAnchor.y]);
 
+  const pressRef = useRef<SVGGElement>(null);
+  // fans: steady when healthy (spinning back up after a recovery), straining when degraded, and
+  // winding down to a stop when the rack is down
+  const fanClass = status === "degraded" ? "ol-fan-strain" : status === "down" ? "ol-fan-spindown" : spunUp.current ? "ol-fan-spinup" : "ol-fan";
+
   const unhealthy = status !== "healthy";
   const showBadge = unhealthy || held !== null;
   const showDegradedFx = status === "degraded" || held === "degraded";
@@ -203,8 +211,11 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
 
   return (
     <g
+      ref={pressRef}
       onClick={(e) => {
         e.stopPropagation();
+        // squash & stretch: the cabinet presses into the floor and springs back
+        replayClass(pressRef.current, "ol-press");
         onSelect(service.id);
       }}
       onMouseEnter={(e) => onHover(service.id, e)}
@@ -267,6 +278,8 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
 
       {/* CABINET ASSEMBLY: shakes once on failure */}
       <g className={failAnim ? "ol-rack-shake" : undefined}>
+        {/* the chassis rattles in whole pixels while the rack is down; the HUD and badges below stay steady */}
+        <g className={status === "down" ? "ol-rack-rattle" : undefined} data-testid="rack-chassis">
         {/* main high-tech brushed metal chassis with bevel highlight */}
         <IsoBox
           x={x}
@@ -400,7 +413,8 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
 
         {/* ROOFTOP COOLING TURBINE FAN WITH MULTI-BLADE ROTOR */}
         <g
-          className={status !== "healthy" ? "" : spunUp.current ? "ol-fan-spinup" : "ol-fan"}
+          className={fanClass}
+          data-testid="rack-fan"
           style={{ transformOrigin: `${fanAnchor.x}px ${fanAnchor.y}px` }}
         >
           {/* outer turbine intake shroud */}
@@ -494,7 +508,8 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
                 strokeLinecap="round"
                 className="ol-spark-burst"
                 data-testid="rack-top-spark"
-                style={{ animationDelay: `${s.delay}s` }}
+                // intermittent bursts: each discharge on its own period and phase so the four never pulse together
+                style={{ animationDelay: `-${(s.delay * 3.1).toFixed(2)}s`, "--burst-period": `${(1.8 + i * 0.37).toFixed(2)}s` } as CSSProperties}
               />
             ))}
             {/* dense rising smoke column */}
@@ -538,6 +553,8 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
             </foreignObject>
           </>
         )}
+
+        </g>
 
         {/* FLOATING HOLOGRAPHIC TELEMETRY HUD OVER CABINET */}
         {(selected || unhealthy) && (
@@ -639,6 +656,10 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
                 </text>
               </g>
             </g>
+            {/* pixel confetti off the top of the cabinet */}
+            <PixelBurst x={topAnchor.x} y={topAnchor.y} count={14} testId="rack-burst" />
+            {/* the value this recovery earned, rising from the cabinet a beat after RESTORED */}
+            <WorldChip x={bubbleAnchor.x} y={bubbleAnchor.y - 30} label="+SLA" tone="good" testId="rack-chip-sla" delayMs={250} />
           </>
         )}
       </g>
@@ -663,6 +684,10 @@ function ServerRack({ service, x, y, selected, severity, investigating, dimmed, 
             <Wrench className="w-3.5 h-3.5" fill="currentColor" />
           </div>
         </foreignObject>
+      )}
+      {/* the runbook was paid for: a cost chip rises off the rack being worked on */}
+      {mitigateAnim && !recoverAnim && (
+        <WorldChip key={mitigateAnim.id} x={wrenchAnchor.x} y={wrenchAnchor.y - 14} label="-$" tone="cost" testId="rack-chip-cost" />
       )}
     </g>
   );

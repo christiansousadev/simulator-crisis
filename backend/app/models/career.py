@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text
 
@@ -19,7 +19,7 @@ class CareerRecord(Base):
     final_sla_percentage = Column(Numeric(5, 2), nullable=False)
     final_budget = Column(Numeric(12, 2), nullable=False)
     prestige_earned = Column(Integer, nullable=False, default=0)
-    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     # true when this run was, at any point, resumed from a persisted snapshot after a backend
     # restart rather than played start-to-finish in one continuous process -- not used to exclude
     # the record from any ranking today, just kept so that decision can be made later without the

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearPending } from "../../hooks/useAsyncAction";
 import { api } from "../../services/api";
@@ -44,7 +44,7 @@ beforeEach(() => {
 });
 
 describe("EngineerRosterPanel hiring", () => {
-  it("pre-selects the first vacant service and its specialist, and hires onto that service", () => {
+  it("pre-selects the first vacant service and its specialist, and hires onto that service", async () => {
     setRoster([engineer("a", "srv-auth", "auth")]);
     render(<EngineerRosterPanel />);
     fireEvent.click(screen.getByRole("button", { name: /Hire Engineer/ }));
@@ -54,18 +54,24 @@ describe("EngineerRosterPanel hiring", () => {
     expect(screen.getByRole("button", { name: "Payments" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("hire-consequence")).toHaveTextContent("Specialist: full effect");
 
-    fireEvent.click(screen.getByRole("button", { name: /^Hire \(/ }));
+    // the hire resolves asynchronously and re-renders the panel: let it settle inside act
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Hire \(/ }));
+    });
     expect(api.hireEngineer).toHaveBeenCalledWith("payments", "srv-payment");
   });
 
-  it("warns about the off-specialty penalty and still sends the chosen service", () => {
+  it("warns about the off-specialty penalty and still sends the chosen service", async () => {
     setRoster([]);
     render(<EngineerRosterPanel />);
     fireEvent.click(screen.getByRole("button", { name: /Hire Engineer/ }));
     fireEvent.click(screen.getByRole("button", { name: "Database" }));
 
     expect(screen.getByTestId("hire-consequence")).toHaveTextContent("Off-specialty: 0.45 quality");
-    fireEvent.click(screen.getByRole("button", { name: /^Hire \(/ }));
+    // the hire resolves asynchronously and re-renders the panel: let it settle inside act
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Hire \(/ }));
+    });
     expect(api.hireEngineer).toHaveBeenCalledWith("db", "srv-auth");
   });
 

@@ -88,9 +88,10 @@ export default function SettingsModal() {
     ["Space", t.flow.shortcutRun],
     ["1 · 2 · 5", t.flow.shortcutSpeed],
     ["[ · ]", t.flow.shortcutCycle],
-    ["I M C U R A G", t.flow.shortcutTabs],
+    ["I M C U R A G W", t.flow.shortcutTabs],
     ["D", t.flow.shortcutDock],
     ["B", t.flow.shortcutBuild],
+    ["? · H", t.flow.shortcutHelp],
   ];
 
   return (

@@ -1,12 +1,15 @@
 import type { MouseEvent } from "react";
 import { memo } from "react";
+import { useGameStore } from "../../store/useGameStore";
 import { Service } from "../../types/game";
+import { getHourOfDay } from "../../utils/officeClock";
 import EngineerDesk from "./EngineerDesk";
 import { DeskLamp, GroundShadow, PcTower } from "./OfficeProps";
 import IsoBox from "./IsoBox";
 import RosterDirector from "./RosterDirector";
 import RosterWalkers from "./RosterWalkers";
 import { DESK_ORDER, DESK_SLOTS, RESERVE_SLOTS } from "./officeGeometry";
+import { isLampHour } from "./officeLifeUtils";
 import { useRosterStage } from "./rosterStage";
 import { reserveSeatNodeId } from "./waypointGraph";
 
@@ -25,6 +28,7 @@ interface EngineeringFloorProps {
 const ReserveDesk = memo(function ReserveDesk({ x, y, index }: { x: number; y: number; index: number }) {
   const occupied = useRosterStage((s) => s.walkers.some((w) => w.seated && w.nodeId === reserveSeatNodeId(index)));
   const screen = occupied ? "#38bdf8" : "#0f172a";
+  const lampOn = useGameStore((s) => isLampHour(getHourOfDay(s.telemetry.tick)));
   return (
     <g>
       <GroundShadow x={x + 0.5} y={y + 0.45} rx={20} ry={10} />
@@ -32,7 +36,7 @@ const ReserveDesk = memo(function ReserveDesk({ x, y, index }: { x: number; y: n
       <PcTower x={x + 0.05} y={y + 0.42} />
       <IsoBox x={x + 0.1} y={y + 0.07} z={0.31} w={0.32} d={0.05} h={0.24} color={screen} stroke="#1e293b" highlightTop />
       <IsoBox x={x + 0.52} y={y + 0.07} z={0.31} w={0.32} d={0.05} h={0.24} color={screen} stroke="#1e293b" highlightTop />
-      <DeskLamp x={x + 0.9} y={y + 0.1} />
+      <DeskLamp x={x + 0.9} y={y + 0.1} lit={lampOn && occupied} />
       {/* Ergonomic chair */}
       <IsoBox x={x + 0.46} y={y + 0.96} z={0.01} w={0.04} d={0.04} h={0.16} fillTop="url(#chromeMetal)" color="#64748b" />
       <IsoBox x={x + 0.32} y={y + 0.85} z={0.17} w={0.32} d={0.26} h={0.07} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" stroke="rgba(255,255,255,0.08)" highlightTop />

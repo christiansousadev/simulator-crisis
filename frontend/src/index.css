@@ -190,12 +190,47 @@
   animation-play-state: paused !important;
 }
 
-/* screen shake and full-viewport flash, applied to the app root by imperative class toggles */
+/* scene shake, applied to the office <svg> only (useSceneShake) so the top bar, dock and KPIs stay
+   steady and readable during a crisis. Whole-pixel offsets that decay, held in steps so the pixel
+   art never smears. The keyframes live here, not in tailwind.config.js: tailwind only emits a
+   keyframe when an animate-* utility uses it, so the old config-only definitions never shipped. */
+@keyframes screen-shake-light {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-2px, 1px); }
+  40% { transform: translate(2px, -1px); }
+  60% { transform: translate(-1px, 0); }
+  80% { transform: translate(1px, 1px); }
+}
+@keyframes screen-shake-heavy {
+  0%, 100% { transform: translate(0, 0); }
+  12% { transform: translate(-4px, 2px); }
+  25% { transform: translate(4px, -3px); }
+  38% { transform: translate(-3px, -1px); }
+  50% { transform: translate(3px, 2px); }
+  62% { transform: translate(-2px, 1px); }
+  75% { transform: translate(1px, -1px); }
+  88% { transform: translate(-1px, 0); }
+}
+@keyframes screen-shake-quake {
+  0%, 100% { transform: translate(0, 0); }
+  8% { transform: translate(-6px, 3px); }
+  16% { transform: translate(6px, -4px); }
+  24% { transform: translate(-5px, -2px); }
+  32% { transform: translate(5px, 3px); }
+  44% { transform: translate(-4px, 2px); }
+  56% { transform: translate(3px, -2px); }
+  68% { transform: translate(-2px, 1px); }
+  80% { transform: translate(1px, -1px); }
+  90% { transform: translate(-1px, 0); }
+}
 .screen-shake-light {
-  animation: screen-shake-light 0.4s ease-in-out;
+  animation: screen-shake-light 0.25s steps(5, end);
 }
 .screen-shake-heavy {
-  animation: screen-shake-heavy 0.6s ease-in-out;
+  animation: screen-shake-heavy 0.45s steps(8, end);
+}
+.screen-shake-quake {
+  animation: screen-shake-quake 0.7s steps(10, end);
 }
 
 /* accessibility: high-contrast pass over the most information-dense hud surfaces */

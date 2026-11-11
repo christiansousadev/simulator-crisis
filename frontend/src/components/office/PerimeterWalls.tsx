@@ -1,5 +1,6 @@
 import { memo } from "react";
 import IsoBox from "./IsoBox";
+import IsoFaceDecal from "./IsoFaceDecal";
 import { project } from "./isoMath";
 
 interface PerimeterWallsProps {
@@ -135,6 +136,69 @@ function PerimeterWalls({ minX, minY, maxX, maxY, height = 2.8 }: PerimeterWalls
     <g>
       <WallRun axis="x" fixed={minY} from={minX} to={maxX} height={height} />
       <WallRun axis="y" fixed={minX} from={minY} to={maxY} height={height} />
+
+      <SafetyStation x={minX + 2.8} wallFront={minY + THICKNESS} />
+      <FirstAidCabinet x={minX + 3.3} wallFront={minY + THICKNESS} />
+      <ExitSign x={minX + 5.2} wallFront={minY + THICKNESS} />
+    </g>
+  );
+}
+
+// all wall gear hangs on the x-axis wall's room-facing plane (y = minY + THICKNESS) and is drawn
+// with crisp 2:1 edges so it reads as the same pixel art as the furniture
+
+// FIRE EXTINGUISHER ON A WALL BRACKET, WITH ITS RED LOCATOR SIGN ABOVE, A HOSE AND A GREEN GAUGE
+function SafetyStation({ x, wallFront }: { x: number; wallFront: number }) {
+  return (
+    <g data-testid="wall-extinguisher" shapeRendering="crispEdges" pointerEvents="none">
+      {/* mounting bracket plate */}
+      <IsoBox x={x - 0.01} y={wallFront} z={0.46} w={0.12} d={0.008} h={0.36} color="#475569" stroke="#1e293b" strokeWidth={0.3} />
+      {/* cylinder, valve head and pressure gauge */}
+      <IsoBox x={x} y={wallFront} z={0.5} w={0.1} d={0.08} h={0.28} color="#ef4444" stroke="#7f1d1d" strokeWidth={0.4} highlightTop />
+      <IsoBox x={x + 0.03} y={wallFront + 0.02} z={0.78} w={0.04} d={0.04} h={0.06} color="#0f172a" stroke="#334155" strokeWidth={0.3} />
+      <IsoBox x={x + 0.035} y={wallFront + 0.08} z={0.69} w={0.03} d={0.004} h={0.03} color="#22c55e" stroke="#14532d" strokeWidth={0.2} />
+      {/* discharge hose running down the side */}
+      <IsoBox x={x + 0.1} y={wallFront + 0.03} z={0.54} w={0.016} d={0.016} h={0.28} color="#0f172a" stroke="none" strokeWidth={0} />
+      {/* red locator sign with a white pixel extinguisher pictogram */}
+      <IsoBox x={x - 0.01} y={wallFront} z={0.92} w={0.12} d={0.006} h={0.14} color="#dc2626" stroke="#7f1d1d" strokeWidth={0.3} />
+      <IsoFaceDecal x={x - 0.01} y={wallFront + 0.006} z={1.06} axis="x">
+        <rect x={1.5} y={2} width={1} height={1} fill="#fef2f2" />
+        <rect x={1.5} y={3} width={1} height={3.5} fill="#fef2f2" />
+        <rect x={0.5} y={2} width={1} height={0.5} fill="#fef2f2" />
+      </IsoFaceDecal>
+    </g>
+  );
+}
+
+// WHITE FIRST-AID CABINET WITH A GREEN PIXEL CROSS
+function FirstAidCabinet({ x, wallFront }: { x: number; wallFront: number }) {
+  return (
+    <g data-testid="wall-first-aid" shapeRendering="crispEdges" pointerEvents="none">
+      <IsoBox x={x} y={wallFront} z={0.72} w={0.2} d={0.05} h={0.2} color="#f1f5f9" stroke="#334155" strokeWidth={0.4} highlightTop />
+      <IsoFaceDecal x={x} y={wallFront + 0.05} z={0.92} axis="x">
+        <rect x={2.5} y={3} width={1.5} height={5} fill="#16a34a" />
+        <rect x={1} y={4.75} width={4.5} height={1.5} fill="#16a34a" />
+      </IsoFaceDecal>
+    </g>
+  );
+}
+
+// EMERGENCY EXIT SIGN: emerald lightbox with a pixel running figure heading for a door
+function ExitSign({ x, wallFront }: { x: number; wallFront: number }) {
+  return (
+    <g data-testid="wall-exit-sign" shapeRendering="crispEdges" pointerEvents="none">
+      <IsoBox x={x} y={wallFront - 0.04} z={1.4} w={0.32} d={0.04} h={0.14} color="#059669" stroke="#10b981" strokeWidth={0.5} highlightTop />
+      <IsoFaceDecal x={x} y={wallFront} z={1.54} axis="x">
+        {/* door frame */}
+        <rect x={7} y={1.5} width={2.5} height={5} fill="none" stroke="#ecfdf5" strokeWidth={0.5} />
+        {/* running figure: head, torso, stride */}
+        <rect x={3} y={1.5} width={1} height={1} fill="#ecfdf5" />
+        <rect x={2.5} y={2.5} width={1.5} height={2} fill="#ecfdf5" />
+        <rect x={1.5} y={4.5} width={1} height={1.5} fill="#ecfdf5" />
+        <rect x={4} y={4.5} width={1} height={1.5} fill="#ecfdf5" />
+        {/* arrow toward the door */}
+        <rect x={5} y={3.25} width={1.5} height={0.5} fill="#ecfdf5" />
+      </IsoFaceDecal>
     </g>
   );
 }

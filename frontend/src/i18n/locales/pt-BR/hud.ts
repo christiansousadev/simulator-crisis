@@ -26,6 +26,9 @@ export const hudPt = {
     speedTitle: (x) => `Rodar em velocidade ${x}x`,
     freeze: "CONGELADO",
     freezeTitle: "Feature freeze: runbooks arriscados estão bloqueados",
+    helpTitle: "Academia SRE e ajuda [? / H]",
+    hallOfFameTitle: "Hall da Fama",
+    hallOfFamePrestige: (points) => `Hall da Fama: ${points} pontos de prestígio para gastar na decoração do escritório`,
   },
   dock: {
     tabsLabel: "Seções do painel",

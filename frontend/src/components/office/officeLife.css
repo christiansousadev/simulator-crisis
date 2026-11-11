@@ -235,8 +235,9 @@
 }
 
 /* ---- ambient props ---- */
+/* the vault door slides on a 4-frame track, whole pixels at a time */
 .ol-door-slide {
-  transition: transform 0.6s ease-in-out;
+  transition: transform 0.36s steps(4, end);
 }
 .ol-clock-hand {
   transition: transform 1s linear;
@@ -256,14 +257,16 @@
 /* ---- downed rack: top-of-cabinet sparks and the dense smoke plume ---- */
 @keyframes ol-spark-burst {
   0% { opacity: 0; transform: scale(0.3); }
-  12% { opacity: 1; transform: scale(1); }
-  40% { opacity: 0; transform: scale(1.15); }
+  4% { opacity: 1; transform: scale(1); }
+  10% { opacity: 0; transform: scale(1.15); }
+  14% { opacity: 1; transform: scale(0.9); }
+  22% { opacity: 0; transform: scale(1.1); }
   100% { opacity: 0; }
 }
 .ol-spark-burst {
   transform-box: fill-box;
   transform-origin: 0% 100%;
-  animation: ol-spark-burst 0.85s ease-out infinite;
+  animation: ol-spark-burst var(--burst-period, 2.2s) steps(2, end) infinite;
 }
 @keyframes ol-smoke-plume {
   0% { transform: translateY(0) scale(0.5); opacity: 0.6; }
@@ -340,62 +343,6 @@
   shape-rendering: crispEdges;
 }
 
-/* Stepped 1-pixel idle bobbing for authentic 16-bit RPG character feel */
-@keyframes ol-pixel-bob {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-1px); }
-}
-.animate-worker-bob {
-  animation: ol-pixel-bob 1.2s steps(2, start) infinite;
-}
-
-/* Stepped panic bounce: rapid 2px hopping */
-@keyframes ol-pixel-panic {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-3px); }
-}
-.animate-bounce-panic {
-  animation: ol-pixel-panic 0.35s steps(2, start) infinite;
-}
-
-/* Stepped typing flurry for seated engineers: alternating hands */
-@keyframes ol-pixel-type-left {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1.5px); }
-}
-@keyframes ol-pixel-type-right {
-  0%, 100% { transform: translateY(-1.5px); }
-  50% { transform: translateY(0); }
-}
-.animate-pixel-type-left {
-  animation: ol-pixel-type-left 0.16s steps(2, start) infinite;
-}
-.animate-pixel-type-right {
-  animation: ol-pixel-type-right 0.16s steps(2, start) infinite;
-}
-
-/* Stepped 4-frame walk cycle */
-@keyframes ol-pixel-walk-l {
-  0% { transform: rotate(18deg); }
-  25% { transform: rotate(0deg); }
-  50% { transform: rotate(-18deg); }
-  75% { transform: rotate(0deg); }
-  100% { transform: rotate(18deg); }
-}
-@keyframes ol-pixel-walk-r {
-  0% { transform: rotate(-18deg); }
-  25% { transform: rotate(0deg); }
-  50% { transform: rotate(18deg); }
-  75% { transform: rotate(0deg); }
-  100% { transform: rotate(-18deg); }
-}
-.animate-walk-cycle-left {
-  animation: ol-pixel-walk-l 0.4s steps(4, start) infinite;
-}
-.animate-walk-cycle-right {
-  animation: ol-pixel-walk-r 0.4s steps(4, start) infinite;
-}
-
 /* 16-bit steam zig-zag rise */
 @keyframes ol-pixel-steam {
   0% { transform: translateY(0) translateX(0); opacity: 0; }
@@ -407,14 +354,489 @@
   animation: ol-pixel-steam 1.4s steps(4, start) infinite;
 }
 
-/* Pixel alert balloon pop */
-@keyframes ol-pixel-pop {
+/* in-world pixel balloon pop (SVG sprites only; HTML UI keeps tailwind's smooth animate-pop-in) */
+@keyframes ol-pop {
   0% { transform: scale(0); opacity: 0; }
   70% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
-.animate-pop-in {
-  animation: ol-pixel-pop 0.18s steps(3, start) both;
+.ol-pop {
+  animation: ol-pop 0.18s steps(3, start) both;
 }
 
+/* ==========================================================================
+   WORKER RIG (OfficeWorker). One clock per sprite: --step is the length of a full 4-frame gait
+   cycle, derived from the walking speed, so legs, arms, bob and shadow can never drift apart.
+   Every loop holds whole-pixel poses with steps(1, end): no rotation, no fractional easing, so
+   crispEdges contours stay stable. Layers, outermost first:
+     .ol-shadow   contact shadow, on the floor, outside every bob
+     .ol-cue      one-shot cues (anticipation, settle, sit, startle, press), replayed from JS
+     .ol-bob      whole-body vertical motion (gait bob, panic hop)
+     .ol-leg-*    legs
+     .ol-lean     static pose offset of the upper body (run lean, lounging)
+     .ol-upper    breathing (torso + arms + head)
+     .ol-arm-*    arm swing and gestures; .ol-head looks around
+   ========================================================================== */
+.ol-shadow {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+@keyframes ol-shadow-step {
+  0%, 50%, 100% { transform: scale(1); }
+  25%, 75% { transform: scale(0.88); }
+}
+@keyframes ol-shadow-hop {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.8); }
+}
+.ol-rig[data-gait="walk"] .ol-shadow,
+.ol-rig[data-gait="run"] .ol-shadow {
+  animation: ol-shadow-step var(--step, 0.33s) steps(1, end) infinite;
+}
+.ol-rig[data-gait="still"][data-mood="panic"][data-panic]:not([data-panic="shiver"]) .ol-shadow {
+  animation: ol-shadow-hop 0.36s steps(1, end) infinite;
+}
+
+/* gait: the body rises one pixel on each passing frame (two when running) */
+@keyframes ol-bob-walk {
+  0%, 50%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-1px); }
+}
+@keyframes ol-bob-run {
+  0%, 50%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-2px); }
+}
+.ol-rig[data-gait="walk"] .ol-bob {
+  animation: ol-bob-walk var(--step, 0.33s) steps(1, end) infinite;
+}
+.ol-rig[data-gait="run"] .ol-bob {
+  animation: ol-bob-run var(--step, 0.2s) steps(1, end) infinite;
+}
+
+/* legs: contact -> passing (foot lifted) -> opposite contact -> passing, shifted in whole pixels */
+@keyframes ol-leg-l {
+  0%, 100% { transform: translate(2px, 0); }
+  25% { transform: translate(0, 0); }
+  50% { transform: translate(-2px, 0); }
+  75% { transform: translate(0, -1px); }
+}
+@keyframes ol-leg-r {
+  0%, 100% { transform: translate(-2px, 0); }
+  25% { transform: translate(0, -1px); }
+  50% { transform: translate(2px, 0); }
+  75% { transform: translate(0, 0); }
+}
+.ol-rig[data-gait="walk"] .ol-leg-l,
+.ol-rig[data-gait="run"] .ol-leg-l {
+  animation: ol-leg-l var(--step, 0.33s) steps(1, end) infinite;
+}
+.ol-rig[data-gait="walk"] .ol-leg-r,
+.ol-rig[data-gait="run"] .ol-leg-r {
+  animation: ol-leg-r var(--step, 0.33s) steps(1, end) infinite;
+}
+
+/* arms swing in counter-phase with the legs; a locked arm (laptop / mug) stays put */
+@keyframes ol-arm-l-walk {
+  0%, 100% { transform: translate(0, 1px); }
+  25%, 75% { transform: translate(0, 0); }
+  50% { transform: translate(-1px, -1px); }
+}
+@keyframes ol-arm-r-walk {
+  0%, 100% { transform: translate(1px, -1px); }
+  25%, 75% { transform: translate(0, 0); }
+  50% { transform: translate(0, 1px); }
+}
+@keyframes ol-arm-l-run {
+  0%, 100% { transform: translate(0, 2px); }
+  25%, 75% { transform: translate(0, 0); }
+  50% { transform: translate(-1px, -3px); }
+}
+@keyframes ol-arm-r-run {
+  0%, 100% { transform: translate(1px, -3px); }
+  25%, 75% { transform: translate(0, 0); }
+  50% { transform: translate(0, 2px); }
+}
+.ol-rig[data-gait="walk"] .ol-arm-l {
+  animation: ol-arm-l-walk var(--step, 0.33s) steps(1, end) infinite;
+}
+.ol-rig[data-gait="walk"] .ol-arm-r:not([data-locked]) {
+  animation: ol-arm-r-walk var(--step, 0.33s) steps(1, end) infinite;
+}
+.ol-rig[data-gait="run"] .ol-arm-l {
+  animation: ol-arm-l-run var(--step, 0.2s) steps(1, end) infinite;
+}
+.ol-rig[data-gait="run"] .ol-arm-r:not([data-locked]) {
+  animation: ol-arm-r-run var(--step, 0.2s) steps(1, end) infinite;
+}
+
+/* static upper-body offsets: urgency lean (replaces the old skewX, which smeared contours) and
+   the relaxed lean-back on the sofa */
+.ol-rig[data-gait="run"] .ol-lean,
+.ol-rig[data-gait="still"][data-mood="running"] .ol-lean {
+  transform: translateX(2px);
+}
+.ol-rig[data-pose="lounge"] .ol-lean {
+  transform: translateX(-1px);
+}
+
+/* breathing: only the upper body rises, the feet stay planted; --phase desyncs the floor */
+@keyframes ol-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+.ol-rig[data-gait="still"]:not([data-mood="panic"]):not([data-mood="running"]) .ol-upper {
+  animation: ol-breathe var(--breathe, 3s) steps(1, end) infinite;
+  animation-delay: var(--phase, 0s);
+}
+
+/* panic, three variants picked per engineer so the floor never panics in unison */
+@keyframes ol-panic-hop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes ol-panic-shiver {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+@keyframes ol-flail-l {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-1px, -8px); }
+}
+@keyframes ol-flail-r {
+  0%, 100% { transform: translate(1px, -8px); }
+  50% { transform: translate(0, 0); }
+}
+.ol-rig[data-gait="still"][data-mood="panic"][data-panic="head"] .ol-bob {
+  animation: ol-panic-hop 0.36s steps(1, end) infinite;
+}
+.ol-rig[data-gait="still"][data-mood="panic"][data-panic="flail"] .ol-bob {
+  animation: ol-panic-hop 0.5s steps(1, end) infinite;
+}
+.ol-rig[data-gait="still"][data-mood="panic"][data-panic="flail"] .ol-arm-l {
+  animation: ol-flail-l 0.24s steps(1, end) infinite;
+}
+.ol-rig[data-gait="still"][data-mood="panic"][data-panic="flail"] .ol-arm-r:not([data-locked]) {
+  animation: ol-flail-r 0.24s steps(1, end) infinite;
+}
+.ol-rig[data-gait="still"][data-mood="panic"][data-panic="shiver"] .ol-bob {
+  animation: ol-panic-shiver 0.1s steps(1, end) infinite;
+}
+
+/* typing in bursts: a flurry of keystrokes, then a beat reading the screen with still hands */
+@keyframes ol-type-l {
+  0%, 12%, 24%, 36%, 48%, 60%, 100% { transform: translateY(0); }
+  6%, 18%, 30%, 42%, 54% { transform: translateY(-1px); }
+}
+@keyframes ol-type-r {
+  0%, 12%, 24%, 36%, 48% { transform: translateY(-1px); }
+  6%, 18%, 30%, 42%, 54%, 60%, 100% { transform: translateY(0); }
+}
+.ol-type-l {
+  animation: ol-type-l 2.6s steps(1, end) infinite;
+  animation-delay: var(--phase, 0s);
+}
+.ol-type-r {
+  animation: ol-type-r 2.6s steps(1, end) infinite;
+  animation-delay: var(--phase, 0s);
+}
+
+/* sporadic idle gestures (useIdleGesture sets data-gesture for the gesture's duration) */
+@keyframes ol-look {
+  0%, 100% { transform: translateX(0); }
+  20%, 45% { transform: translateX(-1px); }
+  55%, 80% { transform: translateX(1px); }
+}
+@keyframes ol-watch-arm {
+  0%, 100% { transform: translate(0, 0); }
+  15%, 85% { transform: translate(3px, -5px); }
+}
+@keyframes ol-watch-head {
+  0%, 100% { transform: translateY(0); }
+  15%, 85% { transform: translateY(1px); }
+}
+@keyframes ol-stretch-arm {
+  0%, 100% { transform: translate(0, 0); }
+  20%, 80% { transform: translate(0, -9px); }
+}
+@keyframes ol-sip-arm {
+  0%, 100% { transform: translate(0, 0); }
+  20%, 80% { transform: translate(-4px, -11px); }
+}
+@keyframes ol-sip-head {
+  0%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-1px); }
+}
+@keyframes ol-brew-arm {
+  0%, 100% { transform: translate(0, 0); }
+  15%, 85% { transform: translate(3px, -4px); }
+}
+@keyframes ol-cheer-arm {
+  0%, 100% { transform: translate(0, -10px); }
+  50% { transform: translate(0, -12px); }
+}
+@keyframes ol-cheer-hop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes ol-pip-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+.ol-rig[data-gesture="look"] .ol-head {
+  animation: ol-look 1s steps(1, end) both;
+}
+.ol-rig[data-gesture="watch"] .ol-arm-l {
+  animation: ol-watch-arm 1.1s steps(1, end) both;
+}
+.ol-rig[data-gesture="watch"] .ol-head {
+  animation: ol-watch-head 1.1s steps(1, end) both;
+}
+.ol-rig[data-gesture="watch"] .ol-watch-pip {
+  animation: ol-pip-blink 0.3s steps(1, end) infinite;
+}
+.ol-rig[data-gesture="stretch"] .ol-arm-l,
+.ol-rig[data-gesture="stretch"] .ol-arm-r {
+  animation: ol-stretch-arm 0.9s steps(1, end) both;
+}
+.ol-rig[data-gesture="sip"] .ol-arm-r {
+  animation: ol-sip-arm 1.2s steps(1, end) both;
+}
+.ol-rig[data-gesture="sip"] .ol-head {
+  animation: ol-sip-head 1.2s steps(1, end) both;
+}
+.ol-rig[data-gesture="brew"] .ol-arm-r {
+  animation: ol-brew-arm 1.4s steps(1, end) both;
+}
+.ol-rig[data-gesture="cheer"] .ol-arm-l,
+.ol-rig[data-gesture="cheer"] .ol-arm-r {
+  animation: ol-cheer-arm 0.4s steps(1, end) infinite;
+}
+.ol-rig[data-gesture="cheer"] .ol-bob {
+  animation: ol-cheer-hop 0.4s steps(1, end) infinite;
+}
+
+/* one-shot cues on .ol-cue (pivot at the feet), replayed imperatively so a repeat restarts */
+.ol-cue {
+  transform-origin: 0px 0px;
+}
+@keyframes ol-cue-start {
+  0%, 100% { transform: none; }
+  1%, 99% { transform: translateY(1px) scale(1.04, 0.96); }
+}
+@keyframes ol-cue-settle {
+  0%, 100% { transform: none; }
+  1%, 99% { transform: translateY(1px); }
+}
+@keyframes ol-cue-sit {
+  0% { transform: translateY(-2px); }
+  50% { transform: scale(1.04, 0.95); }
+  100% { transform: none; }
+}
+@keyframes ol-cue-stand {
+  0% { transform: scale(1.04, 0.95); }
+  50% { transform: translateY(-1px) scale(0.97, 1.04); }
+  100% { transform: none; }
+}
+@keyframes ol-cue-startle {
+  0% { transform: none; }
+  25% { transform: translateY(-3px) scale(0.96, 1.06); }
+  60% { transform: scale(1.05, 0.94); }
+  100% { transform: none; }
+}
+.ol-cue-start {
+  animation: ol-cue-start 80ms steps(1, end) both;
+}
+.ol-cue-settle {
+  animation: ol-cue-settle 90ms steps(1, end) both;
+}
+.ol-cue-sit {
+  animation: ol-cue-sit 200ms steps(2, end) both;
+}
+.ol-cue-stand {
+  animation: ol-cue-stand 200ms steps(2, end) both;
+}
+.ol-cue-startle {
+  animation: ol-cue-startle 0.32s steps(4, end) both;
+  animation-delay: var(--wave, 0ms);
+}
+
+/* the "!" balloon that sprouts over a startled engineer, in the same wave */
+@keyframes ol-exclaim {
+  0% { transform: scale(0); opacity: 0; }
+  10% { transform: scale(1.2); opacity: 1; }
+  20%, 85% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.ol-exclaim {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: ol-exclaim 0.9s steps(8, end) both;
+  animation-delay: var(--wave, 0ms);
+}
+
+/* ==========================================================================
+   JUICE
+   ========================================================================== */
+
+/* squash & stretch on click, pivoting at the base so the object presses into the floor */
+@keyframes ol-press {
+  0% { transform: scale(1, 1); }
+  30% { transform: scale(1.05, 0.95); }
+  65% { transform: scale(0.97, 1.04); }
+  100% { transform: scale(1, 1); }
+}
+.ol-press {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: ol-press 180ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+/* a worker presses from its feet instead (its .ol-cue pivot) */
+.ol-cue.ol-press {
+  transform-box: view-box;
+  transform-origin: 0px 0px;
+}
+
+/* resolution burst: pixel confetti thrown up and falling, from a fixed per-burst pool */
+@keyframes ol-burst {
+  0% { transform: translate(0, 0); opacity: 1; }
+  45% { transform: translate(calc(var(--dx) * 0.6), var(--dy)); opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + 12px)); opacity: 0; }
+}
+.ol-burst-px {
+  animation: ol-burst 0.7s steps(6, end) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* racks under stress: fans strain when degraded and wind down to a stop when down */
+@keyframes ol-fan-strain {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ol-fan-strain {
+  animation: ol-fan-strain 0.45s linear infinite;
+}
+@keyframes ol-fan-spindown {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(540deg); }
+}
+.ol-fan-spindown {
+  animation: ol-fan-spindown 1.5s cubic-bezier(0.1, 0.7, 0.3, 1) both;
+}
+/* a down rack's chassis rattles in whole pixels; badges and text stay steady */
+@keyframes ol-rack-rattle {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+.ol-rack-rattle {
+  animation: ol-rack-rattle 0.12s steps(1, end) infinite;
+}
+
+/* ======================================================================================
+   AMBIENT LIFE & WORLD FEEDBACK
+   ====================================================================================== */
+
+/* run dust: two recycled 1px motes kicked up behind the feet on each footfall of an urgency run */
+@keyframes ol-dust {
+  0% { transform: translate(0, 0); opacity: 0.9; }
+  33% { transform: translate(-2px, -1px); opacity: 0.7; }
+  66% { transform: translate(-3px, -2px); opacity: 0.35; }
+  100% { transform: translate(-4px, -2px); opacity: 0; }
+}
+.ol-dust {
+  opacity: 0;
+}
+.ol-rig[data-gait="run"] .ol-dust {
+  animation: ol-dust calc(var(--step, 0.2s) * 2) steps(4, end) infinite;
+}
+.ol-rig[data-gait="run"] .ol-dust + .ol-dust {
+  animation-delay: var(--step, 0.2s);
+}
+
+/* executives at the metrics tv: one points at the screen, the other taps a foot */
+@keyframes ol-point-jab {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+.ol-rig[data-gait="still"][data-action="point"] .ol-arm-r {
+  animation: ol-point-jab 0.5s steps(1, end) infinite;
+}
+@keyframes ol-stomp {
+  0%, 40%, 100% { transform: translateY(0); }
+  15% { transform: translateY(-2px); }
+}
+@keyframes ol-stomp-jolt {
+  0%, 30%, 100% { transform: translateY(0); }
+  20% { transform: translateY(1px); }
+}
+.ol-rig[data-gait="still"][data-action="stomp"] .ol-leg-r {
+  animation: ol-stomp 0.45s steps(1, end) infinite;
+}
+.ol-rig[data-gait="still"][data-action="stomp"] .ol-bob {
+  animation: ol-stomp-jolt 0.45s steps(1, end) infinite;
+}
+
+/* a wary bystander peers toward the vault: the head leans one pixel forward and stays there */
+.ol-rig[data-wary] .ol-head {
+  transform: translateX(1px);
+}
+
+/* desk chair: pushed out and turned while its engineer is away (a single frame, no tween) */
+.ol-chair {
+  transition: none;
+}
+
+/* idle monitor screensaver: dim bars drifting slowly once a desk has been empty for a while */
+@keyframes ol-screensaver {
+  0%, 100% { transform: translateX(0); opacity: 0.25; }
+  50% { transform: translateX(3px); opacity: 0.5; }
+}
+.ol-screensaver {
+  opacity: 0.35;
+  animation: ol-screensaver 7s steps(14, end) infinite;
+  animation-delay: 3s;
+}
+
+/* desk lamp switching on at dusk: two quick flicker frames before it holds */
+@keyframes ol-lamp-flicker {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  30% { opacity: 0.15; }
+  45% { opacity: 1; }
+  60% { opacity: 0.3; }
+  75%, 100% { opacity: 1; }
+}
+.ol-lamp-on {
+  animation: ol-lamp-flicker 0.5s steps(1, end) both;
+}
+
+/* a potted plant rustles one pixel when somebody runs past it in a panic */
+@keyframes ol-plant-sway {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(1px); }
+  75% { transform: translateX(-1px); }
+}
+.ol-plant-sway {
+  animation: ol-plant-sway 0.4s steps(1, end) 3;
+}
+
+/* sofa cushion sinking under somebody lounging, with a small elastic overshoot */
+@keyframes ol-cushion-sink {
+  0% { transform: none; }
+  45% { transform: translateY(2px) scaleY(0.92); }
+  75% { transform: translateY(1px) scaleY(0.97); }
+  100% { transform: translateY(1px) scaleY(0.95); }
+}
+.ol-cushion {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.ol-cushion[data-sunk] {
+  transform: translateY(1px) scaleY(0.95);
+  animation: ol-cushion-sink 0.45s steps(3, end) both;
+}
+
+/* world-anchored value chips (+SLA, -$, +XP) rise from the rack or desk that earned them */
+.ol-chip[data-delayed] {
+  animation-delay: var(--chip-delay, 0ms);
+}
 

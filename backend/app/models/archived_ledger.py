@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 
@@ -12,7 +12,7 @@ class ArchivedAuditLedger(Base):
 
     id = Column(String(36), primary_key=True)
     session_id = Column(String(36), nullable=False, index=True)
-    archived_at = Column(DateTime, default=datetime.utcnow)
+    archived_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     final_tick = Column(Integer, nullable=False)
     final_status = Column(String(20), nullable=False)
     final_budget = Column(Float, nullable=False)

@@ -26,6 +26,9 @@ export const hudEs = {
     speedTitle: (x) => `Ejecutar a velocidad ${x}x`,
     freeze: "CONGELADO",
     freezeTitle: "Congelamiento de funciones: los runbooks de riesgo están bloqueados",
+    helpTitle: "Academia SRE y ayuda [? / H]",
+    hallOfFameTitle: "Salón de la Fama",
+    hallOfFamePrestige: (points) => `Salón de la Fama: ${points} puntos de prestigio para gastar en la decoración de la oficina`,
   },
   dock: {
     tabsLabel: "Secciones del panel",

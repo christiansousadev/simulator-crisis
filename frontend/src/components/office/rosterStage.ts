@@ -1,10 +1,32 @@
 import { create } from "zustand";
 import { WalkerBand, WalkerPlace, bandOf } from "./rosterPlan";
-import { GraphNode, NODE, OFFICE_GRAPH, WaypointGraph, facingForMove, findPath, hopDurationMs } from "./waypointGraph";
+import {
+  GraphNode,
+  Heading,
+  NODE,
+  OFFICE_GRAPH,
+  WaypointGraph,
+  facingForMove,
+  findPath,
+  frontHeading,
+  headingForMove,
+  hopDurationMs,
+} from "./waypointGraph";
 
 // the moving part of the roster: one WalkerView per hired engineer, advanced hop by hop along the
 // waypoint graph by plain JS timers (so it keeps walking while the simulation is paused). React only
 // renders the views; it never drives them.
+
+// how the css transition of one hop is eased: a route starts by accelerating and ends by braking,
+// the hops in between keep a constant pace (which is what reads as walking)
+export type WalkEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
+export function hopEasing(firstOfRoute: boolean, lastOfRoute: boolean): WalkEasing {
+  if (firstOfRoute && lastOfRoute) return "ease-in-out";
+  if (firstOfRoute) return "ease-in";
+  if (lastOfRoute) return "ease-out";
+  return "linear";
+}
 
 export interface WalkerView {
   id: string;
@@ -16,6 +38,9 @@ export interface WalkerView {
   // duration of the css transition into (x, y, z); 0 = appear there without sliding
   hopMs: number;
   facing: "left" | "right";
+  // one of the four isometric directions; n* while walking away from the camera (back view)
+  heading: Heading;
+  easing: WalkEasing;
   seated: boolean;
   // which painter layer renders the sprite (see bandOf)
   band: WalkerBand;
@@ -45,6 +70,8 @@ interface Runtime {
   timer: ReturnType<typeof setTimeout> | null;
   // wall-clock time the sprite's current hop finishes, so a re-plan never cuts a hop in half
   busyUntil: number;
+  // true until the first hop after a standstill has started (that hop eases in)
+  fromRest: boolean;
 }
 
 // at red alert the whole floor runs: same graph, roughly double the pace
@@ -114,6 +141,7 @@ export class RosterChoreographer {
           queue: [],
           timer: null,
           busyUntil: 0,
+          fromRest: true,
         };
         this.runtimes.set(target.id, rt);
         if (entering) this.planRoute(rt, target, { viaReception: true, startDelayMs: FIRST_HOP_DELAY_MS });
@@ -147,6 +175,7 @@ export class RosterChoreographer {
   }
 
   private viewAt(target: WalkerTarget, node: GraphNode, place: WalkerView["place"]): WalkerView {
+    const facing = node.face ?? "right";
     return {
       id: target.id,
       nodeId: node.id,
@@ -154,7 +183,9 @@ export class RosterChoreographer {
       y: node.y,
       z: node.z ?? 0,
       hopMs: 0,
-      facing: node.face ?? "right",
+      facing,
+      heading: frontHeading(facing),
+      easing: "linear",
       seated: Boolean(node.seat) && place !== "entering",
       band: bandOf(node.x, node.y),
       place,
@@ -198,6 +229,8 @@ export class RosterChoreographer {
     });
 
     rt.queue = steps;
+    // a re-plan that lands while the sprite is mid-hop keeps walking; one from a standstill eases in
+    rt.fromRest = rt.busyUntil <= Date.now();
     rt.view = { ...rt.view, place: opts.viaReception ? "entering" : rt.view.place, mug: target.mug };
     const delay = Math.max(opts.startDelayMs, rt.busyUntil - Date.now());
     rt.timer = setTimeout(() => this.advance(rt, target), delay);
@@ -232,6 +265,9 @@ export class RosterChoreographer {
     }
     const from = rt.view;
     const hopMs = hopDurationMs(from, step.node, rosterUrgent ? RUN_SPEED_TILES_PER_S : undefined);
+    const facing = facingForMove(from, step.node, from.facing);
+    // the route stops after this hop when nothing follows or when it pauses here (a check-in)
+    const stopsHere = rt.queue.length === 0 || step.pauseMs > 0;
     rt.view = {
       ...from,
       nodeId: step.node.id,
@@ -239,10 +275,13 @@ export class RosterChoreographer {
       y: step.node.y,
       z: step.node.z ?? 0,
       hopMs,
-      facing: facingForMove(from, step.node, from.facing),
+      facing,
+      heading: headingForMove(from, step.node, facing, from.heading),
+      easing: hopEasing(rt.fromRest, stopsHere),
       seated: false,
       band: bandOf(step.node.x, step.node.y),
     };
+    rt.fromRest = stopsHere;
     rt.busyUntil = Date.now() + hopMs;
     this.publishAll();
 
@@ -255,6 +294,9 @@ export class RosterChoreographer {
         return;
       }
       if (step.pauseMs > 0) {
+        // a beat at the counter: turn to face the camera while waiting
+        rt.view = { ...rt.view, heading: frontHeading(rt.view.facing) };
+        this.publishAll();
         rt.timer = setTimeout(() => this.advance(rt, target), step.pauseMs);
         return;
       }
@@ -265,10 +307,14 @@ export class RosterChoreographer {
   // ARRIVED: SIT DOWN OR STAND, AND TURN TO FACE WHATEVER THE SPOT IS FOR
   private settle(rt: Runtime, place: WalkerPlace): void {
     const node = this.graph.nodes.get(rt.targetNodeId);
+    const facing = node?.face ?? rt.view.facing;
+    rt.fromRest = true;
     rt.view = {
       ...rt.view,
       seated: Boolean(node?.seat),
-      facing: node?.face ?? rt.view.facing,
+      facing,
+      // standing still everyone turns back toward the camera (front view)
+      heading: frontHeading(facing),
       place,
     };
   }

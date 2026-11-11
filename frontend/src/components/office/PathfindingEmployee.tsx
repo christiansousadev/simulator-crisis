@@ -1,13 +1,26 @@
-import { memo } from "react";
+import { memo, useCallback, useEffect } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useGameStore } from "../../store/useGameStore";
 import { isRedAlertLevel, selectDefconLevel } from "../../utils/defcon";
+import { setDeskSipping } from "./deskLife";
 import { deriveWorkerMood } from "./engineerMood";
 import OfficeWorker, { WorkerMood } from "./OfficeWorker";
 import { deskScreenColor } from "./officeLifeUtils";
 import { appearanceFor } from "./rosterPlan";
-import type { WalkerView } from "./rosterStage";
+import type { WalkEasing, WalkerView } from "./rosterStage";
+import type { IdleGesture } from "./workerRig";
 import { NODE } from "./waypointGraph";
+
+// css timing for each hop easing: a route accelerates out of a standstill and brakes into the stop
+const EASING_CSS: Record<WalkEasing, string> = {
+  linear: "linear",
+  "ease-in": "cubic-bezier(0.4, 0, 1, 1)",
+  "ease-out": "cubic-bezier(0, 0, 0.6, 1)",
+  "ease-in-out": "cubic-bezier(0.4, 0, 0.6, 1)",
+};
+
+const DESK_GESTURES: IdleGesture[] = ["look", "watch", "sip"];
+const DESK_GESTURES_BUSY: IdleGesture[] = ["look"];
 
 interface PathfindingEmployeeProps {
   view: WalkerView;
@@ -35,8 +48,25 @@ function PathfindingEmployee({ view, onSelect }: PathfindingEmployeeProps) {
   const mitigating = useGameStore((s) =>
     serviceId ? s.runAnimations.some((a) => a.serviceId === serviceId && a.kind === "mitigate") : false
   );
+  // the service this engineer looks after just came back: arms up
+  const restored = useGameStore((s) =>
+    serviceId ? s.runAnimations.some((a) => a.serviceId === serviceId && a.kind === "recover") : false
+  );
 
   const redAlert = useGameStore((s) => isRedAlertLevel(selectDefconLevel(s)));
+
+  // while this engineer sips at their desk, the desk's own mug leaves the desk
+  const handleGesture = useCallback(
+    (gesture: IdleGesture | null) => {
+      if (serviceId) setDeskSipping(serviceId, gesture === "sip");
+    },
+    [serviceId]
+  );
+  // a sprite leaving mid-sip (reassigned, fired) puts the mug back
+  useEffect(() => {
+    if (!serviceId) return;
+    return () => setDeskSipping(serviceId, false);
+  }, [serviceId]);
 
   if (!engineer) return null;
 
@@ -61,6 +91,9 @@ function PathfindingEmployee({ view, onSelect }: PathfindingEmployeeProps) {
   const leaning = acknowledging && atDesk && view.seated;
   const screen = view.seated && atDesk ? deskScreenColor({ status: serviceStatus, investigating, mitigating, engineerPresent: true }) : null;
 
+  // nobody stops for coffee while their own service is burning
+  const deskGestures = view.seated && atDesk ? (hasAlarm ? DESK_GESTURES_BUSY : DESK_GESTURES) : undefined;
+
   const statusText = `${t.staff.competencies[engineer.core_competency]} · ${t.staff.onCallStatus[engineer.on_call_status]} · ${t.officeLife.places[view.place]}`.toUpperCase();
 
   return (
@@ -80,11 +113,18 @@ function PathfindingEmployee({ view, onSelect }: PathfindingEmployeeProps) {
       badge
       holdsMug={view.mug}
       facing={view.facing}
+      heading={view.heading}
       glowColor={screen ?? undefined}
       transitionMs={view.hopMs > 0 ? view.hopMs : 220}
-      transitionEasing="linear"
+      transitionEasing={EASING_CSS[view.easing]}
       fadeIn={view.nodeId === NODE.entrance}
       carriesLaptop={rushing}
+      seedKey={view.id}
+      alarmed={hasAlarm && view.place !== "lounge" && view.place !== "entering"}
+      cheering={restored && !hasAlarm}
+      lounging={view.place === "lounge" && view.seated}
+      gestures={deskGestures}
+      onGestureChange={handleGesture}
       name={engineer.name}
       workerStatusText={statusText}
       onActivate={serviceId && atDesk && onSelect ? () => onSelect(serviceId) : undefined}

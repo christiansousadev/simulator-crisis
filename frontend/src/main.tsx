@@ -15,6 +15,9 @@ const RootComponent = window.location.pathname === "/live-ops" ? LiveOpsView : A
 // no component ever sees a missing dictionary (index.html paints a splash meanwhile); if the fetch
 // fails (offline, cold cache) fall back to the bundled english instead of blocking the app
 async function boot() {
+  if (import.meta.env.DEV) {
+    (window as unknown as { __GAME_STORE__: typeof useGameStore }).__GAME_STORE__ = useGameStore;
+  }
   try {
     await loadLanguage(loadStoredLanguage());
   } catch {

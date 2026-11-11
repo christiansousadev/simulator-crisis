@@ -62,6 +62,26 @@ describe("routeShortcut", () => {
     expect(route({ key: "i", legacyOpen: ["incident"] })).toEqual({ type: "none" });
   });
 
+  it("opens the SRE Academy with ? (Shift + /) or H", () => {
+    expect(route({ key: "?", shiftKey: true })).toEqual({ type: "open-help" });
+    expect(route({ key: "h" })).toEqual({ type: "open-help" });
+    expect(route({ key: "H", shiftKey: true })).toEqual({ type: "open-help" });
+  });
+
+  it("the help keys respect the same guards as every other hotkey", () => {
+    for (const key of ["?", "h"]) {
+      expect(route({ key, typing: true })).toEqual({ type: "none" });
+      expect(route({ key, hasModifier: true })).toEqual({ type: "none" });
+      expect(route({ key, modalOpen: true })).toEqual({ type: "none" });
+      expect(route({ key, titleVisible: true })).toEqual({ type: "none" });
+      expect(route({ key, legacyOpen: ["incident"] })).toEqual({ type: "none" });
+    }
+  });
+
+  it("documents W as the war room tab", () => {
+    expect(route({ key: "w" })).toEqual({ type: "dock-tab", tab: "warroom" });
+  });
+
   it("the modal stack wins over legacy dialogs", () => {
     expect(route({ key: "Escape", modalOpen: true, legacyOpen: ["triage"] })).toEqual({ type: "close-top-modal" });
   });

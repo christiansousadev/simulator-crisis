@@ -3,6 +3,7 @@ import { useRedAlert } from "../../hooks/useRedAlert";
 import BoardroomMetricsDisplay from "./BoardroomMetricsDisplay";
 import { GroundShadow } from "./OfficeProps";
 import IsoBox from "./IsoBox";
+import IsoFaceDecal from "./IsoFaceDecal";
 import OfficeWorker from "./OfficeWorker";
 
 interface BoardRoomProps {
@@ -12,6 +13,44 @@ interface BoardRoomProps {
 
 // how long the executives take to cross the room; they sit back down only once they have arrived
 const EXEC_WALK_MS = 1400;
+
+// rolling whiteboard geometry: the board box is 0.52 wide, 0.04 deep and 0.46 tall from z=0.04,
+// so its viewer-facing plane sits at y + 0.04 and spans ~16.6 x 25.8 screen px
+const WB_FRONT_Y = 1.55 + 0.04;
+const WB_TOP_Z = 0.04 + 0.46;
+const INK = "#1e3a5f";
+
+// pixel C4 sketch in whiteboard-local px (u across, v down), every coordinate on a whole or half
+// pixel so crispEdges lands it on the grid; sized to stay inside the 16px-wide board face
+function C4Sketch({ x, y, z, redAlert }: { x: number; y: number; z: number; redAlert: boolean }) {
+  const svcB = redAlert ? { fill: "#dc2626", stroke: "#f87171" } : { fill: "#059669", stroke: "#34d399" };
+  return (
+    <IsoFaceDecal x={x} y={y} z={z} axis="x" opacity={0.9}>
+      {/* title scribble */}
+      <rect x={1.5} y={1.5} width={6} height={0.75} fill={INK} opacity={0.6} />
+      {/* api gateway */}
+      <rect x={5} y={3.5} width={6} height={3} fill="#0284c7" stroke="#38bdf8" strokeWidth={0.5} />
+      {/* fan-out connectors */}
+      <rect x={7.75} y={6.5} width={0.5} height={2} fill={INK} />
+      <rect x={3.5} y={8.5} width={9.5} height={0.5} fill={INK} />
+      <rect x={3.5} y={8.5} width={0.5} height={1.5} fill={INK} />
+      <rect x={12.5} y={8.5} width={0.5} height={1.5} fill={INK} />
+      {/* two services */}
+      <rect x={1.5} y={10} width={4.5} height={3} fill="#059669" stroke="#34d399" strokeWidth={0.5} />
+      <rect x={10.5} y={10} width={4.5} height={3} fill={svcB.fill} stroke={svcB.stroke} strokeWidth={0.5} />
+      {/* fan-in to the datastore */}
+      <rect x={3.5} y={13} width={0.5} height={2} fill={INK} />
+      <rect x={12.5} y={13} width={0.5} height={2} fill={INK} />
+      <rect x={3.5} y={14.5} width={9.5} height={0.5} fill={INK} />
+      <rect x={7.75} y={15} width={0.5} height={1} fill={INK} />
+      {/* datastore cylinder: body plus a lighter lid band */}
+      <rect x={5.5} y={16} width={5} height={4} fill="#d97706" stroke="#fbbf24" strokeWidth={0.5} />
+      <rect x={5.5} y={16} width={5} height={1} fill="#fbbf24" />
+      {/* incident marker over the failing service */}
+      {redAlert && <rect className="animate-blink" x={14} y={8.5} width={1.5} height={1.5} fill="#ef4444" />}
+    </IsoFaceDecal>
+  );
+}
 
 // EXECUTIVE BOARDROOM WITH A LARGE CONFERENCE TABLE, LEATHER CHAIRS AND A LIVE METRICS TV
 export default function BoardRoom({ originX, originY }: BoardRoomProps) {
@@ -35,6 +74,10 @@ export default function BoardRoom({ originX, originY }: BoardRoomProps) {
       <IsoBox x={originX + 0.13} y={originY + 1.53} z={0} w={0.56} d={0.08} h={0.04} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#334155" />
       {/* Aluminum frame & marker tray */}
       <IsoBox x={originX + 0.15} y={originY + 1.53} z={0.04} w={0.52} d={0.02} h={0.015} fillTop="url(#chromeMetal)" color="#64748b" />
+
+      {/* SRE C4 container diagram sketched on the whiteboard, laid flat on its front face: gateway on
+          top, two services, a datastore underneath. On red alert the failing service is marked. */}
+      <C4Sketch x={originX + 0.15} y={originY + WB_FRONT_Y} z={WB_TOP_Z} redAlert={redAlert} />
 
       {/* wall-mounted live metrics tv: p99 latency, throughput and error-rate sparklines */}
       <BoardroomMetricsDisplay x={originX + 3.0} y={originY + 0.05} z={0.55} hasP1={redAlert} />
@@ -73,6 +116,8 @@ export default function BoardRoom({ originX, originY }: BoardRoomProps) {
         facing="right"
         transitionMs={EXEC_WALK_MS}
         mood={redAlert ? "panic" : "idle"}
+        // at the tv: one jabs a finger at the failing graph...
+        action={redAlert ? "point" : undefined}
       />
       <OfficeWorker
         x={redAlert ? originX + 3.3 : originX + 1.22}
@@ -85,6 +130,8 @@ export default function BoardRoom({ originX, originY }: BoardRoomProps) {
         facing="right"
         transitionMs={EXEC_WALK_MS}
         mood={redAlert ? "panic" : "idle"}
+        // ...the other taps a foot, hands on hips
+        action={redAlert ? "stomp" : undefined}
       />
 
       {/* standing visitor with a briefcase */}

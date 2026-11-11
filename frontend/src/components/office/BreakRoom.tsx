@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useGameStore } from "../../store/useGameStore";
+import { useRosterStage } from "./rosterStage";
 import IsoBox from "./IsoBox";
 import {
   EspressoMachine,
@@ -30,12 +31,20 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
   const showEmployeeA = useGameStore((s) => s.telemetry.user_happiness >= MORALE_ANY_TRAFFIC);
   const showEmployeeB = useGameStore((s) => s.telemetry.user_happiness >= MORALE_SOME_TRAFFIC);
   const espressoBought = useGameStore((s) => s.telemetry.purchased_upgrades.includes("espresso_machine"));
+  const isGoldenCoffee = useGameStore((s) => s.telemetry.unlocked_cosmetics?.includes("golden_coffee_machine") ?? false);
+  const isExecutiveSofa = useGameStore((s) => s.telemetry.unlocked_cosmetics?.includes("executive_leather_sofa") ?? false);
 
   // the ball animates only while employeeB has actually arrived at the pingpong waypoint --
   // previously it played on an infinite CSS loop keyed to a bare happiness threshold, so it kept
   // volleying by itself across the empty table for the two-thirds of the patrol loop employeeB
   // spent walking or on the sofa instead
   const [employeeBAction, setEmployeeBAction] = useState<string>("walk");
+  const [brewing, setBrewing] = useState(false);
+  // the cushion sinks under whoever is lounging: either wanderer, or an engineer on a break
+  const [seatedA, setSeatedA] = useState(false);
+  const [seatedB, setSeatedB] = useState(false);
+  const engineerLounging = useRosterStage((s) => s.walkers.some((w) => w.seated && w.place === "lounge"));
+  const sofaOccupied = (showEmployeeA && seatedA) || (showEmployeeB && seatedB) || engineerLounging;
   const gameInPlay = showEmployeeB && employeeBAction === "pingpong";
 
   const employeeA = useMemo(
@@ -66,15 +75,15 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
       {/* kitchenette counter with water cooler, espresso machine and fridge */}
       <WaterCooler x={originX + 1.7} y={originY + 0.25} />
       <IsoBox x={originX + 2.05} y={originY + 0.2} z={0} w={0.9} d={0.3} h={0.32} fillLeft="#1e293b" fillRight="#0f172a" fillTop="#f8fafc" stroke="rgba(255,255,255,0.12)" highlightTop />
-      <EspressoMachine x={originX + 2.15} y={originY + 0.3} z={0.32} steam={espressoBought ? "full" : "light"} />
+      <EspressoMachine x={originX + 2.15} y={originY + 0.3} z={0.32} steam={espressoBought ? "full" : "light"} isGolden={isGoldenCoffee} brewing={brewing} />
       <Fridge x={originX + 2.75} y={originY + 0.85} />
 
       {/* lounge sofa */}
-      <Sofa x={originX + 0.2} y={originY + 1.5} />
+      <Sofa x={originX + 0.2} y={originY + 1.5} isExecutive={isExecutiveSofa} occupied={sofaOccupied} />
 
       <OfficePlant x={originX + 2.9} y={originY + 1.7} />
 
-      {showEmployeeA && <WanderingEmployee waypoints={employeeA} shirtColor="#ea580c" hairColor="#1c1917" />}
+      {showEmployeeA && <WanderingEmployee waypoints={employeeA} shirtColor="#ea580c" hairColor="#1c1917" onBrewingChange={setBrewing} onSeatedChange={setSeatedA} />}
       {showEmployeeB && (
         <WanderingEmployee
           waypoints={employeeB}
@@ -82,6 +91,7 @@ export default function BreakRoom({ originX, originY }: BreakRoomProps) {
           hairColor="#3f2e25"
           dwellMs={5200}
           onActionChange={setEmployeeBAction}
+          onSeatedChange={setSeatedB}
         />
       )}
 

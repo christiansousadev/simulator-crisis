@@ -20,6 +20,8 @@ The core gameplay loop mirrors production incident lifecycle:
 
 ## Screenshots
 
+![IncidentZero title screen and mission briefing](./docs/screenshots/title-screen.png)
+
 ![The war room: isometric office, live HUD, and active simulation](./docs/screenshots/office-hud.png)
 
 <table>
@@ -34,14 +36,14 @@ The core gameplay loop mirrors production incident lifecycle:
 <td align="center"><sub>CRT Log Triage</sub></td>
 </tr>
 <tr>
-<td width="33%"><img src="./docs/screenshots/active-incident.png" alt="Active incident floor highlights, alarm beacon, and HUD cards"></td>
-<td width="33%"><img src="./docs/screenshots/upgrades-tree.png" alt="Tech tree: three branches of upgrades side by side"></td>
 <td width="33%"><img src="./docs/screenshots/tutorial.png" alt="Interactive tutorial spotlighting the failing rack"></td>
+<td width="33%"><img src="./docs/screenshots/upgrades-tree.png" alt="Tech tree: three branches of upgrades side by side"></td>
+<td width="33%"><img src="./docs/screenshots/post-match-debrief.png" alt="Post-match debrief timeline, performance ratings, and career progress"></td>
 </tr>
 <tr>
-<td align="center"><sub>Active Incident on Floor</sub></td>
-<td align="center"><sub>Tech Tree Upgrades</sub></td>
 <td align="center"><sub>Interactive Tutorial</sub></td>
+<td align="center"><sub>Tech Tree Upgrades</sub></td>
+<td align="center"><sub>Post-Match Debrief</sub></td>
 </tr>
 <tr>
 <td width="33%"><img src="./docs/screenshots/service-map.png" alt="Service dependency graph map view"></td>
@@ -111,8 +113,10 @@ The core gameplay loop mirrors production incident lifecycle:
 
 - **Living Isometric Office:** SVG isometric diorama with a spring-damped camera (zoom toward the cursor, drag with inertia, arrow/`+`/`-`/`Home` keys), a "Center on Crisis" flight to the worst failing rack, and a minimap with a draggable viewport frame.
 - **Continuous Light:** Sky and office lighting follow the game hour smoothly, and DEFCON drives the mood: an amber pool at DEFCON 4, slow amber beacons at 3, and a staged red alert (flicker, beacons, sweep) at 2 or worse.
-- **Racks That React:** Healthy, degraded and down racks change tint, LED pattern and effects with staged transitions, a one-shot failure shake, and a recovery sequence (scan bar, LEDs turning green, a "RESTORED" chip).
+- **Racks That React:** Healthy, degraded and down racks change tint, LED pattern and effects with staged transitions, a one-shot failure shake, and a recovery sequence (scan bar, LEDs turning green, a "RESTORED" chip, pixel confetti). Fans strain when degraded and wind down when a rack goes down, and value chips rise from where they were earned: `+SLA` off a restored rack, `-$` off a rack under a runbook, `+XP` off the engineer's desk.
 - **A Real Team on the Floor:** Desks stay vacant until you hire. New engineers walk in from reception to their desk, run to the server room when their service has an incident, and head to the lounge when resting.
+- **Characters With Weight:** Pixel-art staff on a layered rig: a floor shadow, four isometric headings with a back view, one step clock for legs, arm swing and bob, breathing, typing in bursts, and idle gestures (look around, check the watch, sip from the desk mug, pull an espresso). An incident sweeps the floor with a startle and a "!" balloon; runs kick up dust; executives point at the metrics TV; bystanders take a hesitant step back. A click squashes and stretches desks, racks and staff.
+- **Ambient Life:** The vault door slides open as people cross it, empty chairs are left pushed back, vacant desks run a screensaver, desk lamps flicker on at dusk, plants rustle as someone runs past, and the sofa cushion sinks under whoever lounges. Screen shake moves only the office scene, never the HUD.
 - **Readable HUD:** Numbers count smoothly toward their new value, spends fly off the cash counter as labelled chips ("-$1,800 · Rollback"), the passive burn shows as a calm trend, meters flash when they cross a band, and runbook cooldowns sweep smoothly and flash when ready.
 - **Lists With Memory:** Incidents sort by urgency and carry a New → Acknowledged → Investigated → Mitigating → Resolved track with the next action always visible; new ledger rows highlight; resolved cards stamp before they collapse.
 - **Interactive Tutorial:** A coach-mark tour that spotlights the real rack, card, buttons and runbooks, waits for you to act, and spawns a guaranteed practice incident. Replay it any time from the help button or the pause menu.
@@ -126,9 +130,11 @@ The core gameplay loop mirrors production incident lifecycle:
 |---|---|
 | `Space` | Pause or resume |
 | `1` `2` `5` | Game speed |
-| `I` `M` `C` `U` `R` `A` `G` | Dock tabs: incidents, directives, compliance, upgrades, roster, achievements, metrics |
+| `I` `M` `C` `U` `R` `A` `G` `W` | Dock tabs: incidents, directives, compliance, upgrades, roster, achievements, metrics, war room |
+| `D` | Collapse or expand the dock |
 | `[` `]` | Previous or next open incident |
 | `B` | Build mode |
+| `?` `H` | Open the SRE Academy (help) |
 | Arrows, `+` `-`, `Home` | Pan, zoom and reset the camera |
 | `Esc` | Close the top-most dialog, or open the pause menu |
 
@@ -241,6 +247,8 @@ make check             # lint + tsc + unit tests + build + e2e (also: make lint 
 ```
 
 The Playwright test suite (`frontend/e2e/`) verifies real browser interactions against live backend and WebSocket instances without mocking. CI executes all linting, unit tests, type checks, and E2E suites on every pull request (`.github/workflows/ci.yml`).
+
+The 26 official screenshots in `docs/screenshots/` (13 English, 13 Portuguese) are regenerated by `npx playwright test capture-screenshots.spec.ts` from `frontend/`. Set `E2E_FRONTEND_PORT` / `E2E_BACKEND_PORT` if the default ports are taken. The spec hires two engineers first, so the office is staffed in every shot.
 
 ---
 

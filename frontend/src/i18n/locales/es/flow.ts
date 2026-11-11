@@ -57,6 +57,7 @@ export const flowEs = {
   shortcutTabs: "Pestañas del panel",
   shortcutDock: "Contraer o expandir el panel",
   shortcutBuild: "Modo construcción",
+  shortcutHelp: "Abrir la Academia SRE (ayuda)",
   creditsDesign: "Diseño y simulación",
   creditsTech: "Hecho con",
   creditsPractice: "Basado en",

@@ -17,7 +17,8 @@ export type ShortcutAction =
   | { type: "cycle-incident"; direction: 1 | -1 }
   | { type: "toggle-build-mode" }
   | { type: "dock-tab"; tab: DockTabId }
-  | { type: "toggle-dock" };
+  | { type: "toggle-dock" }
+  | { type: "open-help" };
 
 export interface ShortcutInput {
   key: string;
@@ -75,6 +76,10 @@ export function routeShortcut(input: ShortcutInput): ShortcutAction {
   // incident cycling lives on the bracket keys so Tab keeps moving focus like everywhere else
   if (key === "]" || key === "}") return { type: "cycle-incident", direction: 1 };
   if (key === "[" || key === "{") return { type: "cycle-incident", direction: -1 };
+
+  // "?" (Shift + /) is the web-wide "show help" key; H is the one-handed alias that also works on
+  // layouts where "?" needs AltGr (which arrives as a modifier and is never hijacked above)
+  if (key === "?" || lower === "h") return { type: "open-help" };
 
   if (lower === "b") return { type: "toggle-build-mode" };
   if (lower === "d") return { type: "toggle-dock" };

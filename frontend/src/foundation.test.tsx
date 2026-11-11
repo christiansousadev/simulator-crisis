@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TransitionList from "./components/common/TransitionList";
 import { usePresence } from "./hooks/usePresence";
@@ -54,6 +54,8 @@ describe("usePresence", () => {
     useGameStore.setState({ reducedMotionPref: "off" });
   });
   afterEach(() => {
+    // unmount first: resetting the motion preference re-renders every subscriber still on screen
+    cleanup();
     vi.useRealTimers();
     useGameStore.setState({ reducedMotionPref: "system" });
   });
@@ -65,7 +67,9 @@ describe("usePresence", () => {
     expect(result.current.mounted).toBe(true);
     expect(result.current.closing).toBe(false);
 
-    rerender({ v: null });
+    act(() => {
+      rerender({ v: null });
+    });
     expect(result.current.mounted).toBe(true);
     expect(result.current.closing).toBe(true);
     expect(result.current.data).toBe("dialog");
@@ -81,7 +85,9 @@ describe("usePresence", () => {
     const { result, rerender } = renderHook(({ v }: { v: string | null }) => usePresence(v, 160), {
       initialProps: { v: "dialog" as string | null },
     });
-    rerender({ v: null });
+    act(() => {
+      rerender({ v: null });
+    });
     expect(result.current.mounted).toBe(false);
   });
 });
@@ -119,6 +125,8 @@ describe("TransitionList", () => {
     useGameStore.setState({ reducedMotionPref: "off" });
   });
   afterEach(() => {
+    // unmount first: resetting the motion preference re-renders every subscriber still on screen
+    cleanup();
     vi.useRealTimers();
     useGameStore.setState({ reducedMotionPref: "system" });
   });
@@ -133,7 +141,9 @@ describe("TransitionList", () => {
     const { rerender } = render(renderList([{ id: "one" }, { id: "two" }]));
     expect(screen.getByText("two")).toBeTruthy();
 
-    rerender(renderList([{ id: "one" }]));
+    act(() => {
+      rerender(renderList([{ id: "one" }]));
+    });
     expect(screen.getByText("two")).toBeTruthy();
 
     act(() => {
@@ -152,7 +162,9 @@ describe("TransitionList", () => {
     );
     const { rerender } = render(renderList([{ id: "first" }]));
     expect(screen.getByTestId("first").dataset.new).toBe("0");
-    rerender(renderList([{ id: "first" }, { id: "second" }]));
+    act(() => {
+      rerender(renderList([{ id: "first" }, { id: "second" }]));
+    });
     expect(screen.getByTestId("second").dataset.new).toBe("1");
     expect(screen.getByTestId("first").dataset.new).toBe("0");
   });

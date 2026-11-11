@@ -315,6 +315,35 @@ export const LightGradients = memo(function LightGradients() {
         <stop offset="60%" stopColor="#22c55e" />
         <stop offset="100%" stopColor="#16a34a" />
       </linearGradient>
+
+      {/* 24K Polished Gold shader for Golden Coffee Machine */}
+      <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#fef08a" />
+        <stop offset="30%" stopColor="#f59e0b" />
+        <stop offset="70%" stopColor="#d97706" />
+        <stop offset="100%" stopColor="#92400e" />
+      </linearGradient>
+      <linearGradient id="goldMetalHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#fef9c3" />
+        <stop offset="50%" stopColor="#fbbf24" />
+        <stop offset="100%" stopColor="#b45309" />
+      </linearGradient>
+
+      {/* Carrara polished marble shader for Marble Reception Desk */}
+      <linearGradient id="marbleStone" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#f8fafc" />
+        <stop offset="25%" stopColor="#e2e8f0" />
+        <stop offset="55%" stopColor="#cbd5e1" />
+        <stop offset="85%" stopColor="#f1f5f9" />
+        <stop offset="100%" stopColor="#94a3b8" />
+      </linearGradient>
+
+      {/* Handcrafted Executive Cognac Leather for Executive Sofa */}
+      <linearGradient id="executiveLeather" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#78350f" />
+        <stop offset="50%" stopColor="#451a03" />
+        <stop offset="100%" stopColor="#291102" />
+      </linearGradient>
     </>
   );
 });

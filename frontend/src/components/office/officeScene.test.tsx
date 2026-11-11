@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useGameStore } from "../../store/useGameStore";
 import type { Engineer, Service } from "../../types/game";
@@ -71,6 +71,8 @@ describe("office scene roster and transitions", () => {
     useGameStore.setState({ runAnimations: [], reducedMotionPref: "off" });
   });
   afterEach(() => {
+    // unmount before disposing: dispose publishes an empty roster to the walkers still on screen
+    cleanup();
     rosterChoreographer.dispose();
     vi.useRealTimers();
   });
@@ -104,7 +106,11 @@ describe("office scene roster and transitions", () => {
     act(() => {
       vi.advanceTimersByTime(2500);
     });
-    expect(container.querySelector(".animate-walk-cycle-left, .animate-walk-cycle-right")).not.toBeNull();
+    // the rig switches to a gait (legs, arms, bob and shadow all keyed off data-gait and one --step clock)
+    const rig = container.querySelector('.ol-rig[data-gait="walk"], .ol-rig[data-gait="run"]');
+    expect(rig).not.toBeNull();
+    expect(rig!.querySelector(".ol-leg-l")).not.toBeNull();
+    expect((rig as HTMLElement).style.getPropertyValue("--step")).toMatch(/^0\.\d+s$/);
   });
 
   it("shakes a failing rack once and runs the restore sequence on recovery", () => {

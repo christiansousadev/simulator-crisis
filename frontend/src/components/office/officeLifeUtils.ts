@@ -52,6 +52,12 @@ export function isNightHour(hour: number): boolean {
   return getDayPhase(((hour % 24) + 24) % 24) === "night";
 }
 
+// DESK LAMPS SWITCH ON AT DUSK (18:00) AND STAY ON THROUGH THE NIGHT SHIFT UNTIL DAWN IS OVER (07:00)
+export function isLampHour(hour: number): boolean {
+  const phase = getDayPhase(((hour % 24) + 24) % 24);
+  return phase === "dusk" || phase === "night" || phase === "dawn";
+}
+
 // MONITOR TINT FOR A DESK. null = dark screen
 export function deskScreenColor(opts: {
   status: ServiceStatus;

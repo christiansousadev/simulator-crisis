@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
@@ -29,8 +29,8 @@ class GameSession(Base):
     status = Column(String(20), nullable=False, default="running")
     current_tick = Column(Integer, nullable=False, default=0)
     prestige_points = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # --- restore-relevant fields added for full session resilience ---
     # snapshot format version: lets a restart tell an old/incompatible row apart from one this

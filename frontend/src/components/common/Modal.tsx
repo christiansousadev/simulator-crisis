@@ -1,4 +1,4 @@
-import { ReactNode, RefObject, useEffect, useId, useRef } from "react";
+import { HTMLAttributes, ReactNode, RefObject, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { usePresenceFlag } from "../../hooks/usePresence";
 import { registerModal } from "../../utils/modalStack";
@@ -194,8 +194,14 @@ export function ModalHeader({
   );
 }
 
-export function ModalBody({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`flex-1 min-h-0 overflow-y-auto ${className}`}>{children}</div>;
+// extra div attributes (id, role="tabpanel", aria-*) pass straight through, so a body can also be
+// the panel a tablist controls
+export function ModalBody({ children, className = "", ...rest }: HTMLAttributes<HTMLDivElement> & { children: ReactNode }) {
+  return (
+    <div {...rest} className={`flex-1 min-h-0 overflow-y-auto ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 export function ModalFooter({ children, className = "" }: { children: ReactNode; className?: string }) {
